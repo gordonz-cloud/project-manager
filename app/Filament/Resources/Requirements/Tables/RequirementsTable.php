@@ -4,6 +4,7 @@ namespace App\Filament\Resources\Requirements\Tables;
 
 use App\Enums\RequirementStatus;
 use App\Filament\Tables\ModuleGroup;
+use App\Models\Requirement;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\EditAction;
@@ -29,6 +30,8 @@ class RequirementsTable
                 TextColumn::make('status')
                     ->label('状态')
                     ->badge(),
+                TextColumn::make('version')
+                    ->label('版本'),
                 TextColumn::make('modules.name')
                     ->label('模块')
                     ->badge()
@@ -55,6 +58,13 @@ class RequirementsTable
                 SelectFilter::make('status')
                     ->label('状态')
                     ->options(RequirementStatus::class),
+                SelectFilter::make('version')
+                    ->label('版本')
+                    ->options(fn (): array => Requirement::query()
+                        ->whereNotNull('version')
+                        ->distinct()
+                        ->pluck('version', 'version')
+                        ->all()),
                 Filter::make('incomplete')
                     ->label('未完成')
                     ->query(fn (Builder $query): Builder => $query->where('status', '!=', RequirementStatus::Done)),

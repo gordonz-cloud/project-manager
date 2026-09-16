@@ -33,8 +33,6 @@ class FeaturesRelationManager extends RelationManager
                 CheckboxList::make('layers')
                     ->label('层')
                     ->options(FeatureLayer::class),
-                TextInput::make('version')
-                    ->label('版本'),
             ]);
     }
 
@@ -51,8 +49,6 @@ class FeaturesRelationManager extends RelationManager
                     ->label('层')
                     ->badge()
                     ->formatStateUsing(fn (string $state): string => FeatureLayer::from($state)->getLabel()),
-                TextColumn::make('version')
-                    ->label('版本'),
             ])
             ->filters([
                 //

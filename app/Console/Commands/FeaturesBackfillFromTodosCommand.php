@@ -10,19 +10,19 @@ use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\File;
 
 /**
- * One-off backfill: sets `layer` and `version` on existing features from the
- * old Notion "待办" (todo) database export. Matches, in order:
+ * One-off backfill: sets `layers` on existing features from the old Notion
+ * "待办" (todo) database export. Matches, in order:
  *   1. an explicit `--map` file's `high` confidence entries (by feature number),
  *   2. exact title match, then title match with whitespace/punctuation stripped.
  * `low` confidence and `null` map entries are never applied — they, along
  * with anything unmatched by title, are listed for a human to sort. Never
- * overwrites a feature that already has a value (idempotent).
+ * overwrites a feature that already has layers (idempotent).
  */
 class FeaturesBackfillFromTodosCommand extends Command
 {
     protected $signature = 'features:backfill-from-todos {project-slug} {--file=storage/notion-export/todos.json} {--map=}';
 
-    protected $description = 'Backfill feature layer/version from the exported Notion todos, matched by title or an explicit map';
+    protected $description = 'Backfill feature layers from the exported Notion todos, matched by title or an explicit map';
 
     public function handle(): int
     {
@@ -108,10 +108,8 @@ class FeaturesBackfillFromTodosCommand extends Command
     {
         if ($feature->layers === null || $feature->layers === []) {
             $feature->layers = [FeatureLayer::from((string) $todo['层'])->value];
+            $feature->save();
         }
-
-        $feature->version ??= ($todo['MVP'] ?? null) === '__YES__' ? '1' : null;
-        $feature->save();
     }
 
     /**

@@ -49,6 +49,8 @@ class RequirementsRelationManager extends RelationManager
                 TextColumn::make('status')
                     ->label('状态')
                     ->badge(),
+                TextColumn::make('version')
+                    ->label('版本'),
                 TextColumn::make('features.title')
                     ->label('功能')
                     ->badge()

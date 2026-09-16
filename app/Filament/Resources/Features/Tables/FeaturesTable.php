@@ -49,8 +49,6 @@ class FeaturesTable
                     ->label('层')
                     ->badge()
                     ->formatStateUsing(fn (string $state): string => FeatureLayer::from($state)->getLabel()),
-                TextColumn::make('version')
-                    ->label('版本'),
                 TextColumn::make('triggers')
                     ->label('触发方式')
                     ->badge()
@@ -90,13 +88,6 @@ class FeaturesTable
                     ->query(fn (Builder $query, array $data): Builder => $data['value']
                         ? $query->whereJsonContains('layers', $data['value'])
                         : $query),
-                SelectFilter::make('version')
-                    ->label('版本')
-                    ->options(fn (): array => Feature::query()
-                        ->whereNotNull('version')
-                        ->distinct()
-                        ->pluck('version', 'version')
-                        ->all()),
             ])
             ->recordActions([
                 EditAction::make()->slideOver(),

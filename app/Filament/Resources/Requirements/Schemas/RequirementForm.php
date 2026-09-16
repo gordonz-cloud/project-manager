@@ -24,6 +24,8 @@ class RequirementForm
                     ->label('状态')
                     ->options(RequirementStatus::class)
                     ->required(),
+                TextInput::make('version')
+                    ->label('版本'),
                 Select::make('modules')
                     ->label('模块')
                     ->relationship(name: 'modules', titleAttribute: 'name')

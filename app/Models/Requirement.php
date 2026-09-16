@@ -19,10 +19,11 @@ use Illuminate\Support\Carbon;
  * @property string|null $acceptance
  * @property RequirementStatus $status
  * @property string|null $notion_url
+ * @property string|null $version
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at
  */
-#[Fillable(['title', 'acceptance', 'status', 'notion_url'])]
+#[Fillable(['title', 'acceptance', 'status', 'notion_url', 'version'])]
 class Requirement extends Model
 {
     /** @use HasFactory<RequirementFactory> */

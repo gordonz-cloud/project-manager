@@ -24,6 +24,7 @@ class RequirementFactory extends Factory
             'title' => fake()->sentence(4),
             'acceptance' => fake()->paragraph(),
             'status' => fake()->randomElement(RequirementStatus::cases()),
+            'version' => null,
         ];
     }
 }

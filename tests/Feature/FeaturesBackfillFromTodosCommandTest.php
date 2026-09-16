@@ -11,21 +11,18 @@ test('backfills layer and version from matching todos, lists what it cannot matc
         'project_id' => $project->id,
         'title' => 'Exact match feature',
         'layers' => null,
-        'version' => null,
     ]);
 
     $punctuated = Feature::factory()->create([
         'project_id' => $project->id,
         'title' => 'Punctuated match feature',
         'layers' => null,
-        'version' => null,
     ]);
 
     $noMvp = Feature::factory()->create([
         'project_id' => $project->id,
         'title' => 'No MVP feature',
         'layers' => null,
-        'version' => null,
     ]);
 
     $this->artisan('features:backfill-from-todos', [
@@ -37,22 +34,18 @@ test('backfills layer and version from matching todos, lists what it cannot matc
         ->assertSuccessful();
 
     expect($exact->fresh()->layers)->toBe([FeatureLayer::Backend->value])
-        ->and($exact->fresh()->version)->toBe('1')
         ->and($punctuated->fresh()->layers)->toBe([FeatureLayer::Frontend->value])
-        ->and($punctuated->fresh()->version)->toBe('1')
-        ->and($noMvp->fresh()->layers)->toBe([FeatureLayer::Admin->value])
-        ->and($noMvp->fresh()->version)->toBeNull();
+        ->and($noMvp->fresh()->layers)->toBe([FeatureLayer::Admin->value]);
 
     // Running it again does not clobber existing values.
-    $exact->update(['layers' => [FeatureLayer::Manual->value], 'version' => '2']);
+    $exact->update(['layers' => [FeatureLayer::Manual->value]]);
 
     $this->artisan('features:backfill-from-todos', [
         'project-slug' => 'sg',
         '--file' => base_path('tests/Fixtures/notion-export/todos.json'),
     ])->assertSuccessful();
 
-    expect($exact->fresh()->layers)->toBe([FeatureLayer::Manual->value])
-        ->and($exact->fresh()->version)->toBe('2');
+    expect($exact->fresh()->layers)->toBe([FeatureLayer::Manual->value]);
 });
 
 test('a --map file applies only its high confidence entries, matched by feature number', function () {
@@ -63,7 +56,6 @@ test('a --map file applies only its high confidence entries, matched by feature 
         'project_id' => $project->id,
         'title' => 'Completely differently worded feature title',
         'layers' => null,
-        'version' => null,
     ]);
 
     $this->artisan('features:backfill-from-todos', [
@@ -75,6 +67,5 @@ test('a --map file applies only its high confidence entries, matched by feature 
         ->expectsOutputToContain('[low] Ambiguous todo text → #1 — test fixture: not confident enough to apply')
         ->assertSuccessful();
 
-    expect($mappedFeature->fresh()->layers)->toBe([FeatureLayer::Backend->value])
-        ->and($mappedFeature->fresh()->version)->toBe('1');
+    expect($mappedFeature->fresh()->layers)->toBe([FeatureLayer::Backend->value]);
 });

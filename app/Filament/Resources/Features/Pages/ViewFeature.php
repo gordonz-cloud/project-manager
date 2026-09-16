@@ -43,8 +43,6 @@ class ViewFeature extends ViewRecord
                             ->label('层')
                             ->badge()
                             ->formatStateUsing(fn (string $state): string => FeatureLayer::from($state)->getLabel()),
-                        TextEntry::make('version')
-                            ->label('版本'),
                         TextEntry::make('triggers')
                             ->label('触发方式')
                             ->badge()

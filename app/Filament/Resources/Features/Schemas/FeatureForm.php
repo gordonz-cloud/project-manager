@@ -26,8 +26,6 @@ class FeatureForm
                 CheckboxList::make('layers')
                     ->label('层')
                     ->options(FeatureLayer::class),
-                TextInput::make('version')
-                    ->label('版本'),
                 CheckboxList::make('triggers')
                     ->label('触发方式')
                     ->options(FeatureTrigger::class),
