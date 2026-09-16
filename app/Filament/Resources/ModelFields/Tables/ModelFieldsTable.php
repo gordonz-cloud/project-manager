@@ -30,7 +30,10 @@ class ModelFieldsTable
                     ->sortable(),
                 TextColumn::make('dataModel.name')
                     ->label('Model')
-                    ->searchable(),
+                    ->searchable()
+                    // The group header already says it; the column is for
+                    // whoever turns grouping off.
+                    ->toggleable(isToggledHiddenByDefault: true),
                 TextColumn::make('name')
                     ->label('字段')
                     ->searchable(),
@@ -42,7 +45,8 @@ class ModelFieldsTable
                 TextColumn::make('default_value')
                     ->label('默认值'),
                 TextColumn::make('constraint')
-                    ->label('约束'),
+                    ->label('约束')
+                    ->wrap(),
                 TextColumn::make('description')
                     ->label('说明')
                     ->wrap(),

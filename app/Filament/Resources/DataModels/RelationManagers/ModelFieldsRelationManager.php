@@ -72,7 +72,8 @@ class ModelFieldsRelationManager extends RelationManager
                 TextColumn::make('default_value')
                     ->label('默认值'),
                 TextColumn::make('constraint')
-                    ->label('约束'),
+                    ->label('约束')
+                    ->wrap(),
                 TextColumn::make('description')
                     ->label('说明')
                     ->wrap(),
