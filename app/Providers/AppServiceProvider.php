@@ -26,9 +26,10 @@ class AppServiceProvider extends ServiceProvider
     {
         $this->configureDefaults();
 
-        // Every list here is read top to bottom, not searched: fifty rows a
-        // page in one place beats the same line in each table.
-        Table::configureUsing(fn (Table $table): Table => $table->defaultPaginationPageOption(50));
+        // Every list here is read top to bottom, not searched, and the biggest
+        // is a few hundred rows on a local SQLite file. Filament has no
+        // infinite scroll for tables, and paging is the thing being avoided.
+        Table::configureUsing(fn (Table $table): Table => $table->paginated(false));
     }
 
     /**
