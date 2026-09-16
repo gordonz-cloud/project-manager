@@ -26,6 +26,8 @@ class FlowStepResource extends Resource
 
     protected static ?string $modelLabel = '数据流';
 
+    protected static ?string $pluralModelLabel = '数据流';
+
     public static function form(Schema $schema): Schema
     {
         return FlowStepForm::configure($schema);

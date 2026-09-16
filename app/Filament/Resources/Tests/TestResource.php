@@ -26,6 +26,8 @@ class TestResource extends Resource
 
     protected static ?string $modelLabel = '测试';
 
+    protected static ?string $pluralModelLabel = '测试';
+
     public static function form(Schema $schema): Schema
     {
         return TestForm::configure($schema);
