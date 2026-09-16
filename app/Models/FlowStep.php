@@ -21,13 +21,11 @@ use Illuminate\Support\Carbon;
  * @property string|null $input
  * @property string|null $change
  * @property string|null $output
- * @property int|null $input_shape_id
- * @property int|null $output_shape_id
  * @property string|null $notion_url
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at
  */
-#[Fillable(['feature_id', 'path', 'order', 'step', 'location', 'input', 'change', 'output', 'input_shape_id', 'output_shape_id', 'notion_url'])]
+#[Fillable(['feature_id', 'path', 'order', 'step', 'location', 'input', 'change', 'output', 'notion_url'])]
 class FlowStep extends Model
 {
     /** @use HasFactory<FlowStepFactory> */
@@ -39,21 +37,5 @@ class FlowStep extends Model
     public function feature(): BelongsTo
     {
         return $this->belongsTo(Feature::class);
-    }
-
-    /**
-     * @return BelongsTo<DataShape, $this>
-     */
-    public function inputShape(): BelongsTo
-    {
-        return $this->belongsTo(DataShape::class, 'input_shape_id');
-    }
-
-    /**
-     * @return BelongsTo<DataShape, $this>
-     */
-    public function outputShape(): BelongsTo
-    {
-        return $this->belongsTo(DataShape::class, 'output_shape_id');
     }
 }
