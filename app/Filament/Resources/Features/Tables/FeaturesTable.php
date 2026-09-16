@@ -5,6 +5,7 @@ namespace App\Filament\Resources\Features\Tables;
 use App\Enums\FeatureLayer;
 use App\Enums\FeatureStatus;
 use App\Enums\FeatureTrigger;
+use App\Filament\Resources\Features\FeatureResource;
 use App\Filament\Tables\ModuleGroup;
 use App\Models\Feature;
 use Filament\Actions\BulkActionGroup;
@@ -23,6 +24,8 @@ class FeaturesTable
         return $table
             ->defaultSort('number')
             ->striped()
+            ->recordUrl(fn (Feature $record): string => FeatureResource::getUrl('view', ['record' => $record]))
+            ->recordAction(null)
             ->modifyQueryUsing(fn (Builder $query): Builder => $query->with('requirement.modules'))
             ->groups([
                 ModuleGroup::make('requirement'),

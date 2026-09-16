@@ -5,6 +5,8 @@ namespace App\Filament\Resources\Features;
 use App\Filament\Resources\Features\Pages\CreateFeature;
 use App\Filament\Resources\Features\Pages\EditFeature;
 use App\Filament\Resources\Features\Pages\ListFeatures;
+use App\Filament\Resources\Features\Pages\ViewFeature;
+use App\Filament\Resources\Features\RelationManagers\DataModelsRelationManager;
 use App\Filament\Resources\Features\RelationManagers\FlowStepsRelationManager;
 use App\Filament\Resources\Features\RelationManagers\TestsRelationManager;
 use App\Filament\Resources\Features\Schemas\FeatureForm;
@@ -45,6 +47,7 @@ class FeatureResource extends Resource
         return [
             FlowStepsRelationManager::class,
             TestsRelationManager::class,
+            DataModelsRelationManager::class,
         ];
     }
 
@@ -53,6 +56,7 @@ class FeatureResource extends Resource
         return [
             'index' => ListFeatures::route('/'),
             'create' => CreateFeature::route('/create'),
+            'view' => ViewFeature::route('/{record}'),
             'edit' => EditFeature::route('/{record}/edit'),
         ];
     }
