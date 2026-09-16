@@ -11,6 +11,7 @@ use Filament\Forms\Components\TextInput;
 use Filament\Resources\RelationManagers\RelationManager;
 use Filament\Schemas\Schema;
 use Filament\Tables\Columns\TextColumn;
+use Filament\Tables\Columns\TextInputColumn;
 use Filament\Tables\Grouping\Group;
 use Filament\Tables\Table;
 
@@ -48,34 +49,38 @@ class FlowStepsRelationManager extends RelationManager
         return $table
             ->recordTitleAttribute('step')
             ->defaultSort('order')
+            ->striped()
             ->groups([
-                Group::make('path')->label('路径'),
+                Group::make('path')->label('路径')->collapsible(),
             ])
             ->columns([
-                TextColumn::make('path')
+                TextInputColumn::make('path')
                     ->label('路径'),
-                TextColumn::make('order')
+                TextInputColumn::make('order')
                     ->label('顺序')
                     ->sortable(),
-                TextColumn::make('step')
+                TextInputColumn::make('step')
                     ->label('步骤'),
-                TextColumn::make('location')
+                TextInputColumn::make('location')
                     ->label('位置'),
                 TextColumn::make('input')
-                    ->label('输入'),
+                    ->label('输入')
+                    ->wrap(),
                 TextColumn::make('change')
-                    ->label('变化'),
+                    ->label('变化')
+                    ->wrap(),
                 TextColumn::make('output')
-                    ->label('输出'),
+                    ->label('输出')
+                    ->wrap(),
             ])
             ->filters([
                 //
             ])
             ->headerActions([
-                CreateAction::make(),
+                CreateAction::make()->slideOver(),
             ])
             ->recordActions([
-                EditAction::make(),
+                EditAction::make()->slideOver(),
                 DeleteAction::make(),
             ])
             ->toolbarActions([

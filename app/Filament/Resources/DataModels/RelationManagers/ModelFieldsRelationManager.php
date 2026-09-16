@@ -13,8 +13,10 @@ use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Toggle;
 use Filament\Resources\RelationManagers\RelationManager;
 use Filament\Schemas\Schema;
-use Filament\Tables\Columns\IconColumn;
+use Filament\Tables\Columns\SelectColumn;
 use Filament\Tables\Columns\TextColumn;
+use Filament\Tables\Columns\TextInputColumn;
+use Filament\Tables\Columns\ToggleColumn;
 use Filament\Tables\Table;
 
 class ModelFieldsRelationManager extends RelationManager
@@ -51,30 +53,37 @@ class ModelFieldsRelationManager extends RelationManager
         return $table
             ->recordTitleAttribute('name')
             ->defaultSort('number')
+            ->striped()
             ->columns([
                 TextColumn::make('number')
                     ->label('Field ID')
                     ->sortable(),
-                TextColumn::make('name')
+                TextInputColumn::make('name')
                     ->label('字段')
                     ->searchable(),
-                TextColumn::make('type')
+                TextInputColumn::make('type')
                     ->label('类型'),
-                IconColumn::make('nullable')
-                    ->label('可空')
-                    ->boolean(),
-                TextColumn::make('status')
+                ToggleColumn::make('nullable')
+                    ->label('可空'),
+                TextInputColumn::make('default_value')
+                    ->label('默认值'),
+                TextInputColumn::make('constraint')
+                    ->label('约束'),
+                TextColumn::make('description')
+                    ->label('说明')
+                    ->wrap(),
+                SelectColumn::make('status')
                     ->label('状态')
-                    ->badge(),
+                    ->options(DataModelStatus::class),
             ])
             ->filters([
                 //
             ])
             ->headerActions([
-                CreateAction::make(),
+                CreateAction::make()->slideOver(),
             ])
             ->recordActions([
-                EditAction::make(),
+                EditAction::make()->slideOver(),
                 DeleteAction::make(),
             ])
             ->toolbarActions([

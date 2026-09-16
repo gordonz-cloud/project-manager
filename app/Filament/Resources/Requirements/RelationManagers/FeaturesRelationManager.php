@@ -13,7 +13,7 @@ use Filament\Actions\EditAction;
 use Filament\Forms\Components\TextInput;
 use Filament\Resources\RelationManagers\RelationManager;
 use Filament\Schemas\Schema;
-use Filament\Tables\Columns\TextColumn;
+use Filament\Tables\Columns\TextInputColumn;
 use Filament\Tables\Table;
 
 class FeaturesRelationManager extends RelationManager
@@ -35,8 +35,9 @@ class FeaturesRelationManager extends RelationManager
     {
         return $table
             ->recordTitleAttribute('title')
+            ->striped()
             ->columns([
-                TextColumn::make('title')
+                TextInputColumn::make('title')
                     ->label('功能')
                     ->searchable(),
             ])
@@ -44,11 +45,11 @@ class FeaturesRelationManager extends RelationManager
                 //
             ])
             ->headerActions([
-                CreateAction::make(),
+                CreateAction::make()->slideOver(),
                 AssociateAction::make(),
             ])
             ->recordActions([
-                EditAction::make(),
+                EditAction::make()->slideOver(),
                 DissociateAction::make(),
                 DeleteAction::make(),
             ])
