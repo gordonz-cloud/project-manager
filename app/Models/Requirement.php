@@ -11,6 +11,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Collection;
 
 /**
  * @property int $id
@@ -53,5 +54,28 @@ class Requirement extends Model
     public function features(): HasMany
     {
         return $this->hasMany(Feature::class);
+    }
+
+    /**
+     * Requirements ordered by their modules' build position — a requirement
+     * touching several modules sorts by whichever module is built last.
+     * This is the pickup order for /feature-run.
+     *
+     * @return Collection<int, static>
+     */
+    public static function inBuildOrder(Project $project): Collection
+    {
+        $position = Module::inBuildOrder($project)->pluck('id')->flip(); // module id => build position
+
+        return collect(
+            static::query()->where('project_id', $project->id)->with('modules')->get()
+                ->sortBy([
+                    fn (Requirement $a, Requirement $b) => ($a->modules->max(fn (Module $m) => $position[$m->id] ?? -1) ?? -1)
+                        <=> ($b->modules->max(fn (Module $m) => $position[$m->id] ?? -1) ?? -1),
+                    fn (Requirement $a, Requirement $b) => $a->id <=> $b->id,
+                ])
+                ->values()
+                ->all()
+        );
     }
 }
