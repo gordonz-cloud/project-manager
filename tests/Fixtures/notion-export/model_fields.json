@@ -1,0 +1,28 @@
+[
+    {
+        "字段": "stock",
+        "Field ID": 1,
+        "Model": "[\"https://notion.test/d1\"]",
+        "类型": "integer",
+        "可空": false,
+        "默认值": "0",
+        "约束": "CHECK (stock >= 0)",
+        "说明": "库存数量",
+        "状态": "现有",
+        "支持需求": "[\"https://notion.test/r1\"]",
+        "url": "https://notion.test/mf1"
+    },
+    {
+        "字段": "points",
+        "Field ID": 2,
+        "Model": "[\"https://notion.test/d2\"]",
+        "类型": "integer",
+        "可空": true,
+        "默认值": null,
+        "约束": null,
+        "说明": "积分余额",
+        "状态": "设计中",
+        "支持需求": "[]",
+        "url": "https://notion.test/mf2"
+    }
+]

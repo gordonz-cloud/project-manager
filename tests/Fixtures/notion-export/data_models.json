@@ -1,0 +1,24 @@
+[
+    {
+        "Model": "Order",
+        "表名": "orders",
+        "状态": "现有",
+        "说明": "订单主表",
+        "商业目的": "记录下单",
+        "设计差异": null,
+        "拍板": null,
+        "模块": "[\"https://notion.test/m1\"]",
+        "url": "https://notion.test/d1"
+    },
+    {
+        "Model": "Member",
+        "表名": "members",
+        "状态": "设计中",
+        "说明": "会员表",
+        "商业目的": "记录会员",
+        "设计差异": null,
+        "拍板": null,
+        "模块": "[\"https://notion.test/m2\"]",
+        "url": "https://notion.test/d2"
+    }
+]

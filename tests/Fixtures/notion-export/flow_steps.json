@@ -1,0 +1,24 @@
+[
+    {
+        "步骤": "校验库存",
+        "功能": "[\"https://notion.test/f1\"]",
+        "路径": "happy",
+        "顺序": 1,
+        "位置": "OrderService::place",
+        "输入": "商品ID, 数量",
+        "变化": "无",
+        "输出": "是否可下单",
+        "url": "https://notion.test/fs1"
+    },
+    {
+        "步骤": "扣减库存",
+        "功能": "[\"https://notion.test/f1\"]",
+        "路径": "happy",
+        "顺序": 2,
+        "位置": "OrderService::place",
+        "输入": "商品ID, 数量",
+        "变化": "stock -= 数量",
+        "输出": "订单",
+        "url": "https://notion.test/fs2"
+    }
+]

@@ -1,0 +1,18 @@
+[
+    {
+        "测试": "下单扣库存不为负",
+        "测试位置": "tests/Feature/OrderStockTest.php",
+        "状态": "有效",
+        "最近结果": "通过",
+        "功能": "[\"https://notion.test/f1\"]",
+        "url": "https://notion.test/t1"
+    },
+    {
+        "测试": "积分展示测试",
+        "测试位置": "tests/Feature/MemberPointsTest.php",
+        "状态": "待写",
+        "最近结果": "未跑",
+        "功能": "[\"https://notion.test/f2\",\"https://notion.test/missing\"]",
+        "url": "https://notion.test/t2"
+    }
+]
