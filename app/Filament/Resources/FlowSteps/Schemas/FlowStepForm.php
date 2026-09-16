@@ -2,7 +2,6 @@
 
 namespace App\Filament\Resources\FlowSteps\Schemas;
 
-use Filament\Facades\Filament;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
@@ -16,11 +15,7 @@ class FlowStepForm
             ->components([
                 Select::make('feature_id')
                     ->label('功能')
-                    ->relationship(
-                        'feature',
-                        'title',
-                        modifyQueryUsing: fn ($query) => $query->where('project_id', Filament::getTenant()?->getKey()),
-                    )
+                    ->relationship('feature', 'title')
                     ->searchable()
                     ->preload()
                     ->required(),

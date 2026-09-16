@@ -3,7 +3,6 @@
 namespace App\Filament\Resources\ModelFields\Schemas;
 
 use App\Enums\DataModelStatus;
-use Filament\Facades\Filament;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
@@ -18,11 +17,7 @@ class ModelFieldForm
             ->components([
                 Select::make('data_model_id')
                     ->label('Model')
-                    ->relationship(
-                        'dataModel',
-                        'name',
-                        modifyQueryUsing: fn ($query) => $query->where('project_id', Filament::getTenant()?->getKey()),
-                    )
+                    ->relationship('dataModel', 'name')
                     ->searchable()
                     ->preload()
                     ->required(),
@@ -46,11 +41,7 @@ class ModelFieldForm
                 Select::make('requirements')
                     ->label('支持需求')
                     ->multiple()
-                    ->relationship(
-                        'requirements',
-                        'title',
-                        modifyQueryUsing: fn ($query) => $query->where('project_id', Filament::getTenant()?->getKey()),
-                    )
+                    ->relationship('requirements', 'title')
                     ->preload(),
                 TextInput::make('notion_url')
                     ->label('Notion')

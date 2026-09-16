@@ -3,7 +3,6 @@
 namespace App\Filament\Resources\DataModels\Schemas;
 
 use App\Enums\DataModelStatus;
-use Filament\Facades\Filament;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
@@ -35,20 +34,12 @@ class DataModelForm
                 Select::make('modules')
                     ->label('模块')
                     ->multiple()
-                    ->relationship(
-                        'modules',
-                        'name',
-                        modifyQueryUsing: fn ($query) => $query->where('project_id', Filament::getTenant()?->getKey()),
-                    )
+                    ->relationship('modules', 'name')
                     ->preload(),
                 Select::make('features')
                     ->label('功能')
                     ->multiple()
-                    ->relationship(
-                        'features',
-                        'title',
-                        modifyQueryUsing: fn ($query) => $query->where('project_id', Filament::getTenant()?->getKey()),
-                    )
+                    ->relationship('features', 'title')
                     ->preload(),
                 TextInput::make('notion_url')
                     ->label('Notion')

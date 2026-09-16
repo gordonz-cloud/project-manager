@@ -4,7 +4,6 @@ namespace App\Filament\Resources\Tests\Schemas;
 
 use App\Enums\TestLastResult;
 use App\Enums\TestStatus;
-use Filament\Facades\Filament;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
 use Filament\Schemas\Schema;
@@ -31,11 +30,7 @@ class TestForm
                 Select::make('features')
                     ->label('功能')
                     ->multiple()
-                    ->relationship(
-                        'features',
-                        'title',
-                        modifyQueryUsing: fn ($query) => $query->where('project_id', Filament::getTenant()?->getKey()),
-                    )
+                    ->relationship('features', 'title')
                     ->preload(),
                 TextInput::make('notion_url')
                     ->label('Notion')
