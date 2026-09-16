@@ -22,6 +22,13 @@ class CommitsTable
                     ->label('Hash')
                     ->formatStateUsing(fn (string $state): string => substr($state, 0, 8))
                     ->fontFamily(FontFamily::Mono),
+                TextColumn::make('feature.title')
+                    ->label('功能')
+                    ->badge()
+                    ->color('gray')
+                    ->url(fn (Commit $record): ?string => $record->feature_id
+                        ? FeatureResource::getUrl('view', ['record' => $record->feature_id])
+                        : null),
                 TextColumn::make('subject')
                     ->label('Subject')
                     ->wrap()
@@ -32,13 +39,6 @@ class CommitsTable
                     ->label('提交时间')
                     ->dateTime()
                     ->sortable(),
-                TextColumn::make('feature.title')
-                    ->label('功能')
-                    ->badge()
-                    ->color('gray')
-                    ->url(fn (Commit $record): ?string => $record->feature_id
-                        ? FeatureResource::getUrl('view', ['record' => $record->feature_id])
-                        : null),
             ])
             ->filters([
                 Filter::make('unassigned')
