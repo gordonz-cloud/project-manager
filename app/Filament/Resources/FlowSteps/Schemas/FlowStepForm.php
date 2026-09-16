@@ -34,17 +34,24 @@ class FlowStepForm
                         ->all())
                     ->required(),
                 TextInput::make('order')
-                    ->label('顺序')
+                    ->label('#')
                     ->numeric()
                     ->required(),
                 TextInput::make('location')
-                    ->label('位置'),
+                    ->label('文件 · 方法')
+                    ->extraInputAttributes(['class' => 'font-mono']),
                 Textarea::make('input')
-                    ->label('输入'),
+                    ->label('手上拿到的数据')
+                    ->placeholder('写成 Log::debug 会打出来的样子：字段名、类型、示例值、可空')
+                    ->extraInputAttributes(['class' => 'font-mono'])
+                    ->rows(14),
                 Textarea::make('change')
-                    ->label('变化'),
+                    ->label('做了什么，交给谁'),
                 Textarea::make('output')
-                    ->label('输出'),
+                    ->label('输出（不同于下一跳输入时才填）')
+                    ->placeholder('写成 Log::debug 会打出来的样子：字段名、类型、示例值、可空')
+                    ->extraInputAttributes(['class' => 'font-mono'])
+                    ->rows(14),
             ]);
     }
 }
