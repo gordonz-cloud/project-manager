@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\Features\Schemas;
 
+use App\Enums\FeatureLayer;
 use App\Enums\FeatureStatus;
 use App\Enums\FeatureTrigger;
 use Filament\Forms\Components\CheckboxList;
@@ -22,6 +23,11 @@ class FeatureForm
                     ->label('状态')
                     ->options(FeatureStatus::class)
                     ->required(),
+                Select::make('layer')
+                    ->label('层')
+                    ->options(FeatureLayer::class),
+                TextInput::make('version')
+                    ->label('版本'),
                 CheckboxList::make('triggers')
                     ->label('触发方式')
                     ->options(FeatureTrigger::class),

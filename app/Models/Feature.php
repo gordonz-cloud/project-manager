@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Enums\FeatureLayer;
 use App\Enums\FeatureStatus;
 use App\Models\Concerns\BelongsToProject;
 use App\Models\Concerns\HasProjectSequence;
@@ -26,10 +27,12 @@ use Illuminate\Support\Carbon;
  * @property string|null $latest_commit
  * @property int|null $requirement_id
  * @property string|null $notion_url
+ * @property FeatureLayer|null $layer
+ * @property string|null $version
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at
  */
-#[Fillable(['title', 'number', 'status', 'triggers', 'entry', 'commit_range', 'latest_commit', 'requirement_id', 'notion_url'])]
+#[Fillable(['title', 'number', 'status', 'triggers', 'entry', 'commit_range', 'latest_commit', 'requirement_id', 'notion_url', 'layer', 'version'])]
 class Feature extends Model
 {
     /** @use HasFactory<FeatureFactory> */
@@ -43,6 +46,7 @@ class Feature extends Model
         return [
             'status' => FeatureStatus::class,
             'triggers' => 'array',
+            'layer' => FeatureLayer::class,
         ];
     }
 

@@ -2,9 +2,11 @@
 
 namespace App\Filament\Resources\Features\Tables;
 
+use App\Enums\FeatureLayer;
 use App\Enums\FeatureStatus;
 use App\Enums\FeatureTrigger;
 use App\Filament\Tables\ModuleGroup;
+use App\Models\Feature;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\EditAction;
@@ -40,6 +42,11 @@ class FeaturesTable
                 TextColumn::make('status')
                     ->label('状态')
                     ->badge(),
+                TextColumn::make('layer')
+                    ->label('层')
+                    ->badge(),
+                TextColumn::make('version')
+                    ->label('版本'),
                 TextColumn::make('triggers')
                     ->label('触发方式')
                     ->badge()
@@ -73,6 +80,16 @@ class FeaturesTable
                 SelectFilter::make('requirement')
                     ->label('需求')
                     ->relationship('requirement', 'title'),
+                SelectFilter::make('layer')
+                    ->label('层')
+                    ->options(FeatureLayer::class),
+                SelectFilter::make('version')
+                    ->label('版本')
+                    ->options(fn (): array => Feature::query()
+                        ->whereNotNull('version')
+                        ->distinct()
+                        ->pluck('version', 'version')
+                        ->all()),
             ])
             ->recordActions([
                 EditAction::make()->slideOver(),
