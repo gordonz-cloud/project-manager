@@ -82,6 +82,22 @@ test('unknown enum values abort the import and roll everything back', function (
         ->and(Module::count())->toBe(0);
 });
 
+test('a missing export file fails the import instead of silently importing nothing for it', function () {
+    $project = Project::factory()->create(['slug' => 'sg']);
+
+    $dir = sys_get_temp_dir().'/notion-import-'.uniqid();
+    File::ensureDirectoryExists($dir);
+    File::copyDirectory(base_path('tests/Fixtures/notion-export'), $dir);
+    File::delete($dir.'/tests.json');
+
+    $exitCode = Artisan::call('notion:import', ['project' => $project->slug, '--dir' => $dir]);
+
+    expect($exitCode)->toBe(1)
+        ->and(Artisan::output())->toContain('tests.json')
+        ->and(Module::count())->toBe(0)
+        ->and(Requirement::count())->toBe(0);
+});
+
 test('a dangling relation url is skipped without aborting the import', function () {
     importFixtures();
 

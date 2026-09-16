@@ -47,15 +47,26 @@ class NotionImportCommand extends Command
 
         $dir = rtrim((string) $this->option('dir'), '/');
 
-        $data = [
-            'modules' => $this->readJson("{$dir}/modules.json"),
-            'requirements' => $this->readJson("{$dir}/requirements.json"),
-            'data_models' => $this->readJson("{$dir}/data_models.json"),
-            'model_fields' => $this->readJson("{$dir}/model_fields.json"),
-            'features' => $this->readJson("{$dir}/features.json"),
-            'flow_steps' => $this->readJson("{$dir}/flow_steps.json"),
-            'tests' => $this->readJson("{$dir}/tests.json"),
-        ];
+        $data = [];
+        $badFiles = [];
+
+        foreach (['modules', 'requirements', 'data_models', 'model_fields', 'features', 'flow_steps', 'tests'] as $table) {
+            $rows = $this->readJson("{$dir}/{$table}.json");
+
+            if ($rows === null) {
+                $badFiles[] = "{$table}.json";
+
+                continue;
+            }
+
+            $data[$table] = $rows;
+        }
+
+        if ($badFiles !== []) {
+            $this->error("Missing or invalid JSON, import aborted:\n".implode("\n", $badFiles));
+
+            return self::FAILURE;
+        }
 
         $invalidEnums = $this->collectInvalidEnumValues($data);
 
@@ -96,15 +107,17 @@ class NotionImportCommand extends Command
     }
 
     /**
-     * @return array<int, array<string, mixed>>
+     * @return array<int, array<string, mixed>>|null Null when the file is missing or not valid JSON.
      */
-    private function readJson(string $path): array
+    private function readJson(string $path): ?array
     {
         if (! File::exists($path)) {
-            return [];
+            return null;
         }
 
-        return json_decode(File::get($path), true) ?? [];
+        $rows = json_decode(File::get($path), true);
+
+        return is_array($rows) ? $rows : null;
     }
 
     /**
