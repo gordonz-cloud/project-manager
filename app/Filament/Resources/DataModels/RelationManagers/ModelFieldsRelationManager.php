@@ -1,0 +1,86 @@
+<?php
+
+namespace App\Filament\Resources\DataModels\RelationManagers;
+
+use App\Enums\DataModelStatus;
+use Filament\Actions\BulkActionGroup;
+use Filament\Actions\CreateAction;
+use Filament\Actions\DeleteAction;
+use Filament\Actions\DeleteBulkAction;
+use Filament\Actions\EditAction;
+use Filament\Forms\Components\Select;
+use Filament\Forms\Components\TextInput;
+use Filament\Forms\Components\Toggle;
+use Filament\Resources\RelationManagers\RelationManager;
+use Filament\Schemas\Schema;
+use Filament\Tables\Columns\IconColumn;
+use Filament\Tables\Columns\TextColumn;
+use Filament\Tables\Table;
+
+class ModelFieldsRelationManager extends RelationManager
+{
+    protected static string $relationship = 'modelFields';
+
+    public function form(Schema $schema): Schema
+    {
+        return $schema
+            ->components([
+                TextInput::make('name')
+                    ->label('字段')
+                    ->required()
+                    ->maxLength(255),
+                TextInput::make('type')
+                    ->label('类型'),
+                Toggle::make('nullable')
+                    ->label('可空'),
+                TextInput::make('default_value')
+                    ->label('默认值'),
+                TextInput::make('constraint')
+                    ->label('约束'),
+                TextInput::make('description')
+                    ->label('说明'),
+                Select::make('status')
+                    ->label('状态')
+                    ->options(DataModelStatus::class)
+                    ->required(),
+            ]);
+    }
+
+    public function table(Table $table): Table
+    {
+        return $table
+            ->recordTitleAttribute('name')
+            ->defaultSort('number')
+            ->columns([
+                TextColumn::make('number')
+                    ->label('Field ID')
+                    ->sortable(),
+                TextColumn::make('name')
+                    ->label('字段')
+                    ->searchable(),
+                TextColumn::make('type')
+                    ->label('类型'),
+                IconColumn::make('nullable')
+                    ->label('可空')
+                    ->boolean(),
+                TextColumn::make('status')
+                    ->label('状态')
+                    ->badge(),
+            ])
+            ->filters([
+                //
+            ])
+            ->headerActions([
+                CreateAction::make(),
+            ])
+            ->recordActions([
+                EditAction::make(),
+                DeleteAction::make(),
+            ])
+            ->toolbarActions([
+                BulkActionGroup::make([
+                    DeleteBulkAction::make(),
+                ]),
+            ]);
+    }
+}

@@ -1,0 +1,45 @@
+<?php
+
+namespace App\Filament\Resources\Tests\Schemas;
+
+use App\Enums\TestLastResult;
+use App\Enums\TestStatus;
+use Filament\Facades\Filament;
+use Filament\Forms\Components\Select;
+use Filament\Forms\Components\TextInput;
+use Filament\Schemas\Schema;
+
+class TestForm
+{
+    public static function configure(Schema $schema): Schema
+    {
+        return $schema
+            ->components([
+                TextInput::make('title')
+                    ->label('测试')
+                    ->required(),
+                TextInput::make('location')
+                    ->label('测试位置'),
+                Select::make('status')
+                    ->label('状态')
+                    ->options(TestStatus::class)
+                    ->required(),
+                Select::make('last_result')
+                    ->label('最近结果')
+                    ->options(TestLastResult::class)
+                    ->required(),
+                Select::make('features')
+                    ->label('功能')
+                    ->multiple()
+                    ->relationship(
+                        'features',
+                        'title',
+                        modifyQueryUsing: fn ($query) => $query->where('project_id', Filament::getTenant()?->getKey()),
+                    )
+                    ->preload(),
+                TextInput::make('notion_url')
+                    ->label('Notion')
+                    ->url(),
+            ]);
+    }
+}
