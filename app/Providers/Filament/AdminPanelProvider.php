@@ -2,6 +2,7 @@
 
 namespace App\Providers\Filament;
 
+use App\Filament\Pages\Tenancy\EditProject;
 use App\Filament\Pages\Tenancy\RegisterProject;
 use App\Models\Project;
 use Filament\Http\Middleware\Authenticate;
@@ -33,6 +34,7 @@ class AdminPanelProvider extends PanelProvider
             ->login()
             ->tenant(Project::class, slugAttribute: 'slug')
             ->tenantRegistration(RegisterProject::class)
+            ->tenantProfile(EditProject::class)
             ->maxContentWidth(Width::Full)
             ->colors([
                 'primary' => Color::Amber,

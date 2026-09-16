@@ -22,15 +22,13 @@ use Illuminate\Support\Carbon;
  * @property FeatureStatus $status
  * @property array<int, string>|null $triggers
  * @property string|null $entry
- * @property string|null $commit_range
- * @property string|null $latest_commit
  * @property int|null $requirement_id
  * @property string|null $notion_url
  * @property array<int, string>|null $layers
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at
  */
-#[Fillable(['title', 'number', 'status', 'triggers', 'entry', 'commit_range', 'latest_commit', 'requirement_id', 'notion_url', 'layers'])]
+#[Fillable(['title', 'number', 'status', 'triggers', 'entry', 'requirement_id', 'notion_url', 'layers'])]
 class Feature extends Model
 {
     /** @use HasFactory<FeatureFactory> */
@@ -78,5 +76,13 @@ class Feature extends Model
     public function tests(): BelongsToMany
     {
         return $this->belongsToMany(Test::class);
+    }
+
+    /**
+     * @return HasMany<Commit, $this>
+     */
+    public function commits(): HasMany
+    {
+        return $this->hasMany(Commit::class);
     }
 }

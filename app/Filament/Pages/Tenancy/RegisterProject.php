@@ -27,6 +27,8 @@ class RegisterProject extends RegisterTenant
                     ->required()
                     ->unique(Project::class, 'slug'),
                 TextInput::make('description'),
+                TextInput::make('repo_path')
+                    ->label('Repo path'),
             ]);
     }
 
