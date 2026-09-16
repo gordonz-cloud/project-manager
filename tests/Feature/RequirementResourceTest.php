@@ -1,5 +1,6 @@
 <?php
 
+use App\Enums\RequirementStatus;
 use App\Filament\Resources\Requirements\Pages\CreateRequirement;
 use App\Filament\Resources\Requirements\Pages\ListRequirements;
 use App\Models\Module;
@@ -47,4 +48,20 @@ test('requirement form module select only offers modules from the current tenant
 
     expect($options)->toHaveKey($p1Module->id);
     expect($options)->not->toHaveKey($p2Module->id);
+});
+
+test('requirement status can be updated inline from the table', function () {
+    $user = User::factory()->create();
+    $project = Project::factory()->create();
+    $project->users()->attach($user);
+
+    $requirement = Requirement::factory()->for($project)->create(['status' => RequirementStatus::Pending]);
+
+    $this->actingAs($user);
+    Filament::setTenant($project);
+
+    Livewire::test(ListRequirements::class)
+        ->call('updateTableColumnState', 'status', $requirement->getKey(), RequirementStatus::Done->value);
+
+    expect($requirement->refresh()->status)->toBe(RequirementStatus::Done);
 });
