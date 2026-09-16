@@ -55,17 +55,26 @@ class FlowStepsTable
                     ->formatStateUsing(fn (?string $state): string => self::formatShape($state))
                     ->html()
                     ->wrap()
-                    ->extraAttributes(['style' => 'white-space: pre-wrap']),
+                    ->extraAttributes(['style' => 'white-space: pre-wrap'])
+                    // The shapes are read on a feature's own page, hop by hop;
+                    // the cross-feature list is for finding a step, not reading it.
+                    ->toggleable(isToggledHiddenByDefault: true),
                 TextColumn::make('change')
                     ->label('做了什么，交给谁')
-                    ->wrap(),
+                    ->wrap()
+                    // The shapes are read on a feature's own page, hop by hop;
+                    // the cross-feature list is for finding a step, not reading it.
+                    ->toggleable(isToggledHiddenByDefault: true),
                 TextColumn::make('output')
                     ->label('输出（不同于下一跳输入时才填）')
                     ->fontFamily(FontFamily::Mono)
                     ->formatStateUsing(fn (?string $state): string => self::formatShape($state))
                     ->html()
                     ->wrap()
-                    ->extraAttributes(['style' => 'white-space: pre-wrap']),
+                    ->extraAttributes(['style' => 'white-space: pre-wrap'])
+                    // The shapes are read on a feature's own page, hop by hop;
+                    // the cross-feature list is for finding a step, not reading it.
+                    ->toggleable(isToggledHiddenByDefault: true),
                 TextColumn::make('created_at')
                     ->dateTime()
                     ->sortable()
