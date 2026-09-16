@@ -48,7 +48,7 @@ test('imports all tables and relations', function () {
 
     $field = ModelField::where('notion_url', 'https://notion.test/mf1')->first();
     expect($field->number)->toBe(1)
-        ->and($field->requirements)->toHaveCount(1);
+        ->and($field->dataModel->notion_url)->toBe('https://notion.test/d1');
 
     $test = Test::where('notion_url', 'https://notion.test/t1')->first();
     expect($test->features)->toHaveCount(1);
