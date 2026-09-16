@@ -37,14 +37,6 @@ class RequirementsTable
                     ->label('功能')
                     ->badge()
                     ->listWithLineBreaks(),
-                TextColumn::make('modelFields.name')
-                    ->label('Model Field')
-                    ->badge()
-                    ->listWithLineBreaks()
-                    // The bare column name repeats across tables; the model
-                    // in front is what tells one created_at from another.
-                    ->formatStateUsing(fn (string $state, $record): string => $record->modelFields
-                        ->firstWhere('name', $state)?->dataModel?->name.'.'.$state),
                 TextColumn::make('notion_url')
                     ->label('Notion URL')
                     ->searchable()

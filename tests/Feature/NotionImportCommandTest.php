@@ -36,8 +36,7 @@ test('imports all tables and relations', function () {
 
     $requirement = Requirement::where('notion_url', 'https://notion.test/r1')->first();
     expect($requirement->modules)->toHaveCount(1)
-        ->and($requirement->modules->first()->notion_url)->toBe('https://notion.test/m1')
-        ->and($requirement->modelFields)->toHaveCount(1);
+        ->and($requirement->modules->first()->notion_url)->toBe('https://notion.test/m1');
 
     $feature = Feature::where('notion_url', 'https://notion.test/f1')->first();
     expect($feature->number)->toBe(1)

@@ -53,10 +53,6 @@ class ModelFieldsTable
                 TextColumn::make('status')
                     ->label('状态')
                     ->badge(),
-                TextColumn::make('requirements.title')
-                    ->label('支持需求')
-                    ->badge()
-                    ->listWithLineBreaks(),
                 TextColumn::make('notion_url')
                     ->label('Notion URL')
                     ->toggleable(isToggledHiddenByDefault: true),

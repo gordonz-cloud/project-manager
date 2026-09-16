@@ -53,12 +53,4 @@ class Requirement extends Model
     {
         return $this->hasMany(Feature::class);
     }
-
-    /**
-     * @return BelongsToMany<ModelField, $this>
-     */
-    public function modelFields(): BelongsToMany
-    {
-        return $this->belongsToMany(ModelField::class);
-    }
 }

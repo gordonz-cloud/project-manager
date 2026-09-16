@@ -21,7 +21,6 @@ test('all seven many-to-many relations attach and read back', function () {
     $module->requirements()->attach($requirement);
     $module->dataModels()->attach($dataModel);
     $dataModel->features()->attach($feature);
-    $modelField->requirements()->attach($requirement);
     $feature->tests()->attach($test);
 
     expect($module->requirements()->first()->is($requirement))->toBeTrue()
@@ -30,8 +29,6 @@ test('all seven many-to-many relations attach and read back', function () {
         ->and($dataModel->modules()->first()->is($module))->toBeTrue()
         ->and($dataModel->features()->first()->is($feature))->toBeTrue()
         ->and($feature->dataModels()->first()->is($dataModel))->toBeTrue()
-        ->and($modelField->requirements()->first()->is($requirement))->toBeTrue()
-        ->and($requirement->modelFields()->first()->is($modelField))->toBeTrue()
         ->and($feature->tests()->first()->is($test))->toBeTrue()
         ->and($test->features()->first()->is($feature))->toBeTrue();
 });

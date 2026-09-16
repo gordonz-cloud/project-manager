@@ -38,11 +38,6 @@ class ModelFieldForm
                     ->label('状态')
                     ->options(DataModelStatus::class)
                     ->required(),
-                Select::make('requirements')
-                    ->label('支持需求')
-                    ->multiple()
-                    ->relationship('requirements', 'title')
-                    ->preload(),
                 TextInput::make('notion_url')
                     ->label('Notion')
                     ->url(),

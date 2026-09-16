@@ -29,14 +29,6 @@ class RequirementForm
                     ->relationship(name: 'modules', titleAttribute: 'name')
                     ->multiple()
                     ->preload(),
-                Select::make('modelFields')
-                    ->label('Model Field')
-                    ->relationship(name: 'modelFields', titleAttribute: 'name')
-                    ->getOptionLabelFromRecordUsing(fn ($record): string => $record->dataModel->name.'.'.$record->name)
-                    ->multiple()
-                    ->preload()
-                    ->searchable()
-                    ->columnSpanFull(),
                 TextInput::make('notion_url')
                     ->label('Notion URL')
                     ->url(),

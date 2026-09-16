@@ -89,7 +89,6 @@ class NotionImportCommand extends Command
             $this->linkRequirementModules($data['requirements']);
             $this->linkDataModelModules($data['data_models']);
             $this->linkFeatureDataModels($data['features']);
-            $this->linkModelFieldRequirements($data['model_fields']);
             $this->linkTestFeatures($data['tests']);
         });
 
@@ -384,9 +383,6 @@ class NotionImportCommand extends Command
 
             $moduleIds = $this->resolveMany($this->decodeUrls($row['模块'] ?? null), 'requirements');
             Requirement::find($requirementId)->modules()->sync($moduleIds);
-
-            $fieldIds = $this->resolveMany($this->decodeUrls($row['Model Field'] ?? null), 'requirements');
-            Requirement::find($requirementId)->modelFields()->sync($fieldIds);
         }
     }
 
@@ -421,23 +417,6 @@ class NotionImportCommand extends Command
 
             $dataModelIds = $this->resolveMany($this->decodeUrls($row['Model'] ?? null), 'features');
             Feature::find($featureId)->dataModels()->sync($dataModelIds);
-        }
-    }
-
-    /**
-     * @param  array<int, array<string, mixed>>  $rows
-     */
-    private function linkModelFieldRequirements(array $rows): void
-    {
-        foreach ($rows as $row) {
-            $fieldId = $this->urlMap[$row['url']] ?? null;
-
-            if (! $fieldId) {
-                continue;
-            }
-
-            $requirementIds = $this->resolveMany($this->decodeUrls($row['支持需求'] ?? null), 'model_fields');
-            ModelField::find($fieldId)->requirements()->sync($requirementIds);
         }
     }
 
