@@ -58,6 +58,14 @@ class DataModel extends Model
     }
 
     /**
+     * @return HasMany<DataShape, $this>
+     */
+    public function shapes(): HasMany
+    {
+        return $this->hasMany(DataShape::class);
+    }
+
+    /**
      * A model has no module of its own; it inherits the modules of the
      * requirements its features serve. Derived, not stored, so it can never
      * drift from the features → requirement → module chain that already
