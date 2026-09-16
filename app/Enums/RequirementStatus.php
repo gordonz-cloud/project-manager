@@ -6,8 +6,8 @@ use Filament\Support\Contracts\HasLabel;
 
 enum RequirementStatus: string implements HasLabel
 {
-    case Pending = '待定';
-    case Confirmed = '已确认';
+    case Uncertain = '不确定';
+    case Todo = '待做';
     case InProgress = '进行中';
     case Done = '完成';
     case OnHold = '暂缓';

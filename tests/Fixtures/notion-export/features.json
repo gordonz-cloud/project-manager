@@ -14,7 +14,7 @@
     {
         "功能": "积分展示",
         "Feature ID": 2,
-        "状态": "想法",
+        "状态": "不确定",
         "触发方式": ["UI"],
         "入口": "MemberController@show",
         "需求": "[\"https://notion.test/missing\"]",

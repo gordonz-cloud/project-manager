@@ -6,7 +6,7 @@ use Filament\Support\Contracts\HasLabel;
 
 enum FeatureStatus: string implements HasLabel
 {
-    case Idea = '想法';
+    case Uncertain = '不确定';
     case Todo = '待做';
     case InDevelopment = '开发中';
     case InVerification = '验证中';
