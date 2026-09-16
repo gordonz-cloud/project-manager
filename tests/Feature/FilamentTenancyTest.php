@@ -4,12 +4,17 @@ use App\Models\Concerns\BelongsToProject;
 use App\Models\Project;
 use App\Models\User;
 use Filament\Facades\Filament;
+use Filament\Support\Enums\Width;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
 
 test('login page is reachable', function () {
     $this->get('/admin/login')->assertOk();
+});
+
+test('admin panel uses the full content width', function () {
+    expect(Filament::getPanel('admin')->getMaxContentWidth())->toBe(Width::Full);
 });
 
 test('a user cannot access a project they do not belong to', function () {
