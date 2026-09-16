@@ -87,7 +87,6 @@ class NotionImportCommand extends Command
 
             // Second pass: relation columns, resolved once every row exists.
             $this->linkRequirementModules($data['requirements']);
-            $this->linkDataModelModules($data['data_models']);
             $this->linkFeatureDataModels($data['features']);
             $this->linkTestFeatures($data['tests']);
         });
@@ -383,23 +382,6 @@ class NotionImportCommand extends Command
 
             $moduleIds = $this->resolveMany($this->decodeUrls($row['模块'] ?? null), 'requirements');
             Requirement::find($requirementId)->modules()->sync($moduleIds);
-        }
-    }
-
-    /**
-     * @param  array<int, array<string, mixed>>  $rows
-     */
-    private function linkDataModelModules(array $rows): void
-    {
-        foreach ($rows as $row) {
-            $dataModelId = $this->urlMap[$row['url']] ?? null;
-
-            if (! $dataModelId) {
-                continue;
-            }
-
-            $moduleIds = $this->resolveMany($this->decodeUrls($row['模块'] ?? null), 'data_models');
-            DataModel::find($dataModelId)->modules()->sync($moduleIds);
         }
     }
 

@@ -3,18 +3,21 @@
 namespace App\Filament\Resources\DataModels\Tables;
 
 use App\Enums\DataModelStatus;
+use App\Models\DataModel;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\EditAction;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Table;
+use Illuminate\Database\Eloquent\Builder;
 
 class DataModelsTable
 {
     public static function configure(Table $table): Table
     {
         return $table
+            ->modifyQueryUsing(fn (Builder $query) => $query->with('features.requirement.modules'))
             ->striped()
             ->columns([
                 TextColumn::make('name')
@@ -38,8 +41,9 @@ class DataModelsTable
                 TextColumn::make('ruling')
                     ->label('拍板')
                     ->wrap(),
-                TextColumn::make('modules.name')
+                TextColumn::make('modules')
                     ->label('模块')
+                    ->state(fn (DataModel $record) => $record->derivedModules()->pluck('name'))
                     ->badge()
                     ->listWithLineBreaks(),
                 TextColumn::make('features.title')
@@ -68,7 +72,7 @@ class DataModelsTable
                     ->options(DataModelStatus::class),
                 SelectFilter::make('modules')
                     ->label('模块')
-                    ->relationship('modules', 'name'),
+                    ->relationship('features.requirement.modules', 'name'),
             ])
             ->recordActions([
                 EditAction::make()->slideOver(),

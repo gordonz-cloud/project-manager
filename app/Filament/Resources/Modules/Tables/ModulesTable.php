@@ -14,7 +14,7 @@ class ModulesTable
     public static function configure(Table $table): Table
     {
         return $table
-            ->modifyQueryUsing(fn (Builder $query) => $query->withCount(['requirements', 'dataModels']))
+            ->modifyQueryUsing(fn (Builder $query) => $query->withCount('requirements'))
             ->striped()
             ->columns([
                 TextColumn::make('name')
@@ -22,9 +22,6 @@ class ModulesTable
                     ->searchable(),
                 TextColumn::make('requirements_count')
                     ->label('需求数')
-                    ->sortable(),
-                TextColumn::make('data_models_count')
-                    ->label('Model 数')
                     ->sortable(),
                 TextColumn::make('notion_url')
                     ->label('Notion URL')

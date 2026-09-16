@@ -31,12 +31,4 @@ class Module extends Model
     {
         return $this->belongsToMany(Requirement::class);
     }
-
-    /**
-     * @return BelongsToMany<DataModel, $this>
-     */
-    public function dataModels(): BelongsToMany
-    {
-        return $this->belongsToMany(DataModel::class);
-    }
 }

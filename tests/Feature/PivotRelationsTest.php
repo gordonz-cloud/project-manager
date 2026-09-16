@@ -19,14 +19,11 @@ test('all seven many-to-many relations attach and read back', function () {
     $test = TestModel::factory()->create(['project_id' => $project->id]);
 
     $module->requirements()->attach($requirement);
-    $module->dataModels()->attach($dataModel);
     $dataModel->features()->attach($feature);
     $feature->tests()->attach($test);
 
     expect($module->requirements()->first()->is($requirement))->toBeTrue()
         ->and($requirement->modules()->first()->is($module))->toBeTrue()
-        ->and($module->dataModels()->first()->is($dataModel))->toBeTrue()
-        ->and($dataModel->modules()->first()->is($module))->toBeTrue()
         ->and($dataModel->features()->first()->is($feature))->toBeTrue()
         ->and($feature->dataModels()->first()->is($dataModel))->toBeTrue()
         ->and($feature->tests()->first()->is($test))->toBeTrue()

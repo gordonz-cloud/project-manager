@@ -31,11 +31,6 @@ class DataModelForm
                     ->label('设计差异'),
                 Textarea::make('ruling')
                     ->label('拍板'),
-                Select::make('modules')
-                    ->label('模块')
-                    ->multiple()
-                    ->relationship('modules', 'name')
-                    ->preload(),
                 Select::make('features')
                     ->label('功能')
                     ->multiple()
