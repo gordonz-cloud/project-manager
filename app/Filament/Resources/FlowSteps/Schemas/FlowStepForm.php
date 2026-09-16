@@ -37,21 +37,31 @@ class FlowStepForm
                     ->label('#')
                     ->numeric()
                     ->required(),
-                TextInput::make('location')
-                    ->label('文件 · 方法')
+                TextInput::make('file')
+                    ->label('文件')
+                    ->datalist(fn (Get $get): array => FlowStep::query()
+                        ->where('feature_id', $get('feature_id'))
+                        ->whereNotNull('file')
+                        ->distinct()
+                        ->pluck('file')
+                        ->all())
+                    ->extraInputAttributes(['class' => 'font-mono']),
+                TextInput::make('function')
+                    ->label('函数')
                     ->extraInputAttributes(['class' => 'font-mono']),
                 Textarea::make('input')
-                    ->label('手上拿到的数据')
+                    ->label('参数')
                     ->placeholder('写成 Log::debug 会打出来的样子：字段名、类型、示例值、可空')
                     ->extraInputAttributes(['class' => 'font-mono'])
                     ->rows(14),
                 Textarea::make('change')
-                    ->label('做了什么，交给谁'),
+                    ->label('做了什么'),
                 Textarea::make('output')
-                    ->label('输出（不同于下一跳输入时才填）')
+                    ->label('返回值')
                     ->placeholder('写成 Log::debug 会打出来的样子：字段名、类型、示例值、可空')
                     ->extraInputAttributes(['class' => 'font-mono'])
-                    ->rows(14),
+                    ->rows(14)
+                    ->required(),
             ]);
     }
 }

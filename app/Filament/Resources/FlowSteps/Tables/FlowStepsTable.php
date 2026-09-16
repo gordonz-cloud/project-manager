@@ -46,11 +46,14 @@ class FlowStepsTable
                 TextColumn::make('step')
                     ->label('步骤')
                     ->searchable(),
-                TextColumn::make('location')
-                    ->label('文件 · 方法')
+                TextColumn::make('file')
+                    ->label('文件')
+                    ->fontFamily(FontFamily::Mono),
+                TextColumn::make('function')
+                    ->label('函数')
                     ->fontFamily(FontFamily::Mono),
                 TextColumn::make('input')
-                    ->label('手上拿到的数据')
+                    ->label('参数')
                     ->fontFamily(FontFamily::Mono)
                     ->formatStateUsing(fn (?string $state): string => self::formatShape($state))
                     ->html()
@@ -60,13 +63,13 @@ class FlowStepsTable
                     // the cross-feature list is for finding a step, not reading it.
                     ->toggleable(isToggledHiddenByDefault: true),
                 TextColumn::make('change')
-                    ->label('做了什么，交给谁')
+                    ->label('做了什么')
                     ->wrap()
                     // The shapes are read on a feature's own page, hop by hop;
                     // the cross-feature list is for finding a step, not reading it.
                     ->toggleable(isToggledHiddenByDefault: true),
                 TextColumn::make('output')
-                    ->label('输出（不同于下一跳输入时才填）')
+                    ->label('返回值')
                     ->fontFamily(FontFamily::Mono)
                     ->formatStateUsing(fn (?string $state): string => self::formatShape($state))
                     ->html()

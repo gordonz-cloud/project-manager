@@ -29,21 +29,31 @@ class FlowStepsRelationManager extends RelationManager
                 TextInput::make('step')
                     ->label('步骤')
                     ->required(),
-                TextInput::make('location')
-                    ->label('文件 · 方法')
+                TextInput::make('file')
+                    ->label('文件')
+                    ->datalist(fn (): array => FlowStep::query()
+                        ->where('feature_id', $this->getOwnerRecord()->getKey())
+                        ->whereNotNull('file')
+                        ->distinct()
+                        ->pluck('file')
+                        ->all())
+                    ->extraInputAttributes(['class' => 'font-mono']),
+                TextInput::make('function')
+                    ->label('函数')
                     ->extraInputAttributes(['class' => 'font-mono']),
                 Textarea::make('input')
-                    ->label('手上拿到的数据')
+                    ->label('参数')
                     ->placeholder('写成 Log::debug 会打出来的样子：字段名、类型、示例值、可空')
                     ->extraInputAttributes(['class' => 'font-mono'])
                     ->rows(14),
                 Textarea::make('change')
-                    ->label('做了什么，交给谁'),
+                    ->label('做了什么'),
                 Textarea::make('output')
-                    ->label('输出（不同于下一跳输入时才填）')
+                    ->label('返回值')
                     ->placeholder('写成 Log::debug 会打出来的样子：字段名、类型、示例值、可空')
                     ->extraInputAttributes(['class' => 'font-mono'])
-                    ->rows(14),
+                    ->rows(14)
+                    ->required(),
                 TextInput::make('path')
                     ->label('路径')
                     ->datalist(fn (): array => FlowStep::query()
@@ -75,21 +85,24 @@ class FlowStepsRelationManager extends RelationManager
                     ->sortable(),
                 TextColumn::make('step')
                     ->label('步骤'),
-                TextColumn::make('location')
-                    ->label('文件 · 方法')
+                TextColumn::make('file')
+                    ->label('文件')
+                    ->fontFamily(FontFamily::Mono),
+                TextColumn::make('function')
+                    ->label('函数')
                     ->fontFamily(FontFamily::Mono),
                 TextColumn::make('input')
-                    ->label('手上拿到的数据')
+                    ->label('参数')
                     ->fontFamily(FontFamily::Mono)
                     ->formatStateUsing(fn (?string $state): string => FlowStepsTable::formatShape($state))
                     ->html()
                     ->wrap()
                     ->extraAttributes(['style' => 'white-space: pre-wrap']),
                 TextColumn::make('change')
-                    ->label('做了什么，交给谁')
+                    ->label('做了什么')
                     ->wrap(),
                 TextColumn::make('output')
-                    ->label('输出（不同于下一跳输入时才填）')
+                    ->label('返回值')
                     ->fontFamily(FontFamily::Mono)
                     ->formatStateUsing(fn (?string $state): string => FlowStepsTable::formatShape($state))
                     ->html()
