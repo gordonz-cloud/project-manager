@@ -16,6 +16,7 @@ use App\Models\Project;
 use App\Models\Requirement;
 use App\Models\Test;
 use Illuminate\Console\Command;
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\File;
 
@@ -68,6 +69,21 @@ class NotionImportCommand extends Command
             return self::FAILURE;
         }
 
+        /**
+         * Every key was assigned above or this method already returned: the
+         * loop's only skip path (a null $rows) adds to $badFiles, which was
+         * just checked to be empty.
+         *
+         * @var array{
+         *     modules: array<int, array<string, mixed>>,
+         *     requirements: array<int, array<string, mixed>>,
+         *     data_models: array<int, array<string, mixed>>,
+         *     model_fields: array<int, array<string, mixed>>,
+         *     features: array<int, array<string, mixed>>,
+         *     flow_steps: array<int, array<string, mixed>>,
+         *     tests: array<int, array<string, mixed>>,
+         * } $data
+         */
         $invalidEnums = $this->collectInvalidEnumValues($data);
 
         if ($invalidEnums !== []) {
@@ -203,7 +219,7 @@ class NotionImportCommand extends Command
         }
     }
 
-    private function trackUpsert(string $table, object $model): void
+    private function trackUpsert(string $table, Model $model): void
     {
         $this->stats[$table] ??= ['created' => 0, 'updated' => 0, 'skipped' => 0];
         $this->stats[$table][$model->wasRecentlyCreated ? 'created' : 'updated']++;
@@ -220,10 +236,11 @@ class NotionImportCommand extends Command
      * @param  array<string, mixed>  $attributes
      * @return TModel
      */
-    private function upsert(string $class, Project $project, string $notionUrl, array $attributes): object
+    private function upsert(string $class, Project $project, string $notionUrl, array $attributes): Model
     {
+        /** @var TModel $model firstOrNew() on a class-string<TModel> erases to Model; this restores the template PHPStan cannot follow through the dynamic call. */
         $model = $class::firstOrNew(['notion_url' => $notionUrl]);
-        $model->project_id = $project->id;
+        $model->setAttribute('project_id', $project->id);
         $model->fill($attributes);
         $model->save();
 

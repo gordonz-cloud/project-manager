@@ -6,18 +6,23 @@ use App\Models\User;
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Validation\Rule;
 
-trait ProfileValidationRules
+/**
+ * Used by the Volt profile settings page (resources/views/pages/settings/⚡profile.blade.php),
+ * which PHPStan does not scan — hence static methods on a plain class rather
+ * than a trait, so nothing here looks unused to it.
+ */
+final class ProfileValidationRules
 {
     /**
      * Get the validation rules used to validate user profiles.
      *
      * @return array<string, array<int, ValidationRule|array<mixed>|string>>
      */
-    protected function profileRules(?int $userId = null): array
+    public static function profileRules(?int $userId = null): array
     {
         return [
-            'name' => $this->nameRules(),
-            'email' => $this->emailRules($userId),
+            'name' => self::nameRules(),
+            'email' => self::emailRules($userId),
         ];
     }
 
@@ -26,7 +31,7 @@ trait ProfileValidationRules
      *
      * @return array<int, ValidationRule|array<mixed>|string>
      */
-    protected function nameRules(): array
+    public static function nameRules(): array
     {
         return ['required', 'string', 'max:255'];
     }
@@ -36,7 +41,7 @@ trait ProfileValidationRules
      *
      * @return array<int, ValidationRule|array<mixed>|string>
      */
-    protected function emailRules(?int $userId = null): array
+    public static function emailRules(?int $userId = null): array
     {
         return [
             'required',
