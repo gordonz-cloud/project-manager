@@ -25,7 +25,11 @@ class RequirementsTable
                     ->searchable(),
                 TextColumn::make('acceptance')
                     ->label('验收标准')
-                    ->wrap(),
+                    // One line per requirement; the whole text is a hover away.
+                    ->limit(12)
+                    ->tooltip(fn (TextColumn $column): ?string => mb_strlen((string) $column->getState()) > 12
+                        ? (string) $column->getState()
+                        : null),
                 TextColumn::make('status')
                     ->label('状态')
                     ->badge(),
