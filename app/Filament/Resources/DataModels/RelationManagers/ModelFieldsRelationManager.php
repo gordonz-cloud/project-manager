@@ -43,6 +43,11 @@ class ModelFieldsRelationManager extends RelationManager
                     ->label('状态')
                     ->options(DataModelStatus::class)
                     ->required(),
+                Select::make('requirements')
+                    ->label('支持需求')
+                    ->relationship('requirements', 'title')
+                    ->multiple()
+                    ->preload(),
             ]);
     }
 
@@ -74,6 +79,10 @@ class ModelFieldsRelationManager extends RelationManager
                 TextColumn::make('status')
                     ->label('状态')
                     ->badge(),
+                TextColumn::make('requirements.title')
+                    ->label('支持需求')
+                    ->badge()
+                    ->listWithLineBreaks(),
             ])
             ->filters([
                 //
