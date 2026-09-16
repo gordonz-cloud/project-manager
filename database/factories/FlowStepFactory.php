@@ -25,6 +25,7 @@ class FlowStepFactory extends Factory
             'path' => fake()->word(),
             'order' => fake()->numberBetween(1, 10),
             'step' => fake()->sentence(3),
+            'file' => fake()->word().'.php',
         ];
     }
 }

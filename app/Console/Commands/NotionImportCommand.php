@@ -350,13 +350,15 @@ class NotionImportCommand extends Command
     {
         foreach ($rows as $row) {
             $featureId = $this->resolve($this->decodeUrls($row['功能'])[0] ?? '', 'flow_steps');
+            [$file, $function] = $this->splitLocation($row['位置'] ?? null);
 
             $model = $this->upsert(FlowStep::class, $project, $row['url'], [
                 'feature_id' => $featureId,
                 'path' => $row['路径'],
                 'order' => $row['顺序'],
                 'step' => $row['步骤'],
-                'location' => $row['位置'] ?? null,
+                'file' => $file,
+                'function' => $function,
                 'input' => $row['输入'] ?? null,
                 'change' => $row['变化'] ?? null,
                 'output' => $row['输出'] ?? null,
@@ -364,6 +366,31 @@ class NotionImportCommand extends Command
             $this->trackUpsert('flow_steps', $model);
             $this->remember($row['url'], $model->id);
         }
+    }
+
+    /**
+     * Splits "位置" ("path::method()", "path · method()", "path::method", or
+     * bare "path") into file and function. The separator is `::` or ` · `; a
+     * trailing `()` on the function is dropped. Anything that does not split
+     * cleanly stays whole in file with a null function.
+     *
+     * @return array{0: string|null, 1: string|null}
+     */
+    private function splitLocation(?string $location): array
+    {
+        if ($location === null) {
+            return [null, null];
+        }
+
+        foreach (['::', ' · '] as $separator) {
+            if (str_contains($location, $separator)) {
+                [$file, $function] = explode($separator, $location, 2);
+
+                return [trim($file), rtrim(trim($function), '()')];
+            }
+        }
+
+        return [$location, null];
     }
 
     /**
