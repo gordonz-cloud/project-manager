@@ -272,8 +272,6 @@ class NotionImportCommand extends Command
                 'status' => $row['状态'],
                 'description' => $row['说明'] ?? null,
                 'business_purpose' => $row['商业目的'] ?? null,
-                'design_gap' => $row['设计差异'] ?? null,
-                'ruling' => $row['拍板'] ?? null,
             ]);
             $this->trackUpsert('data_models', $model);
             $this->remember($row['url'], $model->id);

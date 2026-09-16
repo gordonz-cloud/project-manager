@@ -27,10 +27,6 @@ class DataModelForm
                     ->label('说明'),
                 Textarea::make('business_purpose')
                     ->label('商业目的'),
-                Textarea::make('design_gap')
-                    ->label('设计差异'),
-                Textarea::make('ruling')
-                    ->label('拍板'),
                 Select::make('features')
                     ->label('功能')
                     ->multiple()

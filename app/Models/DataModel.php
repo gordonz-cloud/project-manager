@@ -21,13 +21,11 @@ use Illuminate\Support\Collection;
  * @property DataModelStatus $status
  * @property string|null $description
  * @property string|null $business_purpose
- * @property string|null $design_gap
- * @property string|null $ruling
  * @property string|null $notion_url
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at
  */
-#[Fillable(['name', 'table_name', 'status', 'description', 'business_purpose', 'design_gap', 'ruling', 'notion_url'])]
+#[Fillable(['name', 'table_name', 'status', 'description', 'business_purpose', 'notion_url'])]
 class DataModel extends Model
 {
     /** @use HasFactory<DataModelFactory> */

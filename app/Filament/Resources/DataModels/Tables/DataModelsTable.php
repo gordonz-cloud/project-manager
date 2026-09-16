@@ -35,12 +35,6 @@ class DataModelsTable
                 TextColumn::make('business_purpose')
                     ->label('商业目的')
                     ->wrap(),
-                TextColumn::make('design_gap')
-                    ->label('设计差异')
-                    ->wrap(),
-                TextColumn::make('ruling')
-                    ->label('拍板')
-                    ->wrap(),
                 TextColumn::make('modules')
                     ->label('模块')
                     ->state(fn (DataModel $record) => $record->derivedModules()->pluck('name'))
