@@ -26,8 +26,8 @@ class RequirementsTable
                 TextColumn::make('acceptance')
                     ->label('验收标准')
                     // One line per requirement; the whole text is a hover away.
-                    ->limit(20)
-                    ->tooltip(fn (TextColumn $column): ?string => mb_strlen((string) $column->getState()) > 20
+                    ->limit(40)
+                    ->tooltip(fn (TextColumn $column): ?string => mb_strlen((string) $column->getState()) > 40
                         ? (string) $column->getState()
                         : null),
                 TextColumn::make('status')
