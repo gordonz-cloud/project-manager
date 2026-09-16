@@ -106,7 +106,10 @@ class FeaturesBackfillFromTodosCommand extends Command
      */
     private function applyTodo(Feature $feature, array $todo): void
     {
-        $feature->layer ??= FeatureLayer::from((string) $todo['层']);
+        if ($feature->layers === null || $feature->layers === []) {
+            $feature->layers = [FeatureLayer::from((string) $todo['层'])->value];
+        }
+
         $feature->version ??= ($todo['MVP'] ?? null) === '__YES__' ? '1' : null;
         $feature->save();
     }

@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\Features\Pages;
 
+use App\Enums\FeatureLayer;
 use App\Enums\FeatureTrigger;
 use App\Filament\Resources\Features\FeatureResource;
 use App\Filament\Resources\Requirements\RequirementResource;
@@ -38,9 +39,10 @@ class ViewFeature extends ViewRecord
                         TextEntry::make('status')
                             ->label('状态')
                             ->badge(),
-                        TextEntry::make('layer')
+                        TextEntry::make('layers')
                             ->label('层')
-                            ->badge(),
+                            ->badge()
+                            ->formatStateUsing(fn (string $state): string => FeatureLayer::from($state)->getLabel()),
                         TextEntry::make('version')
                             ->label('版本'),
                         TextEntry::make('triggers')

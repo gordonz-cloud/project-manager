@@ -45,9 +45,10 @@ class FeaturesTable
                 TextColumn::make('status')
                     ->label('状态')
                     ->badge(),
-                TextColumn::make('layer')
+                TextColumn::make('layers')
                     ->label('层')
-                    ->badge(),
+                    ->badge()
+                    ->formatStateUsing(fn (string $state): string => FeatureLayer::from($state)->getLabel()),
                 TextColumn::make('version')
                     ->label('版本'),
                 TextColumn::make('triggers')
@@ -83,9 +84,12 @@ class FeaturesTable
                 SelectFilter::make('requirement')
                     ->label('需求')
                     ->relationship('requirement', 'title'),
-                SelectFilter::make('layer')
+                SelectFilter::make('layers')
                     ->label('层')
-                    ->options(FeatureLayer::class),
+                    ->options(FeatureLayer::class)
+                    ->query(fn (Builder $query, array $data): Builder => $data['value']
+                        ? $query->whereJsonContains('layers', $data['value'])
+                        : $query),
                 SelectFilter::make('version')
                     ->label('版本')
                     ->options(fn (): array => Feature::query()

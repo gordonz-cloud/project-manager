@@ -11,7 +11,7 @@ use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\DissociateAction;
 use Filament\Actions\DissociateBulkAction;
 use Filament\Actions\EditAction;
-use Filament\Forms\Components\Select;
+use Filament\Forms\Components\CheckboxList;
 use Filament\Forms\Components\TextInput;
 use Filament\Resources\RelationManagers\RelationManager;
 use Filament\Schemas\Schema;
@@ -30,7 +30,7 @@ class FeaturesRelationManager extends RelationManager
                     ->label('功能')
                     ->required()
                     ->maxLength(255),
-                Select::make('layer')
+                CheckboxList::make('layers')
                     ->label('层')
                     ->options(FeatureLayer::class),
                 TextInput::make('version')
@@ -47,9 +47,10 @@ class FeaturesRelationManager extends RelationManager
                 TextColumn::make('title')
                     ->label('功能')
                     ->searchable(),
-                TextColumn::make('layer')
+                TextColumn::make('layers')
                     ->label('层')
-                    ->badge(),
+                    ->badge()
+                    ->formatStateUsing(fn (string $state): string => FeatureLayer::from($state)->getLabel()),
                 TextColumn::make('version')
                     ->label('版本'),
             ])

@@ -21,19 +21,18 @@ test('status enum casts stored chinese value back to enum instance', function ()
         ->and($fresh->getRawOriginal('status'))->toBe('进行中');
 });
 
-test('feature layer casts stored chinese value back to enum instance, and version stays nullable', function () {
+test('feature layers casts stored chinese values back as an array, and version stays nullable', function () {
     $project = Project::factory()->create();
 
     $feature = Feature::factory()->create([
         'project_id' => $project->id,
-        'layer' => FeatureLayer::Backend,
+        'layers' => [FeatureLayer::Backend->value, FeatureLayer::Frontend->value],
         'version' => null,
     ]);
 
     $fresh = Feature::find($feature->id);
 
-    expect($fresh->layer)->toBeInstanceOf(FeatureLayer::class)
-        ->and($fresh->layer)->toBe(FeatureLayer::Backend)
-        ->and($fresh->getRawOriginal('layer'))->toBe('后端')
+    expect($fresh->layers)->toBe(['后端', '前端'])
+        ->and(json_decode((string) $fresh->getRawOriginal('layers'), true))->toBe(['后端', '前端'])
         ->and($fresh->version)->toBeNull();
 });

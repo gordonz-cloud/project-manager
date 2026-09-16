@@ -26,7 +26,7 @@ class FeatureFactory extends Factory
             'title' => fake()->sentence(3),
             'status' => fake()->randomElement(FeatureStatus::cases()),
             'triggers' => [fake()->randomElement(FeatureTrigger::cases())->value],
-            'layer' => fake()->randomElement(FeatureLayer::cases()),
+            'layers' => [fake()->randomElement(FeatureLayer::cases())->value],
             'version' => null,
         ];
     }

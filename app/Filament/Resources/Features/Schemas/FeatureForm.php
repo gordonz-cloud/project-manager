@@ -23,7 +23,7 @@ class FeatureForm
                     ->label('状态')
                     ->options(FeatureStatus::class)
                     ->required(),
-                Select::make('layer')
+                CheckboxList::make('layers')
                     ->label('层')
                     ->options(FeatureLayer::class),
                 TextInput::make('version')
