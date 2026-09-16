@@ -2,9 +2,11 @@
 
 namespace App\Filament\Resources\FlowSteps\Schemas;
 
+use App\Models\FlowStep;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
+use Filament\Schemas\Components\Utilities\Get;
 use Filament\Schemas\Schema;
 
 class FlowStepForm
@@ -18,12 +20,18 @@ class FlowStepForm
                     ->relationship('feature', 'title')
                     ->searchable()
                     ->preload()
+                    ->live()
                     ->required(),
                 TextInput::make('step')
                     ->label('步骤')
                     ->required(),
                 TextInput::make('path')
                     ->label('路径')
+                    ->datalist(fn (Get $get): array => FlowStep::query()
+                        ->where('feature_id', $get('feature_id'))
+                        ->distinct()
+                        ->pluck('path')
+                        ->all())
                     ->required(),
                 TextInput::make('order')
                     ->label('顺序')

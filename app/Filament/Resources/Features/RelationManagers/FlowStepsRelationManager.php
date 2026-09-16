@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\Features\RelationManagers;
 
+use App\Models\FlowStep;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\CreateAction;
 use Filament\Actions\DeleteAction;
@@ -35,6 +36,11 @@ class FlowStepsRelationManager extends RelationManager
                     ->label('输出'),
                 TextInput::make('path')
                     ->label('路径')
+                    ->datalist(fn (): array => FlowStep::query()
+                        ->where('feature_id', $this->getOwnerRecord()->getKey())
+                        ->distinct()
+                        ->pluck('path')
+                        ->all())
                     ->required(),
                 TextInput::make('order')
                     ->label('顺序')
