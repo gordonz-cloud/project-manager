@@ -3,12 +3,10 @@
 namespace App\Filament\Resources\Requirements\Schemas;
 
 use App\Enums\RequirementStatus;
-use Filament\Facades\Filament;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
 use Filament\Schemas\Schema;
-use Illuminate\Database\Eloquent\Builder;
 
 class RequirementForm
 {
@@ -28,11 +26,7 @@ class RequirementForm
                     ->required(),
                 Select::make('modules')
                     ->label('模块')
-                    ->relationship(
-                        name: 'modules',
-                        titleAttribute: 'name',
-                        modifyQueryUsing: fn (Builder $query): Builder => $query->where('project_id', Filament::getTenant()->getKey()),
-                    )
+                    ->relationship(name: 'modules', titleAttribute: 'name')
                     ->multiple()
                     ->preload(),
                 TextInput::make('notion_url')

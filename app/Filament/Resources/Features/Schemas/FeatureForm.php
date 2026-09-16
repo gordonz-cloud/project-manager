@@ -4,12 +4,10 @@ namespace App\Filament\Resources\Features\Schemas;
 
 use App\Enums\FeatureStatus;
 use App\Enums\FeatureTrigger;
-use Filament\Facades\Filament;
 use Filament\Forms\Components\CheckboxList;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
 use Filament\Schemas\Schema;
-use Illuminate\Database\Eloquent\Builder;
 
 class FeatureForm
 {
@@ -31,11 +29,7 @@ class FeatureForm
                     ->label('入口'),
                 Select::make('requirement_id')
                     ->label('需求')
-                    ->relationship(
-                        name: 'requirement',
-                        titleAttribute: 'title',
-                        modifyQueryUsing: fn (Builder $query): Builder => $query->where('project_id', Filament::getTenant()->getKey()),
-                    )
+                    ->relationship(name: 'requirement', titleAttribute: 'title')
                     ->searchable()
                     ->preload(),
                 TextInput::make('commit_range')
