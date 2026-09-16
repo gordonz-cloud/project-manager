@@ -4,7 +4,7 @@ namespace App\Filament\Resources\Features\Tables;
 
 use App\Enums\FeatureStatus;
 use App\Enums\FeatureTrigger;
-use App\Models\Feature;
+use App\Filament\Tables\ModuleGroup;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\EditAction;
@@ -16,32 +16,14 @@ use Illuminate\Database\Eloquent\Builder;
 
 class FeaturesTable
 {
-    private const string FIRST_MODULE_SQL = '(select min(modules.name) from module_requirement
-        join modules on modules.id = module_requirement.module_id
-        where module_requirement.requirement_id = features.requirement_id)';
-
     public static function configure(Table $table): Table
     {
-        // A feature reaches its module through its requirement, and a
-        // requirement can sit in several modules, so this is not a column the
-        // table can group on by name. The first module by name stands for the
-        // row; two requirements in the whole dataset span more than one.
-        $firstModuleName = fn (Feature $feature): string => $feature->requirement?->modules
-            ->sortBy('name')->first()->name ?? '（无模块）';
-
         return $table
             ->defaultSort('number')
             ->striped()
             ->modifyQueryUsing(fn (Builder $query): Builder => $query->with('requirement.modules'))
             ->groups([
-                Group::make('module')
-                    ->label('模块')
-                    ->getKeyFromRecordUsing($firstModuleName)
-                    ->getTitleFromRecordUsing($firstModuleName)
-                    ->orderQueryUsing(fn (Builder $query, string $direction): Builder => $query->orderByRaw(
-                        $direction === 'desc' ? self::FIRST_MODULE_SQL.' desc' : self::FIRST_MODULE_SQL.' asc'
-                    ))
-                    ->collapsible(),
+                ModuleGroup::make('requirement'),
                 Group::make('requirement.title')
                     ->label('需求')
                     ->collapsible(),

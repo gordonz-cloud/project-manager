@@ -3,13 +3,13 @@
 namespace App\Filament\Resources\Requirements\Tables;
 
 use App\Enums\RequirementStatus;
+use App\Filament\Tables\ModuleGroup;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\EditAction;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\Filter;
 use Filament\Tables\Filters\SelectFilter;
-use Filament\Tables\Grouping\Group;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 
@@ -46,9 +46,10 @@ class RequirementsTable
                     ->sortable()
                     ->toggleable(isToggledHiddenByDefault: true),
             ])
+            ->modifyQueryUsing(fn (Builder $query): Builder => $query->with('modules'))
+            ->defaultGroup('module')
             ->groups([
-                Group::make('modules.name')
-                    ->label('模块'),
+                ModuleGroup::make(),
             ])
             ->filters([
                 SelectFilter::make('status')

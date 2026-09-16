@@ -48,3 +48,25 @@ test('requirement form module select only offers modules from the current tenant
     expect($options)->toHaveKey($p1Module->id);
     expect($options)->not->toHaveKey($p2Module->id);
 });
+
+test('the requirement list groups by module without asking Filament to sort a many-to-many', function () {
+    $user = User::factory()->create();
+    $project = Project::factory()->create();
+    $project->users()->attach($user);
+
+    $this->actingAs($user);
+    Filament::setTenant($project);
+
+    $shipping = Module::factory()->create(['project_id' => $project->id, 'name' => '物流']);
+    $tracked = Requirement::factory()->create(['project_id' => $project->id, 'title' => '包裹可追踪']);
+    $tracked->modules()->attach($shipping);
+    $loose = Requirement::factory()->create(['project_id' => $project->id, 'title' => '还没归模块']);
+
+    // Grouping straight on modules.name threw: Filament sorts the query by the
+    // grouped relation and refuses BelongsToMany. The subquery order stands in.
+    Livewire::test(ListRequirements::class)
+        ->set('tableGrouping', 'module')
+        ->assertCanSeeTableRecords([$tracked, $loose])
+        ->assertSee('物流')
+        ->assertSee('（无模块）');
+});
