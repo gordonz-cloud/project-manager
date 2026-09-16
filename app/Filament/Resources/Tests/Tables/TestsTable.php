@@ -7,9 +7,7 @@ use App\Enums\TestStatus;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\EditAction;
-use Filament\Tables\Columns\SelectColumn;
 use Filament\Tables\Columns\TextColumn;
-use Filament\Tables\Columns\TextInputColumn;
 use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Table;
 
@@ -20,18 +18,18 @@ class TestsTable
         return $table
             ->striped()
             ->columns([
-                TextInputColumn::make('title')
+                TextColumn::make('title')
                     ->label('测试')
                     ->searchable(),
-                TextInputColumn::make('location')
+                TextColumn::make('location')
                     ->label('测试位置')
                     ->searchable(),
-                SelectColumn::make('status')
+                TextColumn::make('status')
                     ->label('状态')
-                    ->options(TestStatus::class),
-                SelectColumn::make('last_result')
+                    ->badge(),
+                TextColumn::make('last_result')
                     ->label('最近结果')
-                    ->options(TestLastResult::class),
+                    ->badge(),
                 TextColumn::make('features.title')
                     ->label('功能')
                     ->badge()

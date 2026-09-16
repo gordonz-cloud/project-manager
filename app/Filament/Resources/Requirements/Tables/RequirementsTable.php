@@ -6,9 +6,7 @@ use App\Enums\RequirementStatus;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\EditAction;
-use Filament\Tables\Columns\SelectColumn;
 use Filament\Tables\Columns\TextColumn;
-use Filament\Tables\Columns\TextInputColumn;
 use Filament\Tables\Filters\Filter;
 use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Grouping\Group;
@@ -22,15 +20,15 @@ class RequirementsTable
         return $table
             ->striped()
             ->columns([
-                TextInputColumn::make('title')
+                TextColumn::make('title')
                     ->label('需求')
                     ->searchable(),
                 TextColumn::make('acceptance')
                     ->label('验收标准')
                     ->wrap(),
-                SelectColumn::make('status')
+                TextColumn::make('status')
                     ->label('状态')
-                    ->options(RequirementStatus::class),
+                    ->badge(),
                 TextColumn::make('modules.name')
                     ->label('模块')
                     ->badge()

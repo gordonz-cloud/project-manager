@@ -13,7 +13,7 @@ use Filament\Actions\EditAction;
 use Filament\Forms\Components\TextInput;
 use Filament\Resources\RelationManagers\RelationManager;
 use Filament\Schemas\Schema;
-use Filament\Tables\Columns\TextInputColumn;
+use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
 
 class TestsRelationManager extends RelationManager
@@ -37,7 +37,7 @@ class TestsRelationManager extends RelationManager
             ->recordTitleAttribute('title')
             ->striped()
             ->columns([
-                TextInputColumn::make('title')
+                TextColumn::make('title')
                     ->label('测试')
                     ->searchable(),
             ])

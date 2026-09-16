@@ -11,7 +11,6 @@ use Filament\Forms\Components\TextInput;
 use Filament\Resources\RelationManagers\RelationManager;
 use Filament\Schemas\Schema;
 use Filament\Tables\Columns\TextColumn;
-use Filament\Tables\Columns\TextInputColumn;
 use Filament\Tables\Grouping\Group;
 use Filament\Tables\Table;
 
@@ -54,14 +53,14 @@ class FlowStepsRelationManager extends RelationManager
                 Group::make('path')->label('路径')->collapsible(),
             ])
             ->columns([
-                TextInputColumn::make('path')
+                TextColumn::make('path')
                     ->label('路径'),
-                TextInputColumn::make('order')
+                TextColumn::make('order')
                     ->label('顺序')
                     ->sortable(),
-                TextInputColumn::make('step')
+                TextColumn::make('step')
                     ->label('步骤'),
-                TextInputColumn::make('location')
+                TextColumn::make('location')
                     ->label('位置'),
                 TextColumn::make('input')
                     ->label('输入')

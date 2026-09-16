@@ -6,9 +6,7 @@ use App\Enums\DataModelStatus;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\EditAction;
-use Filament\Tables\Columns\SelectColumn;
 use Filament\Tables\Columns\TextColumn;
-use Filament\Tables\Columns\TextInputColumn;
 use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Table;
 
@@ -19,15 +17,15 @@ class DataModelsTable
         return $table
             ->striped()
             ->columns([
-                TextInputColumn::make('name')
+                TextColumn::make('name')
                     ->label('Model')
                     ->searchable(),
-                TextInputColumn::make('table_name')
+                TextColumn::make('table_name')
                     ->label('表名')
                     ->searchable(),
-                SelectColumn::make('status')
+                TextColumn::make('status')
                     ->label('状态')
-                    ->options(DataModelStatus::class),
+                    ->badge(),
                 TextColumn::make('description')
                     ->label('说明')
                     ->wrap(),

@@ -7,9 +7,7 @@ use App\Enums\FeatureTrigger;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\EditAction;
-use Filament\Tables\Columns\SelectColumn;
 use Filament\Tables\Columns\TextColumn;
-use Filament\Tables\Columns\TextInputColumn;
 use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Table;
 
@@ -25,17 +23,17 @@ class FeaturesTable
                     ->label('Feature ID')
                     ->numeric()
                     ->sortable(),
-                TextInputColumn::make('title')
+                TextColumn::make('title')
                     ->label('功能')
                     ->searchable(),
-                SelectColumn::make('status')
+                TextColumn::make('status')
                     ->label('状态')
-                    ->options(FeatureStatus::class),
+                    ->badge(),
                 TextColumn::make('triggers')
                     ->label('触发方式')
                     ->badge()
                     ->formatStateUsing(fn (string $state): string => FeatureTrigger::from($state)->getLabel()),
-                TextInputColumn::make('entry')
+                TextColumn::make('entry')
                     ->label('入口'),
                 TextColumn::make('requirement.title')
                     ->label('需求')
@@ -44,9 +42,9 @@ class FeaturesTable
                     ->url(fn ($record) => $record->requirement_id
                         ? route('filament.admin.resources.requirements.edit', ['tenant' => $record->project->slug, 'record' => $record->requirement_id])
                         : null),
-                TextInputColumn::make('commit_range')
+                TextColumn::make('commit_range')
                     ->label('Commit Range'),
-                TextInputColumn::make('latest_commit')
+                TextColumn::make('latest_commit')
                     ->label('Latest Commit'),
                 TextColumn::make('notion_url')
                     ->label('Notion URL')

@@ -6,7 +6,6 @@ use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\EditAction;
 use Filament\Tables\Columns\TextColumn;
-use Filament\Tables\Columns\TextInputColumn;
 use Filament\Tables\Grouping\Group;
 use Filament\Tables\Table;
 
@@ -27,16 +26,16 @@ class FlowStepsTable
                 TextColumn::make('feature.title')
                     ->label('功能')
                     ->searchable(),
-                TextInputColumn::make('path')
+                TextColumn::make('path')
                     ->label('路径')
                     ->searchable(),
-                TextInputColumn::make('order')
+                TextColumn::make('order')
                     ->label('顺序')
                     ->sortable(),
-                TextInputColumn::make('step')
+                TextColumn::make('step')
                     ->label('步骤')
                     ->searchable(),
-                TextInputColumn::make('location')
+                TextColumn::make('location')
                     ->label('位置'),
                 TextColumn::make('input')
                     ->label('输入')

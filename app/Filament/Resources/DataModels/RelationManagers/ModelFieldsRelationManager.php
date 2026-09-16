@@ -13,10 +13,8 @@ use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Toggle;
 use Filament\Resources\RelationManagers\RelationManager;
 use Filament\Schemas\Schema;
-use Filament\Tables\Columns\SelectColumn;
+use Filament\Tables\Columns\IconColumn;
 use Filament\Tables\Columns\TextColumn;
-use Filament\Tables\Columns\TextInputColumn;
-use Filament\Tables\Columns\ToggleColumn;
 use Filament\Tables\Table;
 
 class ModelFieldsRelationManager extends RelationManager
@@ -58,23 +56,24 @@ class ModelFieldsRelationManager extends RelationManager
                 TextColumn::make('number')
                     ->label('Field ID')
                     ->sortable(),
-                TextInputColumn::make('name')
+                TextColumn::make('name')
                     ->label('字段')
                     ->searchable(),
-                TextInputColumn::make('type')
+                TextColumn::make('type')
                     ->label('类型'),
-                ToggleColumn::make('nullable')
+                IconColumn::make('nullable')
+                    ->boolean()
                     ->label('可空'),
-                TextInputColumn::make('default_value')
+                TextColumn::make('default_value')
                     ->label('默认值'),
-                TextInputColumn::make('constraint')
+                TextColumn::make('constraint')
                     ->label('约束'),
                 TextColumn::make('description')
                     ->label('说明')
                     ->wrap(),
-                SelectColumn::make('status')
+                TextColumn::make('status')
                     ->label('状态')
-                    ->options(DataModelStatus::class),
+                    ->badge(),
             ])
             ->filters([
                 //

@@ -6,10 +6,8 @@ use App\Enums\DataModelStatus;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\EditAction;
-use Filament\Tables\Columns\SelectColumn;
+use Filament\Tables\Columns\IconColumn;
 use Filament\Tables\Columns\TextColumn;
-use Filament\Tables\Columns\TextInputColumn;
-use Filament\Tables\Columns\ToggleColumn;
 use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Grouping\Group;
 use Filament\Tables\Table;
@@ -33,23 +31,24 @@ class ModelFieldsTable
                 TextColumn::make('dataModel.name')
                     ->label('Model')
                     ->searchable(),
-                TextInputColumn::make('name')
+                TextColumn::make('name')
                     ->label('字段')
                     ->searchable(),
-                TextInputColumn::make('type')
+                TextColumn::make('type')
                     ->label('类型'),
-                ToggleColumn::make('nullable')
+                IconColumn::make('nullable')
+                    ->boolean()
                     ->label('可空'),
-                TextInputColumn::make('default_value')
+                TextColumn::make('default_value')
                     ->label('默认值'),
-                TextInputColumn::make('constraint')
+                TextColumn::make('constraint')
                     ->label('约束'),
                 TextColumn::make('description')
                     ->label('说明')
                     ->wrap(),
-                SelectColumn::make('status')
+                TextColumn::make('status')
                     ->label('状态')
-                    ->options(DataModelStatus::class),
+                    ->badge(),
                 TextColumn::make('requirements.title')
                     ->label('支持需求')
                     ->badge()

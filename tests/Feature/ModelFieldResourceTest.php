@@ -84,20 +84,3 @@ test('creating a model field via the resource sets the tenant and the next numbe
     expect($field->project_id)->toBe($p1->id)
         ->and($field->number)->toBe(1);
 });
-
-test('model field nullable can be toggled inline from the table', function () {
-    $user = User::factory()->create();
-    $project = Project::factory()->create();
-    $project->users()->attach($user);
-
-    $model = DataModel::factory()->for($project)->create();
-    $field = ModelField::factory()->for($project)->for($model, 'dataModel')->create(['nullable' => false]);
-
-    $this->actingAs($user);
-    Filament::setTenant($project);
-
-    Livewire::test(ListModelFields::class)
-        ->call('updateTableColumnState', 'nullable', $field->getKey(), true);
-
-    expect($field->refresh()->nullable)->toBeTrue();
-});
