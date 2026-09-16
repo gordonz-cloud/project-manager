@@ -68,6 +68,15 @@ class TestsTable
                     ->toggleable(isToggledHiddenByDefault: true),
             ])
             ->filters([
+                SelectFilter::make('module')
+                    ->label('模块')
+                    ->relationship('features.requirement.modules', 'name')
+                    ->preload(),
+                SelectFilter::make('feature')
+                    ->label('功能')
+                    ->relationship('features', 'title')
+                    ->searchable()
+                    ->preload(),
                 SelectFilter::make('status')
                     ->label('状态')
                     ->options(TestStatus::class),

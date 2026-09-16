@@ -78,9 +78,15 @@ class FeaturesTable
                 SelectFilter::make('status')
                     ->label('状态')
                     ->options(FeatureStatus::class),
+                SelectFilter::make('module')
+                    ->label('模块')
+                    ->relationship('requirement.modules', 'name')
+                    ->preload(),
                 SelectFilter::make('requirement')
                     ->label('需求')
-                    ->relationship('requirement', 'title'),
+                    ->relationship('requirement', 'title')
+                    ->searchable()
+                    ->preload(),
                 SelectFilter::make('layers')
                     ->label('层')
                     ->options(FeatureLayer::class)

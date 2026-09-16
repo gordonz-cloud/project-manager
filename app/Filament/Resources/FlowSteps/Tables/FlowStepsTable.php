@@ -7,6 +7,7 @@ use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\EditAction;
 use Filament\Support\Enums\FontFamily;
 use Filament\Tables\Columns\TextColumn;
+use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Grouping\Group;
 use Filament\Tables\Table;
 
@@ -75,7 +76,15 @@ class FlowStepsTable
                     ->toggleable(isToggledHiddenByDefault: true),
             ])
             ->filters([
-                //
+                SelectFilter::make('module')
+                    ->label('模块')
+                    ->relationship('feature.requirement.modules', 'name')
+                    ->preload(),
+                SelectFilter::make('feature')
+                    ->label('功能')
+                    ->relationship('feature', 'title')
+                    ->searchable()
+                    ->preload(),
             ])
             ->recordActions([
                 EditAction::make()->slideOver(),
