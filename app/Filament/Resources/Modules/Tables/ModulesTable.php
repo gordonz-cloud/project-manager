@@ -6,6 +6,7 @@ use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\EditAction;
 use Filament\Tables\Columns\TextColumn;
+use Filament\Tables\Columns\TextInputColumn;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 
@@ -15,8 +16,9 @@ class ModulesTable
     {
         return $table
             ->modifyQueryUsing(fn (Builder $query) => $query->withCount(['requirements', 'dataModels']))
+            ->striped()
             ->columns([
-                TextColumn::make('name')
+                TextInputColumn::make('name')
                     ->label('名字')
                     ->searchable(),
                 TextColumn::make('requirements_count')
@@ -25,6 +27,9 @@ class ModulesTable
                 TextColumn::make('data_models_count')
                     ->label('Model 数')
                     ->sortable(),
+                TextColumn::make('notion_url')
+                    ->label('Notion URL')
+                    ->toggleable(isToggledHiddenByDefault: true),
                 TextColumn::make('created_at')
                     ->dateTime()
                     ->sortable()
@@ -38,7 +43,7 @@ class ModulesTable
                 //
             ])
             ->recordActions([
-                EditAction::make(),
+                EditAction::make()->slideOver(),
             ])
             ->toolbarActions([
                 BulkActionGroup::make([

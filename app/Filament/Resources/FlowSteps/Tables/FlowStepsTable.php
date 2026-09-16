@@ -6,6 +6,7 @@ use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\EditAction;
 use Filament\Tables\Columns\TextColumn;
+use Filament\Tables\Columns\TextInputColumn;
 use Filament\Tables\Grouping\Group;
 use Filament\Tables\Table;
 
@@ -16,25 +17,39 @@ class FlowStepsTable
         return $table
             ->defaultSort(fn ($query) => $query->orderBy('path')->orderBy('order'))
             ->defaultGroup('feature.title')
+            ->striped()
             ->groups([
                 Group::make('feature.title')
-                    ->label('功能'),
+                    ->label('功能')
+                    ->collapsible(),
             ])
             ->columns([
                 TextColumn::make('feature.title')
                     ->label('功能')
                     ->searchable(),
-                TextColumn::make('path')
+                TextInputColumn::make('path')
                     ->label('路径')
                     ->searchable(),
-                TextColumn::make('order')
+                TextInputColumn::make('order')
                     ->label('顺序')
                     ->sortable(),
-                TextColumn::make('step')
+                TextInputColumn::make('step')
                     ->label('步骤')
                     ->searchable(),
-                TextColumn::make('location')
+                TextInputColumn::make('location')
                     ->label('位置'),
+                TextColumn::make('input')
+                    ->label('输入')
+                    ->wrap(),
+                TextColumn::make('change')
+                    ->label('变化')
+                    ->wrap(),
+                TextColumn::make('output')
+                    ->label('输出')
+                    ->wrap(),
+                TextColumn::make('notion_url')
+                    ->label('Notion URL')
+                    ->toggleable(isToggledHiddenByDefault: true),
                 TextColumn::make('created_at')
                     ->dateTime()
                     ->sortable()
@@ -48,7 +63,7 @@ class FlowStepsTable
                 //
             ])
             ->recordActions([
-                EditAction::make(),
+                EditAction::make()->slideOver(),
             ])
             ->toolbarActions([
                 BulkActionGroup::make([

@@ -6,8 +6,10 @@ use App\Enums\DataModelStatus;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\EditAction;
-use Filament\Tables\Columns\IconColumn;
+use Filament\Tables\Columns\SelectColumn;
 use Filament\Tables\Columns\TextColumn;
+use Filament\Tables\Columns\TextInputColumn;
+use Filament\Tables\Columns\ToggleColumn;
 use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Grouping\Group;
 use Filament\Tables\Table;
@@ -19,6 +21,7 @@ class ModelFieldsTable
         return $table
             ->defaultSort('number')
             ->defaultGroup('dataModel.name')
+            ->striped()
             ->groups([
                 Group::make('dataModel.name')
                     ->label('Model'),
@@ -30,17 +33,30 @@ class ModelFieldsTable
                 TextColumn::make('dataModel.name')
                     ->label('Model')
                     ->searchable(),
-                TextColumn::make('name')
+                TextInputColumn::make('name')
                     ->label('字段')
                     ->searchable(),
-                TextColumn::make('type')
+                TextInputColumn::make('type')
                     ->label('类型'),
-                IconColumn::make('nullable')
-                    ->label('可空')
-                    ->boolean(),
-                TextColumn::make('status')
+                ToggleColumn::make('nullable')
+                    ->label('可空'),
+                TextInputColumn::make('default_value')
+                    ->label('默认值'),
+                TextInputColumn::make('constraint')
+                    ->label('约束'),
+                TextColumn::make('description')
+                    ->label('说明')
+                    ->wrap(),
+                SelectColumn::make('status')
                     ->label('状态')
-                    ->badge(),
+                    ->options(DataModelStatus::class),
+                TextColumn::make('requirements.title')
+                    ->label('支持需求')
+                    ->badge()
+                    ->listWithLineBreaks(),
+                TextColumn::make('notion_url')
+                    ->label('Notion URL')
+                    ->toggleable(isToggledHiddenByDefault: true),
                 TextColumn::make('created_at')
                     ->dateTime()
                     ->sortable()
@@ -56,7 +72,7 @@ class ModelFieldsTable
                     ->options(DataModelStatus::class),
             ])
             ->recordActions([
-                EditAction::make(),
+                EditAction::make()->slideOver(),
             ])
             ->toolbarActions([
                 BulkActionGroup::make([

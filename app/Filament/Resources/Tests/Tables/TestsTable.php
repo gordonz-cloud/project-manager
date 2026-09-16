@@ -7,7 +7,9 @@ use App\Enums\TestStatus;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\EditAction;
+use Filament\Tables\Columns\SelectColumn;
 use Filament\Tables\Columns\TextColumn;
+use Filament\Tables\Columns\TextInputColumn;
 use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Table;
 
@@ -16,27 +18,27 @@ class TestsTable
     public static function configure(Table $table): Table
     {
         return $table
+            ->striped()
             ->columns([
-                TextColumn::make('title')
+                TextInputColumn::make('title')
                     ->label('测试')
                     ->searchable(),
-                TextColumn::make('location')
+                TextInputColumn::make('location')
                     ->label('测试位置')
                     ->searchable(),
-                TextColumn::make('status')
+                SelectColumn::make('status')
                     ->label('状态')
-                    ->badge(),
-                TextColumn::make('last_result')
+                    ->options(TestStatus::class),
+                SelectColumn::make('last_result')
                     ->label('最近结果')
-                    ->badge()
-                    ->color(fn (TestLastResult $state): string => match ($state) {
-                        TestLastResult::Passed => 'success',
-                        TestLastResult::Failed => 'danger',
-                        TestLastResult::Blocked => 'warning',
-                        default => 'gray',
-                    }),
+                    ->options(TestLastResult::class),
                 TextColumn::make('features.title')
-                    ->label('功能'),
+                    ->label('功能')
+                    ->badge()
+                    ->listWithLineBreaks(),
+                TextColumn::make('notion_url')
+                    ->label('Notion URL')
+                    ->toggleable(isToggledHiddenByDefault: true),
                 TextColumn::make('created_at')
                     ->dateTime()
                     ->sortable()
@@ -55,7 +57,7 @@ class TestsTable
                     ->options(TestLastResult::class),
             ])
             ->recordActions([
-                EditAction::make(),
+                EditAction::make()->slideOver(),
             ])
             ->toolbarActions([
                 BulkActionGroup::make([

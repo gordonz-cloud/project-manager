@@ -6,7 +6,9 @@ use App\Enums\DataModelStatus;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\EditAction;
+use Filament\Tables\Columns\SelectColumn;
 use Filament\Tables\Columns\TextColumn;
+use Filament\Tables\Columns\TextInputColumn;
 use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Table;
 
@@ -15,22 +17,44 @@ class DataModelsTable
     public static function configure(Table $table): Table
     {
         return $table
+            ->striped()
             ->columns([
-                TextColumn::make('name')
+                TextInputColumn::make('name')
                     ->label('Model')
                     ->searchable(),
-                TextColumn::make('table_name')
+                TextInputColumn::make('table_name')
                     ->label('表名')
                     ->searchable(),
-                TextColumn::make('status')
+                SelectColumn::make('status')
                     ->label('状态')
-                    ->badge(),
+                    ->options(DataModelStatus::class),
+                TextColumn::make('description')
+                    ->label('说明')
+                    ->wrap(),
+                TextColumn::make('business_purpose')
+                    ->label('商业目的')
+                    ->wrap(),
+                TextColumn::make('design_gap')
+                    ->label('设计差异')
+                    ->wrap(),
+                TextColumn::make('ruling')
+                    ->label('拍板')
+                    ->wrap(),
                 TextColumn::make('modules.name')
-                    ->label('模块'),
+                    ->label('模块')
+                    ->badge()
+                    ->listWithLineBreaks(),
+                TextColumn::make('features.title')
+                    ->label('功能')
+                    ->badge()
+                    ->listWithLineBreaks(),
                 TextColumn::make('model_fields_count')
                     ->label('字段数')
                     ->counts('modelFields')
                     ->sortable(),
+                TextColumn::make('notion_url')
+                    ->label('Notion URL')
+                    ->toggleable(isToggledHiddenByDefault: true),
                 TextColumn::make('created_at')
                     ->dateTime()
                     ->sortable()
@@ -49,7 +73,7 @@ class DataModelsTable
                     ->relationship('modules', 'name'),
             ])
             ->recordActions([
-                EditAction::make(),
+                EditAction::make()->slideOver(),
             ])
             ->toolbarActions([
                 BulkActionGroup::make([
