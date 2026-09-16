@@ -2,9 +2,10 @@
 
 namespace App\Enums;
 
+use Filament\Support\Contracts\HasColor;
 use Filament\Support\Contracts\HasLabel;
 
-enum TestStatus: string implements HasLabel
+enum TestStatus: string implements HasColor, HasLabel
 {
     case ToWrite = '待写';
     case Valid = '有效';
@@ -14,5 +15,15 @@ enum TestStatus: string implements HasLabel
     public function getLabel(): string
     {
         return $this->value;
+    }
+
+    public function getColor(): string
+    {
+        return match ($this) {
+            self::ToWrite => 'info',
+            self::Valid => 'success',
+            self::Stale => 'warning',
+            self::Disabled => 'gray',
+        };
     }
 }

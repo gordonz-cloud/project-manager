@@ -53,6 +53,7 @@ class RequirementsRelationManager extends RelationManager
                 TextColumn::make('features.title')
                     ->label('功能')
                     ->badge()
+                    ->color('gray')
                     ->listWithLineBreaks(),
             ])
             ->filters([

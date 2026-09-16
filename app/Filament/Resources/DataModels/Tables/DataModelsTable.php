@@ -42,6 +42,7 @@ class DataModelsTable
                 TextColumn::make('features.title')
                     ->label('功能')
                     ->badge()
+                    ->color('gray')
                     ->listWithLineBreaks(),
                 TextColumn::make('model_fields_count')
                     ->label('字段数')

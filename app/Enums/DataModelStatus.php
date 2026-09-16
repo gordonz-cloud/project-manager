@@ -2,9 +2,10 @@
 
 namespace App\Enums;
 
+use Filament\Support\Contracts\HasColor;
 use Filament\Support\Contracts\HasLabel;
 
-enum DataModelStatus: string implements HasLabel
+enum DataModelStatus: string implements HasColor, HasLabel
 {
     case Existing = '现有';
     case Designing = '设计中';
@@ -14,5 +15,15 @@ enum DataModelStatus: string implements HasLabel
     public function getLabel(): string
     {
         return $this->value;
+    }
+
+    public function getColor(): string
+    {
+        return match ($this) {
+            self::Existing => 'success',
+            self::Designing => 'warning',
+            self::Planned => 'info',
+            self::Deprecated => 'danger',
+        };
     }
 }

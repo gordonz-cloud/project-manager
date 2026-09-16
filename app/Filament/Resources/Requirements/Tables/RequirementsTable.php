@@ -38,10 +38,12 @@ class RequirementsTable
                 TextColumn::make('modules.name')
                     ->label('模块')
                     ->badge()
+                    ->color('gray')
                     ->listWithLineBreaks(),
                 TextColumn::make('features.title')
                     ->label('功能')
                     ->badge()
+                    ->color('gray')
                     ->listWithLineBreaks(),
                 TextColumn::make('created_at')
                     ->dateTime()

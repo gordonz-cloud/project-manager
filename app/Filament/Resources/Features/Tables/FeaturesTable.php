@@ -57,6 +57,7 @@ class FeaturesTable
                 TextColumn::make('requirement.title')
                     ->label('需求')
                     ->badge()
+                    ->color('gray')
                     ->searchable()
                     ->url(fn ($record) => $record->requirement_id
                         ? route('filament.admin.resources.requirements.edit', ['tenant' => $record->project->slug, 'record' => $record->requirement_id])
