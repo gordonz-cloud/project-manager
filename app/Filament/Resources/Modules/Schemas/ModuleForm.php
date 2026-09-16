@@ -14,9 +14,6 @@ class ModuleForm
                 TextInput::make('name')
                     ->label('名字')
                     ->required(),
-                TextInput::make('notion_url')
-                    ->label('Notion URL')
-                    ->url(),
             ]);
     }
 }

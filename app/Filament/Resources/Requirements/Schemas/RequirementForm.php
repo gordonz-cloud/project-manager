@@ -29,9 +29,6 @@ class RequirementForm
                     ->relationship(name: 'modules', titleAttribute: 'name')
                     ->multiple()
                     ->preload(),
-                TextInput::make('notion_url')
-                    ->label('Notion URL')
-                    ->url(),
             ]);
     }
 }

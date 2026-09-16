@@ -23,9 +23,6 @@ class ModulesTable
                 TextColumn::make('requirements_count')
                     ->label('需求数')
                     ->sortable(),
-                TextColumn::make('notion_url')
-                    ->label('Notion URL')
-                    ->toggleable(isToggledHiddenByDefault: true),
                 TextColumn::make('created_at')
                     ->dateTime()
                     ->sortable()

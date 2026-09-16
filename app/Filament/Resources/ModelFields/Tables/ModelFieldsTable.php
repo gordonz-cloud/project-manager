@@ -53,9 +53,6 @@ class ModelFieldsTable
                 TextColumn::make('status')
                     ->label('状态')
                     ->badge(),
-                TextColumn::make('notion_url')
-                    ->label('Notion URL')
-                    ->toggleable(isToggledHiddenByDefault: true),
                 TextColumn::make('created_at')
                     ->dateTime()
                     ->sortable()

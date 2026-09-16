@@ -46,9 +46,6 @@ class FeaturesTable
                     ->label('Commit Range'),
                 TextColumn::make('latest_commit')
                     ->label('Latest Commit'),
-                TextColumn::make('notion_url')
-                    ->label('Notion URL')
-                    ->toggleable(isToggledHiddenByDefault: true),
                 TextColumn::make('created_at')
                     ->dateTime()
                     ->sortable()

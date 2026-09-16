@@ -54,9 +54,6 @@ class DataModelsTable
                     ->label('字段数')
                     ->counts('modelFields')
                     ->sortable(),
-                TextColumn::make('notion_url')
-                    ->label('Notion URL')
-                    ->toggleable(isToggledHiddenByDefault: true),
                 TextColumn::make('created_at')
                     ->dateTime()
                     ->sortable()

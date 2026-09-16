@@ -46,9 +46,6 @@ class FlowStepsTable
                 TextColumn::make('output')
                     ->label('输出')
                     ->wrap(),
-                TextColumn::make('notion_url')
-                    ->label('Notion URL')
-                    ->toggleable(isToggledHiddenByDefault: true),
                 TextColumn::make('created_at')
                     ->dateTime()
                     ->sortable()

@@ -37,10 +37,6 @@ class RequirementsTable
                     ->label('功能')
                     ->badge()
                     ->listWithLineBreaks(),
-                TextColumn::make('notion_url')
-                    ->label('Notion URL')
-                    ->searchable()
-                    ->toggleable(isToggledHiddenByDefault: true),
                 TextColumn::make('created_at')
                     ->dateTime()
                     ->sortable()

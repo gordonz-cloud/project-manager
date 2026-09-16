@@ -38,9 +38,6 @@ class ModelFieldForm
                     ->label('状态')
                     ->options(DataModelStatus::class)
                     ->required(),
-                TextInput::make('notion_url')
-                    ->label('Notion')
-                    ->url(),
             ]);
     }
 }

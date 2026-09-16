@@ -36,9 +36,6 @@ class FeatureForm
                     ->label('Commit Range'),
                 TextInput::make('latest_commit')
                     ->label('Latest Commit'),
-                TextInput::make('notion_url')
-                    ->label('Notion URL')
-                    ->url(),
             ]);
     }
 }

@@ -32,9 +32,6 @@ class TestForm
                     ->multiple()
                     ->relationship('features', 'title')
                     ->preload(),
-                TextInput::make('notion_url')
-                    ->label('Notion')
-                    ->url(),
             ]);
     }
 }

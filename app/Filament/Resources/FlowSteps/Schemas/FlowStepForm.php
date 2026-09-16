@@ -37,9 +37,6 @@ class FlowStepForm
                     ->label('变化'),
                 Textarea::make('output')
                     ->label('输出'),
-                TextInput::make('notion_url')
-                    ->label('Notion')
-                    ->url(),
             ]);
     }
 }

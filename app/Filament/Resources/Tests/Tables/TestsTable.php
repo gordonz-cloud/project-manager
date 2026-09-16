@@ -34,9 +34,6 @@ class TestsTable
                     ->label('功能')
                     ->badge()
                     ->listWithLineBreaks(),
-                TextColumn::make('notion_url')
-                    ->label('Notion URL')
-                    ->toggleable(isToggledHiddenByDefault: true),
                 TextColumn::make('created_at')
                     ->dateTime()
                     ->sortable()
