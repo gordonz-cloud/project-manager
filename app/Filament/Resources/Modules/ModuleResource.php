@@ -17,6 +17,10 @@ use Filament\Tables\Table;
 
 class ModuleResource extends Resource
 {
+    protected static ?string $navigationLabel = 'Modules';
+
+    protected static ?int $navigationSort = 1;
+
     protected static ?string $model = Module::class;
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedRectangleStack;
@@ -24,8 +28,6 @@ class ModuleResource extends Resource
     protected static ?string $modelLabel = '模块';
 
     protected static ?string $pluralModelLabel = '模块';
-
-    protected static ?string $navigationLabel = '模块';
 
     public static function form(Schema $schema): Schema
     {

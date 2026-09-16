@@ -16,6 +16,10 @@ use Illuminate\Database\Eloquent\Builder;
 
 class FeaturesTable
 {
+    private const string FIRST_MODULE_SQL = '(select min(modules.name) from module_requirement
+        join modules on modules.id = module_requirement.module_id
+        where module_requirement.requirement_id = features.requirement_id)';
+
     public static function configure(Table $table): Table
     {
         // A feature reaches its module through its requirement, and a
@@ -23,7 +27,7 @@ class FeaturesTable
         // table can group on by name. The first module by name stands for the
         // row; two requirements in the whole dataset span more than one.
         $firstModuleName = fn (Feature $feature): string => $feature->requirement?->modules
-            ->sortBy('name')->first()?->name ?? '（无模块）';
+            ->sortBy('name')->first()->name ?? '（无模块）';
 
         return $table
             ->defaultSort('number')
@@ -35,9 +39,7 @@ class FeaturesTable
                     ->getKeyFromRecordUsing($firstModuleName)
                     ->getTitleFromRecordUsing($firstModuleName)
                     ->orderQueryUsing(fn (Builder $query, string $direction): Builder => $query->orderByRaw(
-                        '(select min(modules.name) from module_requirement
-                            join modules on modules.id = module_requirement.module_id
-                            where module_requirement.requirement_id = features.requirement_id) '.$direction
+                        $direction === 'desc' ? self::FIRST_MODULE_SQL.' desc' : self::FIRST_MODULE_SQL.' asc'
                     ))
                     ->collapsible(),
                 Group::make('requirement.title')

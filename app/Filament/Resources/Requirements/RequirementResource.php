@@ -17,6 +17,10 @@ use Filament\Tables\Table;
 
 class RequirementResource extends Resource
 {
+    protected static ?string $navigationLabel = 'Requirements';
+
+    protected static ?int $navigationSort = 2;
+
     protected static ?string $model = Requirement::class;
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedRectangleStack;
@@ -24,8 +28,6 @@ class RequirementResource extends Resource
     protected static ?string $modelLabel = '需求';
 
     protected static ?string $pluralModelLabel = '需求';
-
-    protected static ?string $navigationLabel = '需求';
 
     public static function form(Schema $schema): Schema
     {

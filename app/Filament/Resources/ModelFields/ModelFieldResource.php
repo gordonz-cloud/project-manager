@@ -16,11 +16,13 @@ use Filament\Tables\Table;
 
 class ModelFieldResource extends Resource
 {
+    protected static ?string $navigationLabel = 'Model Fields';
+
+    protected static ?int $navigationSort = 5;
+
     protected static ?string $model = ModelField::class;
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedRectangleStack;
-
-    protected static ?string $navigationLabel = 'Model Field';
 
     protected static ?string $modelLabel = 'Model Field';
 

@@ -16,11 +16,13 @@ use Filament\Tables\Table;
 
 class FlowStepResource extends Resource
 {
+    protected static ?string $navigationLabel = 'Flow Steps';
+
+    protected static ?int $navigationSort = 6;
+
     protected static ?string $model = FlowStep::class;
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedRectangleStack;
-
-    protected static ?string $navigationLabel = '数据流';
 
     protected static ?string $modelLabel = '数据流';
 

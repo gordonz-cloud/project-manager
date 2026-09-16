@@ -17,11 +17,13 @@ use Filament\Tables\Table;
 
 class DataModelResource extends Resource
 {
+    protected static ?string $navigationLabel = 'Models';
+
+    protected static ?int $navigationSort = 4;
+
     protected static ?string $model = DataModel::class;
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedRectangleStack;
-
-    protected static ?string $navigationLabel = 'Model';
 
     protected static ?string $modelLabel = 'Model';
 
