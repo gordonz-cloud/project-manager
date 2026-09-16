@@ -42,6 +42,9 @@ test('imports all tables and relations', function () {
     $feature = Feature::where('notion_url', 'https://notion.test/f1')->first();
     expect($feature->number)->toBe(1)
         ->and($feature->requirement_id)->toBe($requirement->id)
+        // The fixture carries this as the JSON text the exporter writes, so a
+        // regression back to storing that text encoded twice fails here.
+        ->and($feature->triggers)->toBe(['HTTP', 'UI'])
         ->and($feature->dataModels)->toHaveCount(1);
 
     $field = ModelField::where('notion_url', 'https://notion.test/mf1')->first();

@@ -158,6 +158,23 @@ class NotionImportCommand extends Command
     }
 
     /**
+     * A multi-select arrives from the exporter as the JSON text Notion hands
+     * back — '["HTTP","UI"]' — not as a PHP array. Handing that text to an
+     * array cast stores it encoded twice, and the table then asks the enum
+     * about the string "[\"HTTP\"]".
+     *
+     * @return list<string>|null
+     */
+    private function decodeList(mixed $value): ?array
+    {
+        if (is_string($value)) {
+            $value = json_decode($value, true);
+        }
+
+        return is_array($value) ? array_values($value) : null;
+    }
+
+    /**
      * @return array<int, string>
      */
     private function decodeUrls(mixed $value): array
@@ -302,7 +319,7 @@ class NotionImportCommand extends Command
                 'title' => $row['功能'],
                 'number' => $row['Feature ID'],
                 'status' => $row['状态'],
-                'triggers' => $row['触发方式'] ?? null,
+                'triggers' => $this->decodeList($row['触发方式'] ?? null),
                 'entry' => $row['入口'] ?? null,
                 'commit_range' => $row['Commit Range'] ?? null,
                 'latest_commit' => $row['Latest Commit'] ?? null,

@@ -3,7 +3,7 @@
         "功能": "下单扣库存",
         "Feature ID": 1,
         "状态": "开发中",
-        "触发方式": ["HTTP", "UI"],
+        "触发方式": "[\"HTTP\",\"UI\"]",
         "入口": "OrderController@store",
         "需求": "[\"https://notion.test/r1\"]",
         "Model": "[\"https://notion.test/d1\"]",
