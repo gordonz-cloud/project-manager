@@ -18,7 +18,6 @@ class DataModelsRelationManager extends RelationManager
     {
         return $table
             ->recordTitleAttribute('name')
-            ->striped()
             ->columns([
                 TextColumn::make('name')
                     ->label('模型')

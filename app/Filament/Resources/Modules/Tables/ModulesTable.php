@@ -15,7 +15,6 @@ class ModulesTable
     {
         return $table
             ->modifyQueryUsing(fn (Builder $query) => $query->withCount('requirements'))
-            ->striped()
             ->columns([
                 TextColumn::make('name')
                     ->label('名字')

@@ -51,7 +51,6 @@ class ModelFieldsRelationManager extends RelationManager
         return $table
             ->recordTitleAttribute('name')
             ->defaultSort('number')
-            ->striped()
             ->columns([
                 TextColumn::make('number')
                     ->label('Field ID')

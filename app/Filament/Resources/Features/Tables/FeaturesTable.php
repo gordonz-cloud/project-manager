@@ -23,7 +23,6 @@ class FeaturesTable
     {
         return $table
             ->defaultSort('number')
-            ->striped()
             ->recordUrl(fn (Feature $record): string => FeatureResource::getUrl('view', ['record' => $record]))
             ->recordAction(null)
             ->modifyQueryUsing(fn (Builder $query): Builder => $query->with('requirement.modules'))

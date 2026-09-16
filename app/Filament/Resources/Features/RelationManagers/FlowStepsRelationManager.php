@@ -64,7 +64,6 @@ class FlowStepsRelationManager extends RelationManager
         return $table
             ->recordTitleAttribute('step')
             ->defaultSort('order')
-            ->striped()
             ->groups([
                 Group::make('path')->label('路径')->collapsible(),
             ])

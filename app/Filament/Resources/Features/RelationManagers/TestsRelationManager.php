@@ -35,7 +35,6 @@ class TestsRelationManager extends RelationManager
     {
         return $table
             ->recordTitleAttribute('title')
-            ->striped()
             ->columns([
                 TextColumn::make('title')
                     ->label('测试')

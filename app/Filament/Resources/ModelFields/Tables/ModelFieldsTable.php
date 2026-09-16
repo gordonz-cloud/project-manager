@@ -19,7 +19,6 @@ class ModelFieldsTable
         return $table
             ->defaultSort('number')
             ->defaultGroup('dataModel.name')
-            ->striped()
             ->groups([
                 Group::make('dataModel.name')
                     ->label('Model'),

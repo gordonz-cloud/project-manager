@@ -18,7 +18,6 @@ class DataModelsTable
     {
         return $table
             ->modifyQueryUsing(fn (Builder $query) => $query->with('features.requirement.modules'))
-            ->striped()
             ->columns([
                 TextColumn::make('name')
                     ->label('Model')

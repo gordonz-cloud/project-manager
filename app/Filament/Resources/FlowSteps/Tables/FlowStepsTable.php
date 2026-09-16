@@ -27,7 +27,6 @@ class FlowStepsTable
         return $table
             ->defaultSort(fn ($query) => $query->orderBy('path')->orderBy('order'))
             ->defaultGroup('feature.title')
-            ->striped()
             ->groups([
                 Group::make('feature.title')
                     ->label('功能')

@@ -26,7 +26,6 @@ class TestsTable
         $firstFeature = fn (Test $test): string => $test->features->sortBy('number')->first()->title ?? '（未挂功能）';
 
         return $table
-            ->striped()
             ->modifyQueryUsing(fn (Builder $query): Builder => $query->with('features'))
             ->defaultGroup('feature')
             ->groups([

@@ -19,7 +19,6 @@ class RequirementsTable
     public static function configure(Table $table): Table
     {
         return $table
-            ->striped()
             ->columns([
                 TextColumn::make('title')
                     ->label('需求')
