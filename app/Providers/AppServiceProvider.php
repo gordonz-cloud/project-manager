@@ -29,9 +29,13 @@ class AppServiceProvider extends ServiceProvider
         // Every list here is read top to bottom: a thousand rows a page means
         // no table today has a second page, while a table that one day grows
         // past a few thousand rows still opens instead of rendering the lot.
+        // Clicking a row opens the same slide-over as its edit action instead
+        // of leaving for the edit page; the table stays where it was.
         Table::configureUsing(fn (Table $table): Table => $table
             ->paginationPageOptions([100, 500, 1000])
-            ->defaultPaginationPageOption(1000));
+            ->defaultPaginationPageOption(1000)
+            ->recordUrl(null)
+            ->recordAction('edit'));
     }
 
     /**
