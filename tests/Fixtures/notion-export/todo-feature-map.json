@@ -1,0 +1,4 @@
+[
+  {"todo": "Reworded todo text", "feature": 1, "confidence": "high", "why": "test fixture: reworded title, matched by number"},
+  {"todo": "Ambiguous todo text", "feature": 1, "confidence": "low", "why": "test fixture: not confident enough to apply"}
+]

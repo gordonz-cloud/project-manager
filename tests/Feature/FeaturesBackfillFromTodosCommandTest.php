@@ -32,8 +32,8 @@ test('backfills layer and version from matching todos, lists what it cannot matc
         'project-slug' => 'sg',
         '--file' => base_path('tests/Fixtures/notion-export/todos.json'),
     ])
-        ->expectsOutputToContain('匹配 3、未匹配 1')
-        ->expectsOutputToContain('Nothing matches this title')
+        ->expectsOutputToContain('high 应用 3、low 0、未匹配 3')
+        ->expectsOutputToContain('[未匹配] Nothing matches this title')
         ->assertSuccessful();
 
     expect($exact->fresh()->layer)->toBe(FeatureLayer::Backend)
@@ -53,4 +53,28 @@ test('backfills layer and version from matching todos, lists what it cannot matc
 
     expect($exact->fresh()->layer)->toBe(FeatureLayer::Manual)
         ->and($exact->fresh()->version)->toBe('2');
+});
+
+test('a --map file applies only its high confidence entries, matched by feature number', function () {
+    $project = Project::factory()->create(['slug' => 'sg']);
+
+    // First feature created gets number 1, per HasProjectSequence.
+    $mappedFeature = Feature::factory()->create([
+        'project_id' => $project->id,
+        'title' => 'Completely differently worded feature title',
+        'layer' => null,
+        'version' => null,
+    ]);
+
+    $this->artisan('features:backfill-from-todos', [
+        'project-slug' => 'sg',
+        '--file' => base_path('tests/Fixtures/notion-export/todos.json'),
+        '--map' => base_path('tests/Fixtures/notion-export/todo-feature-map.json'),
+    ])
+        ->expectsOutputToContain('high 应用 1、low 1、未匹配 4')
+        ->expectsOutputToContain('[low] Ambiguous todo text → #1 — test fixture: not confident enough to apply')
+        ->assertSuccessful();
+
+    expect($mappedFeature->fresh()->layer)->toBe(FeatureLayer::Backend)
+        ->and($mappedFeature->fresh()->version)->toBe('1');
 });
