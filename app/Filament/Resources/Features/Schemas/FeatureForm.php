@@ -36,10 +36,6 @@ class FeatureForm
                     ->relationship(name: 'requirement', titleAttribute: 'title')
                     ->searchable()
                     ->preload(),
-                TextInput::make('commit_range')
-                    ->label('Commit Range'),
-                TextInput::make('latest_commit')
-                    ->label('Latest Commit'),
             ]);
     }
 }

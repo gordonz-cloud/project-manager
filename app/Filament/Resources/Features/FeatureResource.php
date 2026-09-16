@@ -6,6 +6,7 @@ use App\Filament\Resources\Features\Pages\CreateFeature;
 use App\Filament\Resources\Features\Pages\EditFeature;
 use App\Filament\Resources\Features\Pages\ListFeatures;
 use App\Filament\Resources\Features\Pages\ViewFeature;
+use App\Filament\Resources\Features\RelationManagers\CommitsRelationManager;
 use App\Filament\Resources\Features\RelationManagers\DataModelsRelationManager;
 use App\Filament\Resources\Features\RelationManagers\FlowStepsRelationManager;
 use App\Filament\Resources\Features\RelationManagers\TestsRelationManager;
@@ -48,6 +49,7 @@ class FeatureResource extends Resource
             FlowStepsRelationManager::class,
             TestsRelationManager::class,
             DataModelsRelationManager::class,
+            CommitsRelationManager::class,
         ];
     }
 

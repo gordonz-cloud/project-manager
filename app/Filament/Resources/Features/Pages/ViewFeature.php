@@ -59,10 +59,6 @@ class ViewFeature extends ViewRecord
                             ->label('模块')
                             ->state(fn (Feature $record): array => $record->requirement?->modules->pluck('name')->all() ?? [])
                             ->badge(),
-                        TextEntry::make('commit_range')
-                            ->label('Commit Range'),
-                        TextEntry::make('latest_commit')
-                            ->label('Latest Commit'),
                     ]),
             ]);
     }

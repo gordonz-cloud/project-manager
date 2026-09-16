@@ -25,7 +25,7 @@ class FeaturesTable
             ->defaultSort('number')
             ->recordUrl(fn (Feature $record): string => FeatureResource::getUrl('view', ['record' => $record]))
             ->recordAction(null)
-            ->modifyQueryUsing(fn (Builder $query): Builder => $query->with('requirement.modules'))
+            ->modifyQueryUsing(fn (Builder $query): Builder => $query->with('requirement.modules')->withCount('commits'))
             ->groups([
                 ModuleGroup::make('requirement'),
                 Group::make('requirement.title')
@@ -62,10 +62,9 @@ class FeaturesTable
                     ->url(fn ($record) => $record->requirement_id
                         ? route('filament.admin.resources.requirements.edit', ['tenant' => $record->project->slug, 'record' => $record->requirement_id])
                         : null),
-                TextColumn::make('commit_range')
-                    ->label('Commit Range'),
-                TextColumn::make('latest_commit')
-                    ->label('Latest Commit'),
+                TextColumn::make('commits_count')
+                    ->label('Commits')
+                    ->numeric(),
                 TextColumn::make('created_at')
                     ->dateTime()
                     ->sortable()
