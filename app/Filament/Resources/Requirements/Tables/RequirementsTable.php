@@ -80,11 +80,14 @@ class RequirementsTable
                     ->badge()
                     ->color('gray')
                     ->listWithLineBreaks(),
-                TextColumn::make('features.title')
+                TextColumn::make('features_count')
                     ->label('功能')
-                    ->badge()
-                    ->color('gray')
-                    ->listWithLineBreaks(),
+                    ->counts('features')
+                    ->formatStateUsing(fn (int $state): string => "{$state} 个")
+                    ->tooltip(fn (Requirement $record): ?string => $record->features->isEmpty()
+                        ? null
+                        : $record->features->pluck('title')->implode("\n"))
+                    ->sortable(),
                 TextColumn::make('created_at')
                     ->dateTime()
                     ->sortable()
@@ -94,7 +97,7 @@ class RequirementsTable
                     ->sortable()
                     ->toggleable(isToggledHiddenByDefault: true),
             ])
-            ->modifyQueryUsing(fn (Builder $query): Builder => $query->with(['modules', 'dependsOn']))
+            ->modifyQueryUsing(fn (Builder $query): Builder => $query->with(['modules', 'dependsOn', 'features']))
             ->defaultSort('buildOrder')
             ->defaultGroup('module')
             ->groups([
