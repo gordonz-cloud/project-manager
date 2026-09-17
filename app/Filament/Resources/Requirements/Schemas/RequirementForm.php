@@ -3,10 +3,13 @@
 namespace App\Filament\Resources\Requirements\Schemas;
 
 use App\Enums\RequirementStatus;
+use App\Models\Requirement;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
 use Filament\Schemas\Schema;
+use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Validation\ValidationException;
 
 class RequirementForm
 {
@@ -31,6 +34,34 @@ class RequirementForm
                     ->relationship(name: 'modules', titleAttribute: 'name')
                     ->multiple()
                     ->preload(),
+                Select::make('dependsOn')
+                    ->label('依赖的需求')
+                    ->relationship(
+                        'dependsOn',
+                        'title',
+                        fn (Builder $query, ?Requirement $record) => $record ? $query->whereKeyNot($record->id) : $query,
+                    )
+                    ->getOptionLabelFromRecordUsing(fn (Requirement $record): string => "{$record->id} · {$record->title}")
+                    ->multiple()
+                    ->preload()
+                    ->searchable()
+                    ->dehydrateStateUsing(function (array $state, ?Requirement $record): array {
+                        if ($record) {
+                            foreach ($state as $dependsOnId) {
+                                $dependsOnId = (int) $dependsOnId;
+
+                                if (Requirement::wouldCycle($record->id, $dependsOnId)) {
+                                    $dependsOnTitle = Requirement::find($dependsOnId)?->title;
+
+                                    throw ValidationException::withMessages([
+                                        'dependsOn' => "{$dependsOnTitle} 已经（直接或间接）依赖 {$record->title}，不能反过来",
+                                    ]);
+                                }
+                            }
+                        }
+
+                        return $state;
+                    }),
             ]);
     }
 }
