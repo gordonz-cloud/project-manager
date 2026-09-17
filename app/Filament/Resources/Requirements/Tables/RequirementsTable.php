@@ -20,6 +20,10 @@ class RequirementsTable
     {
         return $table
             ->columns([
+                TextColumn::make('id')
+                    ->label('需求 ID')
+                    ->numeric()
+                    ->sortable(),
                 TextColumn::make('title')
                     ->label('需求')
                     ->searchable(),
