@@ -19,11 +19,10 @@ use Illuminate\Support\Carbon;
  * @property string|null $location
  * @property TestStatus $status
  * @property TestLastResult $last_result
- * @property string|null $notion_url
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at
  */
-#[Fillable(['title', 'location', 'status', 'last_result', 'notion_url'])]
+#[Fillable(['title', 'location', 'status', 'last_result'])]
 class Test extends Model
 {
     /** @use HasFactory<TestFactory> */

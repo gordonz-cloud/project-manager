@@ -23,12 +23,11 @@ use Illuminate\Support\Carbon;
  * @property array<int, string>|null $triggers
  * @property string|null $entry
  * @property int|null $requirement_id
- * @property string|null $notion_url
  * @property array<int, string>|null $layers
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at
  */
-#[Fillable(['title', 'number', 'status', 'triggers', 'entry', 'requirement_id', 'notion_url', 'layers'])]
+#[Fillable(['title', 'number', 'status', 'triggers', 'entry', 'requirement_id', 'layers'])]
 class Feature extends Model
 {
     /** @use HasFactory<FeatureFactory> */

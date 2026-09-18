@@ -22,11 +22,10 @@ use Illuminate\Support\Carbon;
  * @property string|null $input
  * @property string|null $change
  * @property string|null $output
- * @property string|null $notion_url
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at
  */
-#[Fillable(['feature_id', 'path', 'order', 'step', 'file', 'function', 'input', 'change', 'output', 'notion_url'])]
+#[Fillable(['feature_id', 'path', 'order', 'step', 'file', 'function', 'input', 'change', 'output'])]
 class FlowStep extends Model
 {
     /** @use HasFactory<FlowStepFactory> */

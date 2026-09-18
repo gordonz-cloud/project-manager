@@ -24,11 +24,10 @@ use Illuminate\Support\Carbon;
  * @property string|null $constraint
  * @property string|null $description
  * @property DataModelStatus $status
- * @property string|null $notion_url
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at
  */
-#[Fillable(['data_model_id', 'number', 'name', 'type', 'nullable', 'default_value', 'constraint', 'description', 'status', 'notion_url'])]
+#[Fillable(['data_model_id', 'number', 'name', 'type', 'nullable', 'default_value', 'constraint', 'description', 'status'])]
 class ModelField extends Model
 {
     /** @use HasFactory<ModelFieldFactory> */

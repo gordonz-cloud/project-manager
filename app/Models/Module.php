@@ -15,11 +15,10 @@ use Illuminate\Support\Collection;
  * @property int $id
  * @property int $project_id
  * @property string $name
- * @property string|null $notion_url
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at
  */
-#[Fillable(['name', 'notion_url'])]
+#[Fillable(['name'])]
 class Module extends Model
 {
     /** @use HasFactory<ModuleFactory> */
