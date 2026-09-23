@@ -57,8 +57,6 @@ class Feature extends Model
                 throw new LogicException('A feature use case must belong to the same project.');
             }
 
-            $feature->requirement_id = $useCase->requirement_id;
-
             if ($feature->module_id === null) {
                 $moduleIds = $useCase->modules()->pluck('modules.id');
 

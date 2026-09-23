@@ -18,6 +18,7 @@ use App\Models\ImplementationNodeEdge;
 use App\Models\ModuleSpec;
 use App\Models\NodeRun;
 use App\Models\Project;
+use App\Models\Requirement;
 use App\Models\RunEvent;
 use App\Models\Scenario;
 use App\Models\Test as TestModel;
@@ -221,4 +222,16 @@ test('a workflow run stays inside its use case', function () {
         'workflow_run_id' => $run->id,
         'implementation_node_id' => $otherNode->id,
     ]))->toThrow(LogicException::class, 'workflow use case');
+});
+
+test('saving a feature under a use case keeps its own requirement', function () {
+    $project = Project::factory()->create();
+    $spec = ModuleSpec::factory()->forProject($project)->create();
+    $useCase = UseCase::factory()->forModule($spec->module)->create();
+    $requirement = Requirement::factory()->create(['project_id' => $project->id]);
+
+    $feature = Feature::factory()->forUseCase($useCase)->create(['requirement_id' => $requirement->id]);
+    $feature->update(['title' => 'Renamed']);
+
+    expect($feature->fresh()->requirement_id)->toBe($requirement->id);
 });
