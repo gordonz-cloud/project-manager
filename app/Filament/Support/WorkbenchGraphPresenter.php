@@ -204,7 +204,7 @@ class WorkbenchGraphPresenter
                 label: $useCase->goal,
                 icon: 'heroicon-m-rectangle-stack',
                 tone: $this->tone($useCase),
-                badge: "{$doneFeatures}/{$useCase->features->count()}",
+                badge: "{$useCase->modelCount()} Model · {$doneFeatures}/{$useCase->features->count()}",
                 children: array_values(array_filter([
                     $useCase->spec === null ? null : $this->leaf($useCase->spec, 'Use Case Spec', 'heroicon-m-document-text'),
                     WorkbenchTreeNode::folder($key, 'modules', '模块', 'heroicon-m-cube', $this->moduleNodes($useCase->participatingModules()->load('spec'))),

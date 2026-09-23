@@ -15,8 +15,11 @@ use App\Models\UseCase;
 use App\Models\UseCaseGroup;
 use App\Models\UseCaseSpec;
 use App\Models\WorkflowRun;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Support\Facades\DB;
 
 /**
  * Reads what the workbench tree shows. Loads the whole project in one go.
@@ -51,7 +54,7 @@ class WorkbenchGraphService
         return UseCaseGroup::query()
             ->where('project_id', $project->id)
             ->with([
-                'useCases' => fn ($useCases) => $useCases->orderBy('goal')->orderBy('id'),
+                'useCases' => fn ($useCases) => $this->orderUseCasesByModelCount($useCases),
                 ...$this->useCaseTreeRelations('useCases.'),
             ])
             ->orderBy('sort_order')
@@ -64,13 +67,12 @@ class WorkbenchGraphService
      */
     public function ungroupedUseCases(Project $project): Collection
     {
-        return UseCase::query()
-            ->where('project_id', $project->id)
-            ->whereNull('use_case_group_id')
-            ->with($this->useCaseTreeRelations())
-            ->orderBy('goal')
-            ->orderBy('id')
-            ->get();
+        return $this->orderUseCasesByModelCount(
+            UseCase::query()
+                ->where('project_id', $project->id)
+                ->whereNull('use_case_group_id')
+                ->with($this->useCaseTreeRelations()),
+        )->get();
     }
 
     /**
@@ -125,6 +127,26 @@ class WorkbenchGraphService
         }
 
         return $modelClass::query()->whereKey((int) $id)->where('project_id', $project->id)->first();
+    }
+
+    /**
+     * Use cases ordered by how many distinct data models their features touch (fewest
+     * first), ties by name. One correlated subquery, no N+1.
+     *
+     * @param  Builder<UseCase>|HasMany<UseCase, *>  $query
+     * @return Builder<UseCase>|HasMany<UseCase, *>
+     */
+    private function orderUseCasesByModelCount(Builder|HasMany $query): Builder|HasMany
+    {
+        return $query
+            ->addSelect(['model_count' => DB::table('data_model_feature')
+                ->join('features', 'features.id', '=', 'data_model_feature.feature_id')
+                ->whereColumn('features.use_case_id', 'use_cases.id')
+                ->selectRaw('count(distinct data_model_feature.data_model_id)'),
+            ])
+            ->orderBy('model_count')
+            ->orderBy('goal')
+            ->orderBy('id');
     }
 
     /**

@@ -127,6 +127,19 @@ class UseCase extends Model
     }
 
     /**
+     * Distinct data models this use case's features use. Reads the `model_count` column
+     * the workbench query selects; falls back to counting relations when queried plainly.
+     */
+    public function modelCount(): int
+    {
+        if (array_key_exists('model_count', $this->attributes)) {
+            return (int) $this->attributes['model_count'];
+        }
+
+        return $this->features->flatMap(fn (Feature $feature): Collection => $feature->dataModels)->unique('id')->count();
+    }
+
+    /**
      * Modules this use case touches: its request replies' modules.
      *
      * @return Collection<int, Module>

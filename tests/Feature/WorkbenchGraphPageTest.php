@@ -79,7 +79,7 @@ test('the tree starts at use case groups, then use cases, then their modules and
 
     expect($tree[0]->key)->toBe("use_case_group:{$records['group']->id}")
         ->and($useCase->key)->toBe("use_case:{$records['useCase']->id}")
-        ->and($useCase->badge)->toBe('1/1')
+        ->and($useCase->badge)->toBe('1 Model · 1/1')
         ->and($useCase->children[0]->key)->toBe("use_case_spec:{$records['useCaseSpec']->id}")
         ->and($folders->keys()->all())->toBe(['Use Case Spec', '模块', '功能', '执行记录'])
         ->and($folders['模块']->children[0]->key)->toBe("module:{$records['module']->id}")
@@ -112,6 +112,7 @@ test('search filters the tree and opens the branches that match', function () {
     UseCase::factory()->create(['use_case_group_id' => $records['group']->id, 'goal' => 'Unrelated goal']);
 
     Livewire::test(WorkbenchGraph::class)
+        ->call('selectNode', "use_case:{$records['useCase']->id}")
         ->assertSee('Unrelated goal')
         ->assertDontSee('Trace feature')
         ->set('search', 'Trace feature')
@@ -161,6 +162,36 @@ test('features without a use case sit in their own bucket', function () {
 
     expect(end($tree)->label)->toBe('未归入 Use Case')
         ->and(end($tree)->children[0]->label)->toBe('Loose feature');
+});
+
+test('use cases within a group order by distinct data model count, ties by name', function () {
+    $records = workbenchContext(); // 'Trace goal' has 1 model via its feature
+
+    // Zero-model use case: no features at all.
+    $zeroModels = UseCase::factory()->create(['use_case_group_id' => $records['group']->id, 'goal' => 'Zero models']);
+
+    // Two-model use case: two features, each with its own data model, no overlap.
+    $twoModels = UseCase::factory()->create(['use_case_group_id' => $records['group']->id, 'goal' => 'Two models']);
+    $featureA = Feature::factory()->forUseCase($twoModels)->create();
+    $featureB = Feature::factory()->forUseCase($twoModels)->create();
+    $featureA->dataModels()->attach(DataModel::factory()->create(['project_id' => $records['project']->id]));
+    $featureB->dataModels()->attach(DataModel::factory()->create(['project_id' => $records['project']->id]));
+
+    // Tie with 'Trace goal' at one model, but two features sharing the SAME model
+    // must still count once (distinct), and 'Aardvark' sorts before 'Trace goal'.
+    $tiedShared = UseCase::factory()->create(['use_case_group_id' => $records['group']->id, 'goal' => 'Aardvark tie']);
+    $tiedFeatureA = Feature::factory()->forUseCase($tiedShared)->create();
+    $tiedFeatureB = Feature::factory()->forUseCase($tiedShared)->create();
+    $tiedFeatureA->dataModels()->attach($records['dataModel']);
+    $tiedFeatureB->dataModels()->attach($records['dataModel']);
+
+    $tree = Livewire::test(WorkbenchGraph::class)->instance()->tree;
+    $useCases = collect($tree[0]->children);
+
+    expect($useCases->pluck('label')->all())->toBe(['Zero models', 'Aardvark tie', 'Trace goal', 'Two models'])
+        ->and($useCases->firstWhere('label', 'Zero models')->badge)->toStartWith('0 Model')
+        ->and($useCases->firstWhere('label', 'Aardvark tie')->badge)->toStartWith('1 Model')
+        ->and($useCases->firstWhere('label', 'Two models')->badge)->toStartWith('2 Model');
 });
 
 test('records from another project cannot be selected', function () {
