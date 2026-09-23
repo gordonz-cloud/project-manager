@@ -5,7 +5,9 @@ namespace App\Filament\Resources\Modules\Schemas;
 use App\Models\Module;
 use App\Services\Modules\ModuleDependencies;
 use Filament\Forms\Components\Select;
+use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
+use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
 use Illuminate\Database\Eloquent\Builder;
 
@@ -33,6 +35,15 @@ class ModuleForm
                     ->searchable()
                     ->dehydrateStateUsing(fn (array $state, ?Module $record): array => $dependencies
                         ->validate($record, $state)),
+                Section::make('Module Spec')
+                    ->relationship('spec')
+                    ->schema([
+                        Textarea::make('content')
+                            ->label('模块事实')
+                            ->rows(10)
+                            ->required(),
+                    ])
+                    ->columnSpanFull(),
             ]);
     }
 }

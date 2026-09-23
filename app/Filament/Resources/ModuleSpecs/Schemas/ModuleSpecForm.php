@@ -32,6 +32,7 @@ class ModuleSpecForm
                 Textarea::make('summary')
                     ->columnSpanFull(),
                 Textarea::make('content')
+                    ->required()
                     ->columnSpanFull(),
             ]);
     }

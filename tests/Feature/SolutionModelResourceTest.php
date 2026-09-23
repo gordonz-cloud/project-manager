@@ -5,6 +5,7 @@ use App\Filament\Resources\ImplementationNodes\Pages\EditImplementationNode;
 use App\Filament\Resources\ImplementationNodes\Pages\ListImplementationNodes;
 use App\Filament\Resources\ImplementationNodes\RelationManagers\FlowStepsRelationManager;
 use App\Filament\Resources\ImplementationNodes\RelationManagers\OutgoingEdgesRelationManager;
+use App\Filament\Resources\Modules\Pages\CreateModule;
 use App\Filament\Resources\ModuleSpecs\Pages\CreateModuleSpec;
 use App\Filament\Resources\ModuleSpecs\Pages\EditModuleSpec;
 use App\Filament\Resources\ModuleSpecs\Pages\ListModuleSpecs;
@@ -127,6 +128,28 @@ test('a module spec can be created for a module once', function () {
         ->assertHasNoFormErrors();
 
     expect(ModuleSpec::query()->where('module_id', $module->id)->count())->toBe(1);
+});
+
+test('creating a module requires its spec content', function () {
+    $user = User::factory()->create();
+    $project = Project::factory()->create();
+    $project->users()->attach($user);
+
+    auth()->login($user);
+    Filament::setTenant($project);
+
+    Livewire::test(CreateModule::class)
+        ->fillForm(['name' => 'Orders'])
+        ->call('create')
+        ->assertHasFormErrors(['spec.content' => 'required']);
+
+    Livewire::test(CreateModule::class)
+        ->fillForm(['name' => 'Orders', 'spec.content' => 'Owns the order lifecycle.'])
+        ->call('create')
+        ->assertHasNoFormErrors();
+
+    expect(Module::query()->where('name', 'Orders')->sole()->spec->content)
+        ->toBe('Owns the order lifecycle.');
 });
 
 test('solution model relation managers render the linked records', function () {
