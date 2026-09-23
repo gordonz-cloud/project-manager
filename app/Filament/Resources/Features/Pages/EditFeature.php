@@ -3,6 +3,7 @@
 namespace App\Filament\Resources\Features\Pages;
 
 use App\Filament\Resources\Features\FeatureResource;
+use App\Models\Feature;
 use Filament\Actions\DeleteAction;
 use Filament\Resources\Pages\EditRecord;
 
@@ -13,7 +14,8 @@ class EditFeature extends EditRecord
     protected function getHeaderActions(): array
     {
         return [
-            DeleteAction::make(),
+            DeleteAction::make()
+                ->visible(fn (Feature $record): bool => ! $record->hasRunHistory()),
         ];
     }
 }

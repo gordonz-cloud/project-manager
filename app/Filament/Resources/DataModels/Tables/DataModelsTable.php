@@ -17,6 +17,7 @@ class DataModelsTable
     public static function configure(Table $table): Table
     {
         return $table
+            ->stackedOnMobile()
             ->modifyQueryUsing(fn (Builder $query) => $query->with('features.requirement.modules'))
             ->columns([
                 TextColumn::make('name')

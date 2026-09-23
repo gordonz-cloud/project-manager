@@ -16,4 +16,9 @@ enum FeatureLayer: string implements HasLabel
     {
         return $this->value;
     }
+
+    public static function labelFor(string $state): string
+    {
+        return self::tryFrom($state)?->getLabel() ?? $state;
+    }
 }

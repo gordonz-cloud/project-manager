@@ -7,6 +7,7 @@ use App\Enums\FeatureStatus;
 use App\Enums\FeatureTrigger;
 use App\Models\Feature;
 use App\Models\Project;
+use App\Models\UseCase;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
 /**
@@ -14,6 +15,15 @@ use Illuminate\Database\Eloquent\Factories\Factory;
  */
 class FeatureFactory extends Factory
 {
+    public function forUseCase(UseCase $useCase): static
+    {
+        return $this->state(fn (): array => [
+            'project_id' => $useCase->project_id,
+            'use_case_id' => $useCase->id,
+            'requirement_id' => $useCase->requirement_id,
+        ]);
+    }
+
     /**
      * Define the model's default state.
      *

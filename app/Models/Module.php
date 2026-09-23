@@ -8,6 +8,7 @@ use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 
@@ -23,6 +24,22 @@ class Module extends Model
 {
     /** @use HasFactory<ModuleFactory> */
     use BelongsToProject, HasFactory;
+
+    /**
+     * @return HasOne<ModuleSpec, $this>
+     */
+    public function spec(): HasOne
+    {
+        return $this->hasOne(ModuleSpec::class);
+    }
+
+    /**
+     * @return BelongsToMany<UseCase, $this>
+     */
+    public function useCases(): BelongsToMany
+    {
+        return $this->belongsToMany(UseCase::class, 'module_use_cases');
+    }
 
     /**
      * @return BelongsToMany<Requirement, $this>
@@ -91,6 +108,17 @@ class Module extends Model
      * @return Collection<int, Module>
      */
     public static function inBuildOrder(Project $project): Collection
+    {
+        /** @var \ArrayObject<int, Collection<int, Module>> $memo */
+        $memo = once(fn () => new \ArrayObject);
+
+        return $memo[$project->id] ??= self::computeBuildOrder($project);
+    }
+
+    /**
+     * @return Collection<int, Module>
+     */
+    private static function computeBuildOrder(Project $project): Collection
     {
         $modules = static::query()->where('project_id', $project->id)->with('dependsOn:id')->get()->sortBy('name')->values();
 

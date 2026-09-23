@@ -55,7 +55,7 @@ class FeaturesRelationManager extends RelationManager
                 TextColumn::make('layers')
                     ->label('层')
                     ->badge()
-                    ->formatStateUsing(fn (string $state): string => FeatureLayer::from($state)->getLabel()),
+                    ->formatStateUsing(fn (string $state): string => FeatureLayer::labelFor($state)),
                 TextColumn::make('triggers')
                     ->label('触发方式')
                     ->badge()

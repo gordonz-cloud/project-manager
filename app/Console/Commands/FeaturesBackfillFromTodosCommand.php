@@ -2,12 +2,10 @@
 
 namespace App\Console\Commands;
 
-use App\Enums\FeatureLayer;
-use App\Models\Feature;
 use App\Models\Project;
+use App\Services\Features\BackfillFeatureLayersFromTodos;
 use Illuminate\Console\Command;
-use Illuminate\Support\Collection;
-use Illuminate\Support\Facades\File;
+use InvalidArgumentException;
 
 /**
  * One-off backfill: sets `layers` on existing features from the old Notion
@@ -24,7 +22,7 @@ class FeaturesBackfillFromTodosCommand extends Command
 
     protected $description = 'Backfill feature layers from the exported Notion todos, matched by title or an explicit map';
 
-    public function handle(): int
+    public function handle(BackfillFeatureLayersFromTodos $backfillFeatureLayersFromTodos): int
     {
         $project = Project::where('slug', $this->argument('project-slug'))->first();
 
@@ -36,115 +34,31 @@ class FeaturesBackfillFromTodosCommand extends Command
 
         $file = (string) $this->option('file');
 
-        if (! File::exists($file)) {
-            $this->error("File not found: {$file}");
+        try {
+            $result = $backfillFeatureLayersFromTodos->handle(
+                $project,
+                $file,
+                (string) $this->option('map'),
+            );
+        } catch (InvalidArgumentException $exception) {
+            $this->error($exception->getMessage());
 
             return self::FAILURE;
         }
 
-        /** @var array<int, array<string, mixed>> $todos */
-        $todos = json_decode(File::get($file), true);
+        $this->info($result->summary());
 
-        $map = $this->loadMap($project);
-
-        $features = Feature::where('project_id', $project->id)->get();
-        $byExactTitle = $features->keyBy(fn (Feature $feature): string => $feature->title);
-        $byNormalizedTitle = $features->keyBy(fn (Feature $feature): string => self::normalize($feature->title));
-
-        $highApplied = 0;
-        $unmatched = [];
-        $low = [];
-
-        foreach ($todos as $todo) {
-            $title = (string) ($todo['待办'] ?? '');
-            $mapEntry = $map[$title] ?? null;
-
-            if ($mapEntry) {
-                if ($mapEntry['confidence'] === 'high' && $mapEntry['features']->isNotEmpty()) {
-                    foreach ($mapEntry['features'] as $feature) {
-                        $this->applyTodo($feature, $todo);
-                    }
-
-                    $highApplied++;
-
-                    continue;
-                }
-
-                $low[] = [$title, $mapEntry['features']->pluck('number')->all(), $mapEntry['why']];
-
-                continue;
-            }
-
-            $feature = $byExactTitle->get($title) ?? $byNormalizedTitle->get(self::normalize($title));
-
-            if (! $feature) {
-                $unmatched[] = $title;
-
-                continue;
-            }
-
-            $this->applyTodo($feature, $todo);
-            $highApplied++;
+        foreach ($result->lowConfidence as $lowConfidence) {
+            $candidateText = $lowConfidence->candidateNumbers === []
+                ? '(无候选)'
+                : implode(', ', array_map(fn (int $number): string => "#{$number}", $lowConfidence->candidateNumbers));
+            $this->line("  [low] {$lowConfidence->title} → {$candidateText} — {$lowConfidence->reason}");
         }
 
-        $this->info("high 应用 {$highApplied}、low ".count($low).'、未匹配 '.count($unmatched));
-
-        foreach ($low as [$title, $candidates, $why]) {
-            $candidateText = $candidates === [] ? '(无候选)' : implode(', ', array_map(fn (int $n): string => "#{$n}", $candidates));
-            $this->line("  [low] {$title} → {$candidateText} — {$why}");
-        }
-
-        foreach ($unmatched as $title) {
+        foreach ($result->unmatchedTitles as $title) {
             $this->line("  [未匹配] {$title}");
         }
 
         return self::SUCCESS;
-    }
-
-    /**
-     * @param  array<string, mixed>  $todo
-     */
-    private function applyTodo(Feature $feature, array $todo): void
-    {
-        if ($feature->layers === null || $feature->layers === []) {
-            $feature->layers = [FeatureLayer::from((string) $todo['层'])->value];
-            $feature->save();
-        }
-    }
-
-    /**
-     * @return array<string, array{confidence: string, features: Collection<int, Feature>, why: string}>
-     */
-    private function loadMap(Project $project): array
-    {
-        $mapFile = (string) $this->option('map');
-
-        if ($mapFile === '' || ! File::exists($mapFile)) {
-            return [];
-        }
-
-        /** @var array<int, array{todo: string, feature: int|array<int, int>|null, confidence: string, why: string}> $rows */
-        $rows = json_decode(File::get($mapFile), true);
-
-        $featuresByNumber = Feature::where('project_id', $project->id)->get()->keyBy('number');
-
-        $map = [];
-
-        foreach ($rows as $row) {
-            $numbers = is_array($row['feature']) ? $row['feature'] : array_filter([$row['feature']]);
-
-            $map[$row['todo']] = [
-                'confidence' => $row['confidence'],
-                'features' => collect($numbers)->map(fn (int $number): ?Feature => $featuresByNumber->get($number))->filter()->values(),
-                'why' => $row['why'],
-            ];
-        }
-
-        return $map;
-    }
-
-    private static function normalize(string $title): string
-    {
-        return preg_replace('/[\s\p{P}]+/u', '', $title) ?? $title;
     }
 }

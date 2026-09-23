@@ -26,6 +26,7 @@ class TestsTable
         $firstFeature = fn (Test $test): string => $test->features->sortBy('number')->first()->title ?? '（未挂功能）';
 
         return $table
+            ->stackedOnMobile()
             ->modifyQueryUsing(fn (Builder $query): Builder => $query->with('features'))
             ->defaultGroup('feature')
             ->groups([
@@ -54,6 +55,12 @@ class TestsTable
                 TextColumn::make('last_result')
                     ->label('最近结果')
                     ->badge(),
+                TextColumn::make('scenario.name')
+                    ->label('Scenario')
+                    ->badge()
+                    ->color('gray')
+                    ->wrap()
+                    ->toggleable(isToggledHiddenByDefault: true),
                 TextColumn::make('features.title')
                     ->label('功能')
                     ->badge()

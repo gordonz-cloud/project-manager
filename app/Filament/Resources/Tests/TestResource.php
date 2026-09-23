@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\Tests;
 
+use App\Enums\NavigationGroup;
 use App\Filament\Resources\Tests\Pages\CreateTest;
 use App\Filament\Resources\Tests\Pages\EditTest;
 use App\Filament\Resources\Tests\Pages\ListTests;
@@ -18,11 +19,16 @@ class TestResource extends Resource
 {
     protected static ?string $navigationLabel = 'Tests';
 
-    protected static ?int $navigationSort = 7;
+    protected static ?int $navigationSort = 2;
 
     protected static ?string $model = Test::class;
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedRectangleStack;
+
+    public static function getNavigationGroup(): NavigationGroup
+    {
+        return NavigationGroup::Evidence;
+    }
 
     protected static ?string $modelLabel = '测试';
 

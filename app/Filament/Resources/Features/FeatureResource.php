@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\Features;
 
+use App\Enums\NavigationGroup;
 use App\Filament\Resources\Features\Pages\CreateFeature;
 use App\Filament\Resources\Features\Pages\EditFeature;
 use App\Filament\Resources\Features\Pages\ListFeatures;
@@ -9,6 +10,7 @@ use App\Filament\Resources\Features\Pages\ViewFeature;
 use App\Filament\Resources\Features\RelationManagers\CommitsRelationManager;
 use App\Filament\Resources\Features\RelationManagers\DataModelsRelationManager;
 use App\Filament\Resources\Features\RelationManagers\FlowStepsRelationManager;
+use App\Filament\Resources\Features\RelationManagers\ImplementationNodesRelationManager;
 use App\Filament\Resources\Features\RelationManagers\TestsRelationManager;
 use App\Filament\Resources\Features\Schemas\FeatureForm;
 use App\Filament\Resources\Features\Tables\FeaturesTable;
@@ -23,11 +25,16 @@ class FeatureResource extends Resource
 {
     protected static ?string $navigationLabel = 'Features';
 
-    protected static ?int $navigationSort = 3;
+    protected static ?int $navigationSort = 1;
 
     protected static ?string $model = Feature::class;
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedRectangleStack;
+
+    public static function getNavigationGroup(): NavigationGroup
+    {
+        return NavigationGroup::Delivery;
+    }
 
     protected static ?string $modelLabel = '功能';
 
@@ -46,6 +53,7 @@ class FeatureResource extends Resource
     public static function getRelations(): array
     {
         return [
+            ImplementationNodesRelationManager::class,
             FlowStepsRelationManager::class,
             TestsRelationManager::class,
             DataModelsRelationManager::class,

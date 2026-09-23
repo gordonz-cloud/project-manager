@@ -5,7 +5,6 @@ namespace App\Filament\Resources\Features\Pages;
 use App\Enums\FeatureLayer;
 use App\Enums\FeatureTrigger;
 use App\Filament\Resources\Features\FeatureResource;
-use App\Filament\Resources\Requirements\RequirementResource;
 use App\Models\Feature;
 use Filament\Actions\EditAction;
 use Filament\Infolists\Components\TextEntry;
@@ -42,22 +41,21 @@ class ViewFeature extends ViewRecord
                         TextEntry::make('layers')
                             ->label('层')
                             ->badge()
-                            ->formatStateUsing(fn (string $state): string => FeatureLayer::from($state)->getLabel()),
+                            ->formatStateUsing(fn (string $state): string => FeatureLayer::labelFor($state)),
                         TextEntry::make('triggers')
                             ->label('触发方式')
                             ->badge()
-                            ->formatStateUsing(fn (string $state): string => FeatureTrigger::from($state)->getLabel()),
+                            ->formatStateUsing(fn (string $state): string => FeatureTrigger::labelFor($state)),
                         TextEntry::make('entry')
                             ->label('入口')
                             ->fontFamily(FontFamily::Mono),
-                        TextEntry::make('requirement.title')
-                            ->label('所属需求')
-                            ->url(fn (Feature $record): ?string => $record->requirement_id
-                                ? RequirementResource::getUrl('edit', ['record' => $record->requirement_id])
-                                : null),
-                        TextEntry::make('modules')
+                        TextEntry::make('useCase.goal')
+                            ->label('Use Case'),
+                        TextEntry::make('module')
                             ->label('模块')
-                            ->state(fn (Feature $record): array => $record->requirement?->modules->pluck('name')->all() ?? [])
+                            ->state(fn (Feature $record): array => array_filter([
+                                $record->module?->name,
+                            ]))
                             ->badge(),
                     ]),
             ]);

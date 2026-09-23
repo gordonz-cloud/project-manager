@@ -3,6 +3,7 @@
 namespace App\Filament\Resources\Features\RelationManagers;
 
 use App\Models\Project;
+use App\Services\Commits\SyncProjectCommits;
 use Filament\Actions\Action;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DetachAction;
@@ -15,7 +16,6 @@ use Filament\Schemas\Schema;
 use Filament\Support\Enums\FontFamily;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
-use Illuminate\Support\Facades\Artisan;
 
 class CommitsRelationManager extends RelationManager
 {
@@ -58,13 +58,15 @@ class CommitsRelationManager extends RelationManager
                     ->label('Sync from git')
                     ->action(function (): void {
                         $projectId = $this->getOwnerRecord()->getAttribute('project_id');
-                        $slug = Project::where('id', $projectId)->value('slug');
+                        $project = Project::query()->whereKey($projectId)->first();
 
-                        Artisan::call('commits:sync', ['project-slug' => $slug]);
+                        abort_if($project === null, 404);
+
+                        $result = resolve(SyncProjectCommits::class)->handle($project);
 
                         Notification::make()
                             ->title('已同步')
-                            ->body(trim(Artisan::output()))
+                            ->body($result->summary())
                             ->success()
                             ->send();
                     }),
@@ -75,12 +77,12 @@ class CommitsRelationManager extends RelationManager
                     ->slideOver(),
                 DetachAction::make()
                     ->label('取消挂载')
-                    ->action(fn ($record) => $record->update(['feature_id' => null])),
+                    ->action(fn ($record) => $record->unassignFeature()),
             ])
             ->toolbarActions([
                 BulkActionGroup::make([
                     DetachBulkAction::make()
-                        ->action(fn ($records) => $records->each->update(['feature_id' => null])),
+                        ->action(fn ($records) => $records->each->unassignFeature()),
                 ]),
             ]);
     }

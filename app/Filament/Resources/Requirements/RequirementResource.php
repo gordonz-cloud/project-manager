@@ -2,10 +2,10 @@
 
 namespace App\Filament\Resources\Requirements;
 
+use App\Enums\NavigationGroup;
 use App\Filament\Resources\Requirements\Pages\CreateRequirement;
 use App\Filament\Resources\Requirements\Pages\EditRequirement;
 use App\Filament\Resources\Requirements\Pages\ListRequirements;
-use App\Filament\Resources\Requirements\RelationManagers\FeaturesRelationManager;
 use App\Filament\Resources\Requirements\Schemas\RequirementForm;
 use App\Filament\Resources\Requirements\Tables\RequirementsTable;
 use App\Models\Requirement;
@@ -19,11 +19,16 @@ class RequirementResource extends Resource
 {
     protected static ?string $navigationLabel = 'Requirements';
 
-    protected static ?int $navigationSort = 2;
+    protected static ?int $navigationSort = 1;
 
     protected static ?string $model = Requirement::class;
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedRectangleStack;
+
+    public static function getNavigationGroup(): NavigationGroup
+    {
+        return NavigationGroup::Requirements;
+    }
 
     protected static ?string $modelLabel = '需求';
 
@@ -41,9 +46,7 @@ class RequirementResource extends Resource
 
     public static function getRelations(): array
     {
-        return [
-            FeaturesRelationManager::class,
-        ];
+        return [];
     }
 
     public static function getPages(): array

@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\FlowSteps;
 
+use App\Enums\NavigationGroup;
 use App\Filament\Resources\FlowSteps\Pages\CreateFlowStep;
 use App\Filament\Resources\FlowSteps\Pages\EditFlowStep;
 use App\Filament\Resources\FlowSteps\Pages\ListFlowSteps;
@@ -18,11 +19,16 @@ class FlowStepResource extends Resource
 {
     protected static ?string $navigationLabel = 'Flow Steps';
 
-    protected static ?int $navigationSort = 6;
+    protected static ?int $navigationSort = 1;
 
     protected static ?string $model = FlowStep::class;
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedRectangleStack;
+
+    public static function getNavigationGroup(): NavigationGroup
+    {
+        return NavigationGroup::Evidence;
+    }
 
     protected static ?string $modelLabel = '数据流';
 

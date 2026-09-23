@@ -6,8 +6,9 @@ use App\Filament\Resources\Features\Pages\ViewFeature;
 use App\Filament\Resources\Features\RelationManagers\FlowStepsRelationManager;
 use App\Models\Feature;
 use App\Models\FlowStep;
+use App\Models\Module;
 use App\Models\Project;
-use App\Models\Requirement;
+use App\Models\UseCase;
 use App\Models\User;
 use Filament\Facades\Filament;
 use Livewire\Livewire;
@@ -25,15 +26,14 @@ test('the feature list rows link to the view page', function () {
         ->assertSeeHtml('href="'.FeatureResource::getUrl('view', ['record' => $feature]).'"');
 });
 
-test('the view page renders the feature id, title, requirement title, and flow step input', function () {
+test('the view page renders the feature id, title, use case goal, and flow step input', function () {
     $user = User::factory()->create();
     $project = Project::factory()->create();
     $project->users()->attach($user);
 
-    $requirement = Requirement::factory()->create(['project_id' => $project->id, 'title' => 'Checkout Works']);
-    $feature = Feature::factory()->create([
-        'project_id' => $project->id,
-        'requirement_id' => $requirement->id,
+    $module = Module::factory()->create(['project_id' => $project->id]);
+    $useCase = UseCase::factory()->forModule($module)->create(['goal' => 'Checkout Works']);
+    $feature = Feature::factory()->forUseCase($useCase)->create([
         'title' => 'Charge The Card',
         'number' => 42,
     ]);

@@ -2,9 +2,9 @@
 
 namespace App\Console\Commands;
 
-use App\Models\FlowStep;
+use App\Services\FlowSteps\ApplyFlowStepShapes as ApplyFlowStepShapesService;
 use Illuminate\Console\Command;
-use Illuminate\Support\Facades\File;
+use InvalidArgumentException;
 
 /**
  * Writes data shapes onto flow steps from a JSON file of
@@ -19,45 +19,20 @@ class ApplyFlowStepShapes extends Command
 
     protected $description = 'Write input/output data shapes onto flow steps from a JSON file';
 
-    public function handle(): int
+    public function handle(ApplyFlowStepShapesService $applyFlowStepShapes): int
     {
-        $path = (string) $this->argument('file');
+        $file = (string) $this->argument('file');
 
-        if (! File::exists($path)) {
-            $this->error("No such file: {$path}");
-
-            return self::FAILURE;
-        }
-
-        $rows = json_decode(File::get($path), true);
-
-        if (! is_array($rows)) {
-            $this->error("Not a JSON list: {$path}");
+        try {
+            $result = $applyFlowStepShapes->handle($file);
+        } catch (InvalidArgumentException $exception) {
+            $this->error($exception->getMessage());
 
             return self::FAILURE;
         }
 
-        $written = 0;
-        $missing = [];
+        $this->info($result->summary());
 
-        foreach ($rows as $row) {
-            $step = FlowStep::query()->find((int) ($row['id'] ?? 0));
-
-            if ($step === null) {
-                $missing[] = $row['id'] ?? '?';
-
-                continue;
-            }
-
-            $step->forceFill([
-                'input' => array_key_exists('input', $row) ? $row['input'] : $step->input,
-                'output' => array_key_exists('output', $row) ? $row['output'] : $step->output,
-            ])->save();
-            $written++;
-        }
-
-        $this->info("{$written} steps written".($missing === [] ? '' : '; no step with id '.implode(', ', $missing)));
-
-        return $missing === [] ? self::SUCCESS : self::FAILURE;
+        return $result->hasMissingSteps() ? self::FAILURE : self::SUCCESS;
     }
 }

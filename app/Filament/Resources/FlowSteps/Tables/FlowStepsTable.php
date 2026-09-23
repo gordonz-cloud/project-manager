@@ -26,6 +26,7 @@ class FlowStepsTable
     public static function configure(Table $table): Table
     {
         return $table
+            ->stackedOnMobile()
             ->defaultSort(fn ($query) => $query->orderBy('path')->orderBy('order'))
             ->defaultGroup('feature.title')
             ->groups([
@@ -37,6 +38,11 @@ class FlowStepsTable
                 TextColumn::make('feature.title')
                     ->label('功能')
                     ->searchable(),
+                TextColumn::make('implementationNode.title')
+                    ->label('实现节点')
+                    ->badge()
+                    ->color('gray')
+                    ->toggleable(isToggledHiddenByDefault: true),
                 TextColumn::make('path')
                     ->label('路径')
                     ->searchable(),

@@ -36,6 +36,7 @@ class AdminPanelProvider extends PanelProvider
             ->tenantRegistration(RegisterProject::class)
             ->tenantProfile(EditProject::class)
             ->maxContentWidth(Width::Full)
+            ->viteTheme('resources/css/filament/admin/theme.css')
             ->colors([
                 'primary' => Color::Amber,
             ])

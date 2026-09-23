@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\ModelFields;
 
+use App\Enums\NavigationGroup;
 use App\Filament\Resources\ModelFields\Pages\CreateModelField;
 use App\Filament\Resources\ModelFields\Pages\EditModelField;
 use App\Filament\Resources\ModelFields\Pages\ListModelFields;
@@ -18,11 +19,16 @@ class ModelFieldResource extends Resource
 {
     protected static ?string $navigationLabel = 'Model Fields';
 
-    protected static ?int $navigationSort = 5;
+    protected static ?int $navigationSort = 3;
 
     protected static ?string $model = ModelField::class;
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedRectangleStack;
+
+    public static function getNavigationGroup(): NavigationGroup
+    {
+        return NavigationGroup::Solution;
+    }
 
     protected static ?string $modelLabel = 'Model Field';
 

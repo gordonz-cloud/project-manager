@@ -6,6 +6,7 @@ use App\Enums\RequirementStatus;
 use App\Filament\Tables\ModuleGroup;
 use App\Models\Project;
 use App\Models\Requirement;
+use App\Services\Requirements\RequirementVersionOptions;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\EditAction;
@@ -109,11 +110,7 @@ class RequirementsTable
                     ->options(RequirementStatus::class),
                 SelectFilter::make('version')
                     ->label('版本')
-                    ->options(fn (): array => Requirement::query()
-                        ->whereNotNull('version')
-                        ->distinct()
-                        ->pluck('version', 'version')
-                        ->all()),
+                    ->options(fn (): array => resolve(RequirementVersionOptions::class)->all()),
                 Filter::make('incomplete')
                     ->label('未完成')
                     ->query(fn (Builder $query): Builder => $query->where('status', '!=', RequirementStatus::Done)),

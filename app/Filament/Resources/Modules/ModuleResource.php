@@ -2,10 +2,12 @@
 
 namespace App\Filament\Resources\Modules;
 
+use App\Enums\NavigationGroup;
 use App\Filament\Resources\Modules\Pages\CreateModule;
 use App\Filament\Resources\Modules\Pages\EditModule;
 use App\Filament\Resources\Modules\Pages\ListModules;
 use App\Filament\Resources\Modules\RelationManagers\RequirementsRelationManager;
+use App\Filament\Resources\Modules\RelationManagers\SpecRelationManager;
 use App\Filament\Resources\Modules\Schemas\ModuleForm;
 use App\Filament\Resources\Modules\Tables\ModulesTable;
 use App\Models\Module;
@@ -25,6 +27,11 @@ class ModuleResource extends Resource
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedRectangleStack;
 
+    public static function getNavigationGroup(): NavigationGroup
+    {
+        return NavigationGroup::Scope;
+    }
+
     protected static ?string $modelLabel = '模块';
 
     protected static ?string $pluralModelLabel = '模块';
@@ -42,6 +49,7 @@ class ModuleResource extends Resource
     public static function getRelations(): array
     {
         return [
+            SpecRelationManager::class,
             RequirementsRelationManager::class,
         ];
     }

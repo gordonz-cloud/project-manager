@@ -6,12 +6,15 @@ use App\Enums\RequirementStatus;
 use App\Models\Concerns\BelongsToProject;
 use Database\Factories\RequirementFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
+use Illuminate\Database\Eloquent\Attributes\Scope;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
+use LogicException;
 
 /**
  * @property int $id
@@ -28,6 +31,16 @@ class Requirement extends Model
 {
     /** @use HasFactory<RequirementFactory> */
     use BelongsToProject, HasFactory;
+
+    protected static function booted(): void
+    {
+        static::deleting(function (self $requirement): void {
+            if (WorkflowRun::withoutGlobalScopes()->where('requirement_id', $requirement->id)->exists()) {
+                throw new LogicException('A requirement with workflow history cannot be deleted.');
+            }
+
+        });
+    }
 
     /**
      * @return array<string, string>
@@ -53,6 +66,21 @@ class Requirement extends Model
     public function features(): HasMany
     {
         return $this->hasMany(Feature::class);
+    }
+
+    /**
+     * @return HasMany<UseCase, $this>
+     */
+    public function useCases(): HasMany
+    {
+        return $this->hasMany(UseCase::class);
+    }
+
+    public function hasWorkflowHistory(): bool
+    {
+        return WorkflowRun::withoutGlobalScopes()
+            ->where('requirement_id', $this->id)
+            ->exists();
     }
 
     /**
@@ -113,9 +141,40 @@ class Requirement extends Model
      * (a requirement touching several modules sorts by whichever module is
      * built last), then the lower id. This is the pickup order for /feature-run.
      *
-     * @return Collection<int, static>
+     * @return Collection<int, Requirement>
      */
     public static function inBuildOrder(Project $project): Collection
+    {
+        /** @var \ArrayObject<int, Collection<int, Requirement>> $memo */
+        $memo = once(fn () => new \ArrayObject);
+
+        return $memo[$project->id] ??= self::computeBuildOrder($project);
+    }
+
+    /**
+     * @param  Builder<Requirement>  $query
+     * @return Builder<Requirement>
+     */
+    #[Scope]
+    protected function incomplete(Builder $query): Builder
+    {
+        return $query->where('status', '!=', RequirementStatus::Done);
+    }
+
+    /**
+     * @param  Builder<Requirement>  $query
+     * @return Builder<Requirement>
+     */
+    #[Scope]
+    protected function withVersion(Builder $query): Builder
+    {
+        return $query->whereNotNull('version');
+    }
+
+    /**
+     * @return Collection<int, Requirement>
+     */
+    private static function computeBuildOrder(Project $project): Collection
     {
         $position = Module::inBuildOrder($project)->pluck('id')->flip(); // module id => build position
 

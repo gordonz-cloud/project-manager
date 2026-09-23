@@ -6,10 +6,7 @@ use App\Enums\FeatureLayer;
 use App\Enums\FeatureStatus;
 use App\Enums\FeatureTrigger;
 use App\Filament\Resources\Features\FeatureResource;
-use App\Filament\Tables\ModuleGroup;
 use App\Models\Feature;
-use Filament\Actions\BulkActionGroup;
-use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\EditAction;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\SelectFilter;
@@ -22,17 +19,25 @@ class FeaturesTable
     public static function configure(Table $table): Table
     {
         return $table
+            ->stackedOnMobile()
             ->defaultSort('number')
             ->recordUrl(fn (Feature $record): string => FeatureResource::getUrl('view', ['record' => $record]))
             ->recordAction(null)
-            ->modifyQueryUsing(fn (Builder $query): Builder => $query->with('requirement.modules')->withCount('commits'))
+            ->modifyQueryUsing(fn (Builder $query): Builder => $query
+                ->with(['module'])
+                ->withCount('commits'))
             ->groups([
-                ModuleGroup::make('requirement'),
+                Group::make('module.name')
+                    ->label('模块')
+                    ->collapsible(),
                 Group::make('requirement.title')
                     ->label('需求')
                     ->collapsible(),
+                Group::make('useCase.goal')
+                    ->label('Use case')
+                    ->collapsible(),
             ])
-            ->defaultGroup('module')
+            ->defaultGroup('module.name')
             ->columns([
                 TextColumn::make('number')
                     ->label('Feature ID')
@@ -47,21 +52,24 @@ class FeaturesTable
                 TextColumn::make('layers')
                     ->label('层')
                     ->badge()
-                    ->formatStateUsing(fn (string $state): string => FeatureLayer::from($state)->getLabel()),
+                    ->formatStateUsing(fn (string $state): string => FeatureLayer::labelFor($state)),
                 TextColumn::make('triggers')
                     ->label('触发方式')
                     ->badge()
-                    ->formatStateUsing(fn (string $state): string => FeatureTrigger::from($state)->getLabel()),
+                    ->formatStateUsing(fn (string $state): string => FeatureTrigger::labelFor($state)),
                 TextColumn::make('entry')
                     ->label('入口'),
-                TextColumn::make('requirement.title')
-                    ->label('需求')
+                TextColumn::make('useCase.goal')
+                    ->label('Use case')
                     ->badge()
                     ->color('gray')
-                    ->searchable()
-                    ->url(fn ($record) => $record->requirement_id
-                        ? route('filament.admin.resources.requirements.edit', ['tenant' => $record->project->slug, 'record' => $record->requirement_id])
-                        : null),
+                    ->wrap()
+                    ->searchable(),
+                TextColumn::make('module.name')
+                    ->label('模块')
+                    ->badge()
+                    ->color('gray')
+                    ->searchable(),
                 TextColumn::make('commits_count')
                     ->label('Commits')
                     ->numeric(),
@@ -80,11 +88,11 @@ class FeaturesTable
                     ->options(FeatureStatus::class),
                 SelectFilter::make('module')
                     ->label('模块')
-                    ->relationship('requirement.modules', 'name')
+                    ->relationship('module', 'name')
                     ->preload(),
-                SelectFilter::make('requirement')
-                    ->label('需求')
-                    ->relationship('requirement', 'title')
+                SelectFilter::make('use_case')
+                    ->label('Use case')
+                    ->relationship('useCase', 'goal')
                     ->searchable()
                     ->preload(),
                 SelectFilter::make('layers')
@@ -97,10 +105,6 @@ class FeaturesTable
             ->recordActions([
                 EditAction::make()->slideOver(),
             ])
-            ->toolbarActions([
-                BulkActionGroup::make([
-                    DeleteBulkAction::make(),
-                ]),
-            ]);
+            ->toolbarActions([]);
     }
 }

@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\DataModels;
 
+use App\Enums\NavigationGroup;
 use App\Filament\Resources\DataModels\Pages\CreateDataModel;
 use App\Filament\Resources\DataModels\Pages\EditDataModel;
 use App\Filament\Resources\DataModels\Pages\ListDataModels;
@@ -19,11 +20,16 @@ class DataModelResource extends Resource
 {
     protected static ?string $navigationLabel = 'Models';
 
-    protected static ?int $navigationSort = 4;
+    protected static ?int $navigationSort = 2;
 
     protected static ?string $model = DataModel::class;
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedRectangleStack;
+
+    public static function getNavigationGroup(): NavigationGroup
+    {
+        return NavigationGroup::Solution;
+    }
 
     protected static ?string $modelLabel = 'Model';
 
