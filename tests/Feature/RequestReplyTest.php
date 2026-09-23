@@ -6,8 +6,6 @@ use App\Models\Feature;
 use App\Models\ImplementationNode;
 use App\Models\RequestReply;
 use App\Models\RequestReplyEdge;
-use App\Models\Scenario;
-use App\Models\ScenarioStep;
 use App\Models\UseCase;
 use App\Services\RequestReplies\FeatureEntryParser;
 use Illuminate\Support\Facades\DB;
@@ -24,18 +22,6 @@ test('a flow edge joins two different request replies of one use case', function
         ->toThrow(LogicException::class, 'cannot depend on itself')
         ->and(fn () => RequestReplyEdge::factory()->create(['from_request_reply_id' => $login->id, 'to_request_reply_id' => $foreign->id]))
         ->toThrow(LogicException::class, 'same use case');
-});
-
-test('a scenario step must be a request reply of the scenario use case', function () {
-    $scenario = Scenario::factory()->create();
-    $own = RequestReply::factory()->create(['use_case_id' => $scenario->use_case_id]);
-    $foreign = RequestReply::factory()->create();
-
-    ScenarioStep::query()->create(['scenario_id' => $scenario->id, 'position' => 1, 'request_reply_id' => $own->id]);
-
-    expect($scenario->steps()->pluck('request_reply_id')->all())->toBe([$own->id])
-        ->and(fn () => ScenarioStep::query()->create(['scenario_id' => $scenario->id, 'position' => 2, 'request_reply_id' => $foreign->id]))
-        ->toThrow(LogicException::class, 'scenario use case');
 });
 
 test('a feature links only request replies of its own project', function () {

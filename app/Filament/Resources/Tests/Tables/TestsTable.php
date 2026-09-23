@@ -55,12 +55,6 @@ class TestsTable
                 TextColumn::make('last_result')
                     ->label('最近结果')
                     ->badge(),
-                TextColumn::make('scenario.name')
-                    ->label('Scenario')
-                    ->badge()
-                    ->color('gray')
-                    ->wrap()
-                    ->toggleable(isToggledHiddenByDefault: true),
                 TextColumn::make('features.title')
                     ->label('功能')
                     ->badge()

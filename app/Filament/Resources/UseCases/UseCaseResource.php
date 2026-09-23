@@ -8,7 +8,6 @@ use App\Filament\Resources\UseCases\Pages\EditUseCase;
 use App\Filament\Resources\UseCases\Pages\ListUseCases;
 use App\Filament\Resources\UseCases\RelationManagers\FeaturesRelationManager;
 use App\Filament\Resources\UseCases\RelationManagers\RequestRepliesRelationManager;
-use App\Filament\Resources\UseCases\RelationManagers\ScenariosRelationManager;
 use App\Filament\Resources\UseCases\Schemas\UseCaseForm;
 use App\Filament\Resources\UseCases\Tables\UseCasesTable;
 use App\Models\UseCase;
@@ -47,7 +46,6 @@ class UseCaseResource extends Resource
     {
         return [
             RequestRepliesRelationManager::class,
-            ScenariosRelationManager::class,
             FeaturesRelationManager::class,
         ];
     }

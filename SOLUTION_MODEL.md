@@ -17,7 +17,7 @@ AI 现在从“很粗的需求”直接跳到“实现任务”。写代码时�
 
 ```text
 需求意图
-→ 用例与场景
+→ 用例（含异常走法）
 → 业务规则与不变量
 → 方案决策
 → 功能设计
@@ -33,11 +33,10 @@ Module 只保留一份当前 ModuleSpec，用文本章节保存本模块自己�
 来源、规则、数据语义、已接受决策和验收边界。跨模块的流程写进 UseCaseSpec。下面应该是：
 
 - `use_cases`：谁为了什么目标，触发什么行为，成功和失败是什么。
-- `scenarios`：happy path、替代路径、错误路径、并发路径、恢复路径。
 - `rules` / `invariants`：无论走哪条路径都必须成立的事实。
 - 决策章节：还有哪些问题没定，为什么这样定，影响哪些用例和功能。
 - `implementation_nodes`：实现这个功能需要做哪些节点，依赖什么，交付什么证据。
-- 入口（`request_replies`）：一次 request→response；入口之间的 `request_reply_edges`（`next` / `on_failure` / `optional`）组成 Use Case 的流程图；场景 = 流程图上的一条路径（`scenario_steps`）。
+- 入口（`request_replies`）：一次 request→response；入口之间的 `request_reply_edges`（`next` / `on_failure` / `optional`）组成 Use Case 的流程图。同一目标的不同走法写进 Use Case Spec 的 `## 异常与补偿`，由测试盖住（没有 scenarios 表）。
 - 调用树（`implementation_nodes` + `implementation_node_edges` 的 `calls` / `on_success` / `on_failure` 边）：一个入口内部代码怎么流动，一个节点一个函数。功能（Feature）是工作项，通过 `feature_request_reply` 记它改了哪些入口。
 
 这里最重要的是决策章节。AI 每发现一个新问题，不能直接开始修，而要先分类：
@@ -45,7 +44,7 @@ Module 只保留一份当前 ModuleSpec，用文本章节保存本模块自己�
 ```text
 缺少事实 → question
 需要业务拍板 → decision
-缺少行为 → scenario
+缺少行为 → Use Case Spec 的异常与补偿 + 测试
 会破坏业务事实 → invariant
 只是实现拆分 → implementation node
 ```
@@ -56,8 +55,8 @@ Module 只保留一份当前 ModuleSpec，用文本章节保存本模块自己�
 
 我更倾向于混合结构：
 
-- 分解关系用树：需求 → 能力 → 用例 → 场景 → 实现节点。
-- 依赖关系用有向图：A 必须在 B 前，决定 D 会让场景 S 失效。
+- 分解关系用树：需求 → 能力 → 用例 → 实现节点。
+- 依赖关系用有向图：A 必须在 B 前，决定 D 会让用例 U 的某条走法失效。
 - 业务行为用状态机：订单从什么状态，经过什么事件，允许进入什么状态。
 - 执行过程用事件账：谁在哪个节点、执行了几次、聊了什么、产生了什么结果。
 
@@ -86,10 +85,10 @@ Module 只保留一份当前 ModuleSpec，用文本章节保存本模块自己�
 2. 找出业务目标、收益和明确不做的范围。
 3. 建立业务术语和领域对象。
 4. 找事实、规则和永远不能违反的不变量。
-5. 展开用例，再展开正常、替代、异常和恢复场景。
+5. 展开用例，在 Use Case Spec 里写正常、替代、异常和恢复走法。
 6. 把所有未知项变成问题或显式假设。
 7. 决定方案，并记录为什么。
-8. 从场景反推功能和测试。
+8. 从用例走法反推功能和测试。
 9. 最后才排实现节点。
 
 边界案例可以用统一维度检查：状态、权限、输入边界、空数据、老数据、外部系统、超时、重试、并发、幂等、补偿、人工介入、滥用。不是追求列完宇宙中的所有情况，而是把系统闭合在明确边界内，再按等价类穷举。
@@ -98,8 +97,8 @@ Module 只保留一份当前 ModuleSpec，用文本章节保存本模块自己�
 
 你不缺一张“feature 步骤表”，缺的是它前面的方案层。最重要的是两件事：
 
-1. 所有不确定性必须落成 `question / decision / scenario / invariant`，不能藏进代码和聊天。
-2. 实现节点必须由已确认的用例、场景和决策推导，不能直接由一句 Feature 推导。
+1. 所有不确定性必须落成 `question / decision / Use Case Spec 走法 / invariant`，不能藏进代码和聊天。
+2. 实现节点必须由已确认的用例和决策推导，不能直接由一句 Feature 推导。
 
 project-manager 现在保存的是业务事实和最终证据，适合接在这套系统后面。真正的核心会是“方案模型 + 决策账 + 实现图 + 事件账”。树用来拆，图用来连，状态机用来描述行为，事件账用来记住你怎么走到今天。
 
@@ -111,7 +110,7 @@ project-manager 现在保存的是业务事实和最终证据，适合接在这�
 
 运行状态必须放在 `workflow_runs`、`node_runs`、`node_turns`、`node_attempts` 和 `run_events` 中。模板可以修改，历史运行不能因此被改写。
 
-V1 有意把 `UseCase ↔ Feature`、`Scenario ↔ Test`、`ImplementationNode ↔ Commit`
+V1 有意把 `UseCase ↔ Feature`、`ImplementationNode ↔ Commit`
 先做成现有表上的单个可空外键。它们代表一个主归属，负责让界面和证据链先跑起来；
 下面的多对多关系是后续完整模型，不在 V1 中假装已经实现。
 
@@ -130,14 +129,10 @@ V1 有意把 `UseCase ↔ Feature`、`Scenario ↔ Test`、`ImplementationNode �
 
 ### 行为层
 
-- `use_cases 1 ── * scenarios`
 - `use_cases 1 ── * features`，通过 `features.use_case_id`
 
-`scenario` 是具体可验证的路径。每条路径有前置条件、触发事件、预期结果和场景类型：
-
-```text
-happy | alternate | error | concurrency | recovery | abuse
-```
+同一目标的正常、替代、错误、并发、恢复走法写在 `use_case_specs.content` 的 `## 异常与补偿`，
+每条走法由挂在功能上的测试（`feature_test`）盖住。
 
 规则和决策都是 Spec 的文本章节，不再独立建模；改变决策时直接保留清晰的历史文字，
 必要时在章节里写明 superseded/stale。
@@ -159,26 +154,22 @@ status: pending | ready | running | blocked | done | failed | stale
 evidence: 产出证据，不能只写一句完成
 ```
 
-### 场景、功能与实现节点
+### 功能与实现节点
 
-- `scenarios * ── * implementation_nodes`，通过 `scenario_implementation_nodes`
-- `scenarios 1 ── * scenario_steps * ── 1 request_replies`：场景按 `position` 依次经过的入口
 - `request_replies 1 ── * implementation_nodes`：入口拥有调用树
 - `features * ── * request_replies`，通过 `feature_request_reply`
-
-一个场景可能横跨数据库、服务、接口和页面，所以需要多个实现节点。一个实现节点也可能服务多个场景。
 
 原来的 `flow_steps` 已迁成调用树节点（带 `file`、`function`、`input`、`change`、`output`、`module_id`）并删表：主路径串成 `calls` 链，其它路径挂在主路径上一步（按 `order`）之下，错误/拒绝类路径用 `on_failure`。
 
 ### 测试与提交证据
 
-- `scenarios * ── * tests`，通过 `scenario_tests`
+- `features * ── * tests`，通过 `feature_test`
 - `implementation_nodes * ── * tests`，通过 `implementation_node_tests`
 - `implementation_nodes * ── * commits`，通过 `commit_implementation_nodes`
 
-验收测试必须挂 `scenario`。单元和集成测试可以挂 `implementation_node`。这不是重复关系：
+验收测试挂功能。单元和集成测试可以挂 `implementation_node`。这不是重复关系：
 
-- `scenario_tests` 证明业务行为成立。
+- `feature_test` 证明业务行为成立。
 - `implementation_node_tests` 证明实现单元正确。
 
 提交可以同时实现多个节点，所以提交与节点是多对多，不使用单列外键。
@@ -237,22 +228,18 @@ erDiagram
     MODULE ||--o{ FEATURE : owns
     USE_CASE ||--o{ WORKFLOW_RUN : executed_as
 
-    USE_CASE ||--o{ SCENARIO : expands_to
     USE_CASE ||--o{ FEATURE : delivers
 
     FEATURE ||--o{ IMPLEMENTATION_NODE : plans
     IMPLEMENTATION_NODE ||--o{ IMPLEMENTATION_NODE : parent
     IMPLEMENTATION_NODE }o--o{ IMPLEMENTATION_NODE : dependencies
-    SCENARIO }o--o{ IMPLEMENTATION_NODE : scenario_implementation_nodes
     IMPLEMENTATION_NODE ||--o{ IMPLEMENTATION_NODE : calls_on_success_on_failure
     USE_CASE ||--o{ REQUEST_REPLY : entries
     REQUEST_REPLY ||--o{ REQUEST_REPLY : request_reply_edges
     REQUEST_REPLY ||--o{ IMPLEMENTATION_NODE : call_tree
     FEATURE }o--o{ REQUEST_REPLY : feature_request_reply
-    SCENARIO ||--o{ SCENARIO_STEP : path
-    REQUEST_REPLY ||--o{ SCENARIO_STEP : visited_by
 
-    SCENARIO }o--o{ TEST : scenario_tests
+    FEATURE }o--o{ TEST : feature_test
     IMPLEMENTATION_NODE }o--o{ TEST : implementation_node_tests
     IMPLEMENTATION_NODE }o--o{ COMMIT : commit_implementation_nodes
 
@@ -266,8 +253,8 @@ erDiagram
 ### 不能破坏的系统不变量
 
 - 一个项目下的所有关联对象必须属于同一个项目。
-- `tests` 和 `commits` 只能挂到同一项目的节点和场景；场景步骤、流程图边两端都必须是同一 UseCase 的入口；流程图边不许自环；功能和入口必须同项目。
-- 场景没有验收测试时，所属功能不能进入最终完成。
+- `tests` 和 `commits` 只能挂到同一项目的功能和节点；流程图边两端都必须是同一 UseCase 的入口；流程图边不许自环；功能和入口必须同项目。
+- Use Case Spec 里的走法没有测试盖住时，所属功能不能进入最终完成。
 - 运行中的契约使用快照，之后修改计划不能改写历史运行。
 - 决策变化保留在 Spec 的历史文字中，不删除旧证据。
 
@@ -275,12 +262,11 @@ erDiagram
 
 第一版不要一次建完整运行层。按下面顺序落地：
 
-1. `use_cases`、`scenarios`
+1. `use_cases`、`use_case_specs`
 2. 决策与业务规则写回 ModuleSpec / UseCaseSpec
 3. `implementation_nodes`、节点父子关系与依赖关系
-4. `scenario_implementation_nodes`
-5. `workflow_runs`、`node_runs`、`node_turns`、`node_attempts`
-6. `run_events`
-7. 最后回填 `tests`、`commits` 的证据关系
+4. `workflow_runs`、`node_runs`、`node_turns`、`node_attempts`
+5. `run_events`
+6. 最后回填 `tests`、`commits` 的证据关系
 
 这样每一层都能单独使用。前面三层即使没有运行时，也能阻止 AI 从一句粗需求直接跳到代码。

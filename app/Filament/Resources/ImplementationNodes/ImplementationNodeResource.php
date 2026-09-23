@@ -12,7 +12,6 @@ use App\Filament\Resources\ImplementationNodes\RelationManagers\CommitsRelationM
 use App\Filament\Resources\ImplementationNodes\RelationManagers\IncomingEdgesRelationManager;
 use App\Filament\Resources\ImplementationNodes\RelationManagers\NodeRunsRelationManager;
 use App\Filament\Resources\ImplementationNodes\RelationManagers\OutgoingEdgesRelationManager;
-use App\Filament\Resources\ImplementationNodes\RelationManagers\ScenariosRelationManager;
 use App\Filament\Resources\ImplementationNodes\Schemas\ImplementationNodeForm;
 use App\Filament\Resources\ImplementationNodes\Schemas\ImplementationNodeInfolist;
 use App\Filament\Resources\ImplementationNodes\Tables\ImplementationNodesTable;
@@ -57,7 +56,6 @@ class ImplementationNodeResource extends Resource
     {
         return [
             ChildrenRelationManager::class,
-            ScenariosRelationManager::class,
             CommitsRelationManager::class,
             NodeRunsRelationManager::class,
             OutgoingEdgesRelationManager::class,

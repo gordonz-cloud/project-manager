@@ -19,7 +19,7 @@ class UseCasesTable
             ->stackedOnMobile()
             ->modifyQueryUsing(fn (Builder $query): Builder => $query
                 ->with(['modules', 'group'])
-                ->withCount(['scenarios', 'features']))
+                ->withCount(['features']))
             ->columns([
                 TextColumn::make('group.name')
                     ->label('分组')
@@ -39,9 +39,6 @@ class UseCasesTable
                 TextColumn::make('status')
                     ->label('状态')
                     ->badge(),
-                TextColumn::make('scenarios_count')
-                    ->label('场景')
-                    ->numeric(),
                 TextColumn::make('features_count')
                     ->label('功能')
                     ->numeric(),

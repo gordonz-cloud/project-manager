@@ -12,7 +12,6 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
-use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Carbon;
 use LogicException;
@@ -202,14 +201,6 @@ class ImplementationNode extends Model
     public function incomingEdges(): HasMany
     {
         return $this->hasMany(ImplementationNodeEdge::class, 'to_node_id');
-    }
-
-    /**
-     * @return BelongsToMany<Scenario, $this>
-     */
-    public function scenarios(): BelongsToMany
-    {
-        return $this->belongsToMany(Scenario::class, 'scenario_implementation_nodes');
     }
 
     /**

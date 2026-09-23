@@ -104,14 +104,6 @@ class UseCase extends Model
     }
 
     /**
-     * @return HasMany<Scenario, $this>
-     */
-    public function scenarios(): HasMany
-    {
-        return $this->hasMany(Scenario::class);
-    }
-
-    /**
      * @return HasMany<Feature, $this>
      */
     public function features(): HasMany

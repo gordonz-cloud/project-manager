@@ -27,11 +27,6 @@ class TestForm
                     ->label('最近结果')
                     ->options(TestLastResult::class)
                     ->required(),
-                Select::make('scenario_id')
-                    ->label('Scenario')
-                    ->relationship('scenario', 'name')
-                    ->searchable()
-                    ->preload(),
                 Select::make('features')
                     ->label('功能')
                     ->multiple()

@@ -11,7 +11,6 @@ use App\Models\ModuleSpec;
 use App\Models\NodeRun;
 use App\Models\Project;
 use App\Models\RequestReply;
-use App\Models\Scenario;
 use App\Models\Test;
 use App\Models\UseCase;
 use App\Models\UseCaseGroup;
@@ -36,7 +35,6 @@ class WorkbenchGraphService
         'module_spec' => ModuleSpec::class,
         'data_model' => DataModel::class,
         'model_field' => ModelField::class,
-        'scenario' => Scenario::class,
         'feature' => Feature::class,
         'request_reply' => RequestReply::class,
         'test' => Test::class,
@@ -147,9 +145,7 @@ class WorkbenchGraphService
         return [
             "{$prefix}spec",
             "{$prefix}modules.spec",
-            "{$prefix}scenarios.steps",
             "{$prefix}requestReplies.module",
-            "{$prefix}requestReplies.outgoingEdges",
             ...array_map(fn (string $relation): string => "{$prefix}features.{$relation}", self::FEATURE_RELATIONS),
             "{$prefix}workflowRuns" => fn ($runs) => $runs->latest('id'),
             "{$prefix}workflowRuns.nodeRuns.implementationNode",

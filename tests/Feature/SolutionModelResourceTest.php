@@ -9,9 +9,6 @@ use App\Filament\Resources\ModuleSpecs\Pages\CreateModuleSpec;
 use App\Filament\Resources\ModuleSpecs\Pages\EditModuleSpec;
 use App\Filament\Resources\ModuleSpecs\Pages\ListModuleSpecs;
 use App\Filament\Resources\ModuleSpecs\RelationManagers\UseCasesRelationManager;
-use App\Filament\Resources\Scenarios\Pages\EditScenario;
-use App\Filament\Resources\Scenarios\Pages\ListScenarios;
-use App\Filament\Resources\Scenarios\RelationManagers\ImplementationNodesRelationManager;
 use App\Filament\Resources\UseCaseGroups\Pages\CreateUseCaseGroup;
 use App\Filament\Resources\UseCaseGroups\Pages\ListUseCaseGroups;
 use App\Filament\Resources\UseCases\Pages\EditUseCase;
@@ -29,7 +26,6 @@ use App\Models\ModuleSpec;
 use App\Models\NodeRun;
 use App\Models\Project;
 use App\Models\RunEvent;
-use App\Models\Scenario;
 use App\Models\UseCase;
 use App\Models\UseCaseGroup;
 use App\Models\User;
@@ -50,10 +46,6 @@ function solutionModelContext(): array
 
     $spec = ModuleSpec::factory()->forProject($project)->create();
     $useCase = UseCase::factory()->forModule($spec->module)->create();
-    $scenario = Scenario::factory()->create([
-        'project_id' => $project->id,
-        'use_case_id' => $useCase->id,
-    ]);
     $feature = Feature::factory()->forUseCase($useCase)->create();
     $node = ImplementationNode::factory()->create([
         'project_id' => $project->id,
@@ -84,7 +76,6 @@ function solutionModelContext(): array
         'project',
         'spec',
         'useCase',
-        'scenario',
         'feature',
         'node',
         'target',
@@ -100,7 +91,6 @@ test('solution model resources list their tenant records', function () {
 
     Livewire::test(ListModuleSpecs::class)->assertCanSeeTableRecords([$records['spec']]);
     Livewire::test(ListUseCases::class)->assertCanSeeTableRecords([$records['useCase']]);
-    Livewire::test(ListScenarios::class)->assertCanSeeTableRecords([$records['scenario']]);
     Livewire::test(ListImplementationNodes::class)->assertCanSeeTableRecords([$records['node']]);
     Livewire::test(ListWorkflowRuns::class)->assertCanSeeTableRecords([$records['run']]);
 });
@@ -155,17 +145,11 @@ test('creating a module requires its spec content', function () {
 
 test('solution model relation managers render the linked records', function () {
     $records = solutionModelContext();
-    $records['scenario']->implementationNodes()->attach($records['node']);
 
     Livewire::test(UseCasesRelationManager::class, [
         'ownerRecord' => $records['spec'],
         'pageClass' => EditModuleSpec::class,
     ])->assertCanSeeTableRecords([$records['useCase']]);
-
-    Livewire::test(ImplementationNodesRelationManager::class, [
-        'ownerRecord' => $records['scenario'],
-        'pageClass' => EditScenario::class,
-    ])->assertCanSeeTableRecords([$records['node']]);
 
     Livewire::test(OutgoingEdgesRelationManager::class, [
         'ownerRecord' => $records['node'],

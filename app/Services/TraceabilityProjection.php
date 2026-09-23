@@ -9,7 +9,6 @@ use App\Models\ImplementationNode;
 use App\Models\Project;
 use App\Models\Requirement;
 use App\Models\RunEvent;
-use App\Models\Scenario;
 use App\Models\Test;
 use App\Models\UseCase;
 use App\Models\WorkflowRun;
@@ -36,9 +35,8 @@ class TraceabilityProjection
             ],
             'behavior' => [
                 'label' => 'Behavior',
-                'count' => UseCase::query()->where('project_id', $project->id)->count()
-                    + Scenario::query()->where('project_id', $project->id)->count(),
-                'detail' => 'UseCases + Scenarios',
+                'count' => UseCase::query()->where('project_id', $project->id)->count(),
+                'detail' => 'UseCases',
             ],
             'solution' => [
                 'label' => 'Solution',
@@ -80,20 +78,11 @@ class TraceabilityProjection
     {
         return [
             [
-                'label' => 'Scenarios without valid tests',
-                'count' => Scenario::query()
-                    ->where('project_id', $project->id)
-                    ->whereDoesntHave('tests', fn ($query) => $query->where('status', '有效'))
-                    ->count(),
-                'tone' => 'warning',
-            ],
-            [
                 'label' => 'Leaf nodes without evidence',
                 'count' => ImplementationNode::query()
                     ->where('project_id', $project->id)
                     ->whereDoesntHave('children')
                     ->whereDoesntHave('commits')
-                    ->whereDoesntHave('scenarios.tests', fn ($query) => $query->where('status', '有效'))
                     ->count(),
                 'tone' => 'warning',
             ],

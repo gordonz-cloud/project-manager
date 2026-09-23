@@ -11,7 +11,6 @@ use App\Filament\Resources\Modules\ModuleResource;
 use App\Filament\Resources\ModuleSpecs\ModuleSpecResource;
 use App\Filament\Resources\RequestReplies\RequestReplyResource;
 use App\Filament\Resources\Requirements\RequirementResource;
-use App\Filament\Resources\Scenarios\ScenarioResource;
 use App\Filament\Resources\Tests\TestResource;
 use App\Filament\Resources\UseCaseGroups\UseCaseGroupResource;
 use App\Filament\Resources\UseCases\UseCaseResource;
@@ -25,7 +24,6 @@ test('resources are grouped by solution model layer', function () {
         RequirementResource::class => NavigationGroup::Requirements,
         UseCaseGroupResource::class => NavigationGroup::Behavior,
         UseCaseResource::class => NavigationGroup::Behavior,
-        ScenarioResource::class => NavigationGroup::Behavior,
         RequestReplyResource::class => NavigationGroup::Behavior,
         DataModelResource::class => NavigationGroup::Solution,
         ModelFieldResource::class => NavigationGroup::Solution,

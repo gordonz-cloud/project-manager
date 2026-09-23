@@ -5,7 +5,6 @@ namespace App\Filament\Support;
 use App\Data\Workbench\WorkbenchTreeNode;
 use App\Enums\FeatureStatus;
 use App\Enums\ImplementationNodeEdgeKind;
-use App\Enums\RequestReplyEdgeKind;
 use App\Filament\Resources\Commits\CommitResource;
 use App\Filament\Resources\DataModels\DataModelResource;
 use App\Filament\Resources\Features\FeatureResource;
@@ -13,7 +12,6 @@ use App\Filament\Resources\ModelFields\ModelFieldResource;
 use App\Filament\Resources\Modules\ModuleResource;
 use App\Filament\Resources\ModuleSpecs\ModuleSpecResource;
 use App\Filament\Resources\RequestReplies\RequestReplyResource;
-use App\Filament\Resources\Scenarios\ScenarioResource;
 use App\Filament\Resources\Tests\TestResource;
 use App\Filament\Resources\UseCaseGroups\UseCaseGroupResource;
 use App\Filament\Resources\UseCases\UseCaseResource;
@@ -29,8 +27,6 @@ use App\Models\ModuleSpec;
 use App\Models\NodeRun;
 use App\Models\Project;
 use App\Models\RequestReply;
-use App\Models\RequestReplyEdge;
-use App\Models\Scenario;
 use App\Models\Test;
 use App\Models\UseCase;
 use App\Models\UseCaseGroup;
@@ -54,7 +50,6 @@ class WorkbenchGraphPresenter
         'module_spec' => 'Module Spec',
         'data_model' => 'Data Model',
         'model_field' => 'Model Field',
-        'scenario' => 'Scenario',
         'feature' => '功能',
         'request_reply' => '入口',
         'test' => 'Test',
@@ -116,7 +111,7 @@ class WorkbenchGraphPresenter
     public function title(Model $record): string
     {
         return match (true) {
-            $record instanceof UseCaseGroup, $record instanceof Module, $record instanceof DataModel, $record instanceof ModelField, $record instanceof Scenario => $record->name,
+            $record instanceof UseCaseGroup, $record instanceof Module, $record instanceof DataModel, $record instanceof ModelField => $record->name,
             $record instanceof UseCase => $record->goal,
             $record instanceof UseCaseSpec => $record->useCase->goal,
             $record instanceof ModuleSpec => $record->module->name,
@@ -150,7 +145,6 @@ class WorkbenchGraphPresenter
             $record instanceof UseCase => $record->success_outcome,
             $record instanceof DataModel => $record->description ?? $record->business_purpose,
             $record instanceof ModelField => trim(($record->type ?? '').' — '.($record->description ?? ''), ' —'),
-            $record instanceof Scenario => "Given {$record->given}\nWhen {$record->when}\nThen {$record->then}",
             $record instanceof Feature => $record->entry,
             $record instanceof RequestReply => implode("\n", array_filter([
                 $record->label(),
@@ -181,7 +175,6 @@ class WorkbenchGraphPresenter
             $record instanceof ModuleSpec => ModuleSpecResource::class,
             $record instanceof DataModel => DataModelResource::class,
             $record instanceof ModelField => ModelFieldResource::class,
-            $record instanceof Scenario => ScenarioResource::class,
             $record instanceof Feature => FeatureResource::class,
             $record instanceof RequestReply => RequestReplyResource::class,
             $record instanceof Test => TestResource::class,
@@ -221,7 +214,6 @@ class WorkbenchGraphPresenter
                 children: array_values(array_filter([
                     $useCase->spec === null ? null : $this->leaf($useCase->spec, 'Use Case Spec', 'heroicon-m-document-text'),
                     WorkbenchTreeNode::folder($key, 'modules', '模块', 'heroicon-m-cube', $this->moduleNodes($useCase->participatingModules()->load('spec'))),
-                    WorkbenchTreeNode::folder($key, 'scenarios', '场景', 'heroicon-m-play', $this->scenarioNodes($useCase)),
                     WorkbenchTreeNode::folder($key, 'features', '功能', 'heroicon-m-bolt', $this->featureNodes($useCase->features, $this->entryNumbers($useCase))),
                     WorkbenchTreeNode::folder($key, 'runs', '执行记录', 'heroicon-m-arrow-path', $this->workflowRunNodes($useCase->workflowRuns)),
                 ])),
@@ -266,7 +258,7 @@ class WorkbenchGraphPresenter
     }
 
     /**
-     * ① ② ③… by the use case's entry order, so a scenario path reads as ③→④→⑤.
+     * ① ② ③… by the use case's entry order, shown before each entry label.
      *
      * @return array<int, string>
      */
@@ -282,43 +274,8 @@ class WorkbenchGraphPresenter
     }
 
     /**
-     * Each scenario with its path, a failed step marked ✗: ③→④✗→③→④→⑤.
-     *
-     * @return list<WorkbenchTreeNode>
-     */
-    private function scenarioNodes(UseCase $useCase): array
-    {
-        $numbers = $this->entryNumbers($useCase);
-        $failureEdges = $useCase->requestReplies
-            ->flatMap(fn (RequestReply $requestReply) => $requestReply->outgoingEdges)
-            ->filter(fn (RequestReplyEdge $edge): bool => $edge->kind === RequestReplyEdgeKind::OnFailure)
-            ->mapWithKeys(fn (RequestReplyEdge $edge): array => ["{$edge->from_request_reply_id}>{$edge->to_request_reply_id}" => true])
-            ->all();
-        $nodes = [];
-
-        foreach ($useCase->scenarios as $scenario) {
-            $ids = $scenario->steps->pluck('request_reply_id')->values()->all();
-            $path = [];
-
-            foreach ($ids as $index => $id) {
-                $failed = isset($ids[$index + 1], $failureEdges["{$id}>{$ids[$index + 1]}"]);
-                $path[] = ($numbers[$id] ?? '?').($failed ? '✗' : '');
-            }
-
-            $nodes[] = new WorkbenchTreeNode(
-                key: "scenario:{$scenario->id}",
-                label: $path === [] ? $scenario->name : "{$scenario->name}  ".implode('→', $path),
-                icon: 'heroicon-m-play',
-                tone: $this->tone($scenario),
-            );
-        }
-
-        return $nodes;
-    }
-
-    /**
      * @param  iterable<Feature>  $features
-     * @param  array<int, string>  $entryNumbers  the use case's ①②③, so entry rows match scenario paths
+     * @param  array<int, string>  $entryNumbers  the use case's ①②③, shown before each entry
      * @return list<WorkbenchTreeNode>
      */
     private function featureNodes(iterable $features, array $entryNumbers = []): array

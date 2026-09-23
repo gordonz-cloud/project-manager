@@ -5,7 +5,6 @@ use App\Enums\ImplementationNodeEdgeKind;
 use App\Enums\ImplementationNodeKind;
 use App\Enums\ImplementationNodeState;
 use App\Enums\NavigationGroup;
-use App\Enums\RequestReplyEdgeKind;
 use App\Enums\UseCaseStatus;
 use App\Enums\WorkflowRunStatus;
 use App\Filament\Pages\WorkbenchGraph;
@@ -19,8 +18,6 @@ use App\Models\Module;
 use App\Models\ModuleSpec;
 use App\Models\Project;
 use App\Models\RequestReply;
-use App\Models\RequestReplyEdge;
-use App\Models\Scenario;
 use App\Models\UseCase;
 use App\Models\UseCaseGroup;
 use App\Models\UseCaseSpec;
@@ -30,7 +27,7 @@ use Filament\Facades\Filament;
 use Livewire\Livewire;
 
 /**
- * @return array{project: Project, group: UseCaseGroup, module: Module, moduleSpec: ModuleSpec, useCase: UseCase, useCaseSpec: UseCaseSpec, scenario: Scenario, feature: Feature, requestReply: RequestReply, node: ImplementationNode, dataModel: DataModel, field: ModelField, run: WorkflowRun}
+ * @return array{project: Project, group: UseCaseGroup, module: Module, moduleSpec: ModuleSpec, useCase: UseCase, useCaseSpec: UseCaseSpec, feature: Feature, requestReply: RequestReply, node: ImplementationNode, dataModel: DataModel, field: ModelField, run: WorkflowRun}
  */
 function workbenchContext(): array
 {
@@ -55,7 +52,6 @@ function workbenchContext(): array
         'goal' => 'Trace goal',
     ]);
     $useCaseSpec = UseCaseSpec::factory()->create(['use_case_id' => $useCase->id, 'content' => 'Use case flow']);
-    $scenario = Scenario::factory()->create(['project_id' => $project->id, 'use_case_id' => $useCase->id, 'name' => 'Trace scenario']);
     $feature = Feature::factory()->forUseCase($useCase)->create([
         'title' => 'Trace feature',
         'status' => FeatureStatus::Done,
@@ -75,7 +71,7 @@ function workbenchContext(): array
     $feature->dataModels()->attach($dataModel);
     $run = WorkflowRun::factory()->forUseCase($useCase)->create(['feature_id' => $feature->id, 'status' => WorkflowRunStatus::Running]);
 
-    return compact('project', 'group', 'module', 'moduleSpec', 'useCase', 'useCaseSpec', 'scenario', 'feature', 'requestReply', 'node', 'dataModel', 'field', 'run');
+    return compact('project', 'group', 'module', 'moduleSpec', 'useCase', 'useCaseSpec', 'feature', 'requestReply', 'node', 'dataModel', 'field', 'run');
 }
 
 test('workbench graph page uses the expected navigation contract', function () {
@@ -97,7 +93,7 @@ test('the tree starts at use case groups, then use cases, then their modules and
         ->and($useCase->key)->toBe("use_case:{$records['useCase']->id}")
         ->and($useCase->badge)->toBe('1/1')
         ->and($useCase->children[0]->key)->toBe("use_case_spec:{$records['useCaseSpec']->id}")
-        ->and($folders->keys()->all())->toBe(['Use Case Spec', '模块', '场景', '功能', '执行记录'])
+        ->and($folders->keys()->all())->toBe(['Use Case Spec', '模块', '功能', '执行记录'])
         ->and($folders['模块']->children[0]->key)->toBe("module:{$records['module']->id}")
         ->and($folders['功能']->children[0]->key)->toBe("feature:{$records['feature']->id}")
         ->and($folders['功能']->children[0]->badge)->toBe('Trace module')
@@ -118,7 +114,7 @@ test('the tree shows business names only, never table or column names', function
 
     Livewire::test(WorkbenchGraph::class)
         ->set('search', 'trace')
-        ->assertSee(['Trace module', 'Trace feature', 'trace_field', 'Trace scenario'])
+        ->assertSee(['Trace module', 'Trace feature', 'trace_field'])
         ->assertDontSee(['module_use_cases', 'use_case_id', 'data_model_feature', '未建立']);
 });
 
@@ -128,9 +124,9 @@ test('search filters the tree and opens the branches that match', function () {
 
     Livewire::test(WorkbenchGraph::class)
         ->assertSee('Unrelated goal')
-        ->assertDontSee('Trace scenario')
-        ->set('search', 'Trace scenario')
-        ->assertSee('Trace scenario')
+        ->assertDontSee('Trace feature')
+        ->set('search', 'Trace feature')
+        ->assertSee('Trace feature')
         ->assertDontSee('Unrelated goal');
 });
 
@@ -139,10 +135,10 @@ test('toggling a row opens its children', function () {
     $useCasePath = "use_case_group:{$records['group']->id}>use_case:{$records['useCase']->id}";
 
     Livewire::test(WorkbenchGraph::class)
-        ->assertDontSee('Trace scenario')
+        ->assertDontSee('Trace feature')
         ->call('toggleNode', $useCasePath)
-        ->call('toggleNode', "{$useCasePath}>use_case:{$records['useCase']->id}#scenarios")
-        ->assertSee('Trace scenario');
+        ->call('toggleNode', "{$useCasePath}>use_case:{$records['useCase']->id}#features")
+        ->assertSee('Trace feature');
 });
 
 test('the detail panel shows one rendered text block and no relation lists', function () {
@@ -212,15 +208,13 @@ test('markdown in specs is escaped', function () {
         ->assertDontSeeHtml("<script>alert('xss')</script>");
 });
 
-test('entries under features carry the use case number that scenario paths use', function () {
+test('entries under features carry their use case number', function () {
     $records = workbenchContext();
     $login = $records['requestReply'];
     $entry = fn (string $path): RequestReply => RequestReply::factory()->create(['use_case_id' => $records['useCase']->id, 'method' => 'GET', 'entry' => $path]);
     $home = $entry('/home');
     $error = $entry('/error');
     $records['feature']->requestReplies()->attach([$home->id, $error->id]);
-    RequestReplyEdge::factory()->create(['from_request_reply_id' => $login->id, 'to_request_reply_id' => $error->id, 'kind' => RequestReplyEdgeKind::OnFailure]);
-    $records['scenario']->replaceSteps([$login->id, $error->id, $login->id, $home->id]);
 
     $folders = collect(Livewire::test(WorkbenchGraph::class)->instance()->tree[0]->children[0]->children)->keyBy('label');
     $entries = collect($folders['功能']->children[0]->children[0]->children)->mapWithKeys(fn ($node): array => [$node->key => $node->label]);
@@ -229,7 +223,7 @@ test('entries under features carry the use case number that scenario paths use',
         "request_reply:{$login->id}" => '① POST /trace',
         "request_reply:{$home->id}" => '② GET /home',
         "request_reply:{$error->id}" => '③ GET /error',
-    ])->and($folders['场景']->children[0]->label)->toBe('Trace scenario  ①✗→③→①→②');
+    ]);
 });
 
 test('the tree stops at entries: no call-tree nodes anywhere', function () {

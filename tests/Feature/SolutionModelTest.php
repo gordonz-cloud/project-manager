@@ -6,9 +6,6 @@ use App\Enums\ImplementationNodeState;
 use App\Enums\NodeRunMode;
 use App\Enums\NodeRunStatus;
 use App\Enums\RunEventType;
-use App\Enums\ScenarioPriority;
-use App\Enums\ScenarioStatus;
-use App\Enums\ScenarioType;
 use App\Enums\UseCaseStatus;
 use App\Enums\WorkflowRunStatus;
 use App\Models\Commit;
@@ -20,7 +17,6 @@ use App\Models\NodeRun;
 use App\Models\Project;
 use App\Models\Requirement;
 use App\Models\RunEvent;
-use App\Models\Scenario;
 use App\Models\Test as TestModel;
 use App\Models\UseCase;
 use App\Models\WorkflowRun;
@@ -31,28 +27,15 @@ test('module spec and use case hierarchy connect the executable behavior chain',
     $useCase = UseCase::factory()->forModule($spec->module)->create([
         'status' => UseCaseStatus::Ready,
     ]);
-    $scenario = Scenario::factory()->create([
-        'project_id' => $project->id,
-        'use_case_id' => $useCase->id,
-        'type' => ScenarioType::Happy,
-        'priority' => ScenarioPriority::High,
-        'status' => ScenarioStatus::Ready,
-    ]);
     expect($spec->useCases()->first()->is($useCase))->toBeTrue()
-        ->and($useCase->scenarios()->first()->is($scenario))->toBeTrue()
-        ->and($useCase->status)->toBe(UseCaseStatus::Ready)
-        ->and($scenario->type)->toBe(ScenarioType::Happy);
+        ->and($useCase->status)->toBe(UseCaseStatus::Ready);
 });
 
-test('implementation graph connects scenarios to nodes and evidence', function () {
+test('implementation graph connects nodes and evidence', function () {
     $project = Project::factory()->create();
     $spec = ModuleSpec::factory()->forProject($project)->create();
     $useCase = UseCase::factory()->forModule($spec->module)->create();
     $feature = Feature::factory()->forUseCase($useCase)->create();
-    $scenario = Scenario::factory()->create([
-        'project_id' => $project->id,
-        'use_case_id' => $useCase->id,
-    ]);
     $first = ImplementationNode::factory()->create([
         'project_id' => $project->id,
         'feature_id' => $feature->id,
@@ -73,15 +56,12 @@ test('implementation graph connects scenarios to nodes and evidence', function (
     ]);
     $test = TestModel::factory()->create([
         'project_id' => $project->id,
-        'scenario_id' => $scenario->id,
     ]);
     $commit = Commit::factory()->create([
         'project_id' => $project->id,
         'feature_id' => $feature->id,
         'implementation_node_id' => $second->id,
     ]);
-
-    $scenario->implementationNodes()->attach($first);
 
     expect($feature->useCase()->first()->is($useCase))->toBeTrue()
         ->and($feature->implementationNodes()->count())->toBe(2)
@@ -90,8 +70,6 @@ test('implementation graph connects scenarios to nodes and evidence', function (
         ->and($second->incomingEdges()->first()->is($edge))->toBeTrue()
         ->and($edge->fromNode()->first()->is($first))->toBeTrue()
         ->and($edge->toNode()->first()->is($second))->toBeTrue()
-        ->and($first->scenarios()->first()->is($scenario))->toBeTrue()
-        ->and($scenario->tests()->first()->is($test))->toBeTrue()
         ->and($second->commits()->first()->is($commit))->toBeTrue();
 });
 
