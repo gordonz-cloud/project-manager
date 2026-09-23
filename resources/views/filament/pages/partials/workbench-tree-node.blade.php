@@ -36,6 +36,7 @@
             @else
                 wire:click="selectNode(@js($node->key))"
             @endif
+            data-tree-key="{{ $node->key }}"
             class="flex min-h-8 min-w-0 flex-1 items-center gap-2 rounded-md px-2 py-1.5 text-left transition {{ $isSelected ? 'bg-slate-900 text-white dark:bg-white dark:text-slate-950' : 'hover:bg-slate-50 dark:hover:bg-white/5' }}"
         >
             <x-filament::icon icon="{{ $node->icon }}" class="size-4 shrink-0 {{ $isSelected ? '' : 'text-slate-400' }}" />

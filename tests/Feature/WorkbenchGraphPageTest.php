@@ -7,6 +7,7 @@ use App\Enums\NavigationGroup;
 use App\Enums\UseCaseStatus;
 use App\Enums\WorkflowRunStatus;
 use App\Filament\Pages\WorkbenchGraph;
+use App\Models\Commit;
 use App\Models\DataModel;
 use App\Models\Feature;
 use App\Models\Flowchart;
@@ -419,4 +420,47 @@ test('feature and data model rows show a status pill colored by meaning', functi
 
     expect($dataModel->statusBadge)->toBe('现有')
         ->and($dataModel->tone)->toBe('success');
+});
+
+test('the recent commits card shows at most 50 newest commits, excluding other projects', function () {
+    $records = workbenchContext();
+
+    Commit::factory()->count(55)->create([
+        'project_id' => $records['project']->id,
+        'feature_id' => $records['feature']->id,
+        'committed_at' => fn () => now()->subMinutes(rand(1, 10000)),
+    ]);
+    $newest = Commit::factory()->create([
+        'project_id' => $records['project']->id,
+        'feature_id' => $records['feature']->id,
+        'subject' => 'Newest commit',
+        'committed_at' => now(),
+    ]);
+
+    $otherProject = Project::factory()->create();
+    Commit::factory()->create([
+        'project_id' => $otherProject->id,
+        'subject' => 'Other project commit',
+        'committed_at' => now(),
+    ]);
+
+    $commits = Livewire::test(WorkbenchGraph::class)->instance()->recentCommits;
+
+    expect($commits)->toHaveCount(50)
+        ->and($commits[0]->id)->toBe($newest->id)
+        ->and(collect($commits)->pluck('subject'))->not->toContain('Other project commit');
+});
+
+test('clicking a commit linked to a feature selects that feature', function () {
+    $records = workbenchContext();
+
+    $commit = Commit::factory()->create([
+        'project_id' => $records['project']->id,
+        'feature_id' => $records['feature']->id,
+        'committed_at' => now(),
+    ]);
+
+    Livewire::test(WorkbenchGraph::class)
+        ->call('selectNode', "feature:{$commit->feature_id}")
+        ->assertSet('selectedKey', "feature:{$records['feature']->id}");
 });

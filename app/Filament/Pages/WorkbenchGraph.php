@@ -5,6 +5,7 @@ namespace App\Filament\Pages;
 use App\Data\Workbench\WorkbenchTreeNode;
 use App\Enums\NavigationGroup;
 use App\Filament\Support\WorkbenchGraphPresenter;
+use App\Models\Commit;
 use App\Models\Project;
 use App\Services\Workbench\WorkbenchGraphService;
 use BackedEnum;
@@ -134,6 +135,15 @@ class WorkbenchGraph extends Page
         $needle = mb_strtolower(trim($this->search));
 
         return $needle === '' ? $this->tree : WorkbenchTreeNode::matchingAll($this->tree, $needle);
+    }
+
+    /**
+     * @return list<Commit>
+     */
+    #[Computed]
+    public function recentCommits(): array
+    {
+        return array_values($this->workbenchGraphService()->recentCommits($this->project)->all());
     }
 
     #[Computed]

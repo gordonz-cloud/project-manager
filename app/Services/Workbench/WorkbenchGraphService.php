@@ -115,6 +115,21 @@ class WorkbenchGraphService
     }
 
     /**
+     * The project's newest commits, feature eager-loaded for the link shown beside each one.
+     *
+     * @return Collection<int, Commit>
+     */
+    public function recentCommits(Project $project, int $limit = 50): Collection
+    {
+        return Commit::query()
+            ->where('project_id', $project->id)
+            ->with('feature')
+            ->orderByDesc('committed_at')
+            ->limit($limit)
+            ->get();
+    }
+
+    /**
      * The record a tree key points at, only when it belongs to this project.
      */
     public function record(Project $project, string $key): ?Model

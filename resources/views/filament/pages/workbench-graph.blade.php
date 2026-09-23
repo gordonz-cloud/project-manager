@@ -16,7 +16,11 @@
                 >
             </div>
 
-            <div class="max-h-[calc(100vh-12rem)] overflow-y-auto p-2">
+            <div
+                class="max-h-[calc(100vh-12rem)] overflow-y-auto p-2"
+                x-data
+                x-effect="$wire.selectedKey; $nextTick(() => $el.querySelector('[data-tree-key=\'' + $wire.selectedKey + '\']')?.scrollIntoView({block: 'nearest'}))"
+            >
                 @forelse ($this->visibleTree as $node)
                     @include('filament.pages.partials.workbench-tree-node', ['node' => $node, 'parentPath' => ''])
                 @empty
@@ -25,7 +29,8 @@
             </div>
         </aside>
 
-        <section class="min-w-0 self-start rounded-lg border border-slate-200 bg-white dark:border-white/10 dark:bg-slate-950 xl:sticky xl:top-6">
+        <div class="flex min-w-0 flex-col gap-4 xl:h-[calc(100vh-6rem)]">
+        <section class="min-w-0 shrink-0 rounded-lg border border-slate-200 bg-white dark:border-white/10 dark:bg-slate-950">
             @if ($record)
                 @php
                     $status = $presenter->statusLabel($record);
@@ -123,5 +128,33 @@
                 <div class="px-5 py-16 text-center text-sm text-slate-500 dark:text-slate-400">从左侧选择一项。</div>
             @endif
         </section>
+
+        <section class="flex min-h-0 flex-1 flex-col rounded-lg border border-slate-200 bg-white dark:border-white/10 dark:bg-slate-950">
+            <h3 class="shrink-0 border-b border-slate-200 px-4 py-2.5 text-xs font-medium text-slate-500 dark:border-white/10 dark:text-slate-400">最近 Commits</h3>
+            <div class="min-h-0 flex-1 divide-y divide-slate-100 overflow-y-auto dark:divide-white/5">
+                @forelse ($this->recentCommits as $commit)
+                    <div class="flex items-center gap-2 px-4 py-2 text-sm">
+                        <span class="shrink-0 font-mono text-xs text-slate-400">{{ substr($commit->hash, 0, 7) }}</span>
+                        @if ($commit->feature_id !== null)
+                            <button
+                                type="button"
+                                wire:click="selectNode('feature:{{ $commit->feature_id }}')"
+                                class="min-w-0 flex-1 truncate text-left text-slate-950 hover:underline dark:text-white"
+                                title="{{ $commit->subject }}"
+                            >{{ $commit->subject }}</button>
+                        @else
+                            <span class="min-w-0 flex-1 truncate text-slate-950 dark:text-white" title="{{ $commit->subject }}">{{ $commit->subject }}</span>
+                        @endif
+                        <span class="shrink-0 text-xs text-slate-400">{{ $commit->committed_at->diffForHumans() }}</span>
+                        <span class="w-28 shrink-0 truncate text-right text-xs text-slate-400" title="{{ $commit->feature?->title }}">
+                            {{ $commit->feature?->title ?? '未挂功能' }}
+                        </span>
+                    </div>
+                @empty
+                    <p class="px-4 py-6 text-center text-xs text-slate-400">还没有 commit。</p>
+                @endforelse
+            </div>
+        </section>
+        </div>
     </div>
 </x-filament-panels::page>
