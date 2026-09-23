@@ -33,7 +33,6 @@ class WorkflowRunFactory extends Factory
             'requirement_id' => null,
             'feature_id' => null,
             'graph_version' => 'v1',
-            'focus_node_run_id' => null,
             'status' => WorkflowRunStatus::Pending,
             'started_at' => null,
             'finished_at' => null,

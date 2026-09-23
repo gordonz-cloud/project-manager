@@ -1,9 +1,6 @@
 <?php
 
 use App\Enums\FeatureStatus;
-use App\Filament\Resources\ImplementationNodes\Pages\EditImplementationNode;
-use App\Filament\Resources\ImplementationNodes\Pages\ListImplementationNodes;
-use App\Filament\Resources\ImplementationNodes\RelationManagers\OutgoingEdgesRelationManager;
 use App\Filament\Resources\Modules\Pages\CreateModule;
 use App\Filament\Resources\ModuleSpecs\Pages\CreateModuleSpec;
 use App\Filament\Resources\ModuleSpecs\Pages\EditModuleSpec;
@@ -17,13 +14,9 @@ use App\Filament\Resources\UseCases\RelationManagers\FeaturesRelationManager as 
 use App\Filament\Resources\WorkflowRuns\Pages\EditWorkflowRun;
 use App\Filament\Resources\WorkflowRuns\Pages\ListWorkflowRuns;
 use App\Filament\Resources\WorkflowRuns\RelationManagers\EventsRelationManager;
-use App\Filament\Resources\WorkflowRuns\RelationManagers\NodeRunsRelationManager;
 use App\Models\Feature;
-use App\Models\ImplementationNode;
-use App\Models\ImplementationNodeEdge;
 use App\Models\Module;
 use App\Models\ModuleSpec;
-use App\Models\NodeRun;
 use App\Models\Project;
 use App\Models\RunEvent;
 use App\Models\UseCase;
@@ -47,29 +40,11 @@ function solutionModelContext(): array
     $spec = ModuleSpec::factory()->forProject($project)->create();
     $useCase = UseCase::factory()->forModule($spec->module)->create();
     $feature = Feature::factory()->forUseCase($useCase)->create();
-    $node = ImplementationNode::factory()->create([
-        'project_id' => $project->id,
-        'feature_id' => $feature->id,
-    ]);
-    $target = ImplementationNode::factory()->create([
-        'project_id' => $project->id,
-        'feature_id' => $feature->id,
-    ]);
-    $edge = ImplementationNodeEdge::factory()->create([
-        'project_id' => $project->id,
-        'from_node_id' => $node->id,
-        'to_node_id' => $target->id,
-    ]);
     $run = WorkflowRun::factory()->forUseCase($useCase)->create([
         'feature_id' => $feature->id,
     ]);
-    $nodeRun = NodeRun::factory()->create([
-        'workflow_run_id' => $run->id,
-        'implementation_node_id' => $node->id,
-    ]);
     $event = RunEvent::factory()->create([
         'workflow_run_id' => $run->id,
-        'node_run_id' => $nodeRun->id,
     ]);
 
     return compact(
@@ -77,11 +52,7 @@ function solutionModelContext(): array
         'spec',
         'useCase',
         'feature',
-        'node',
-        'target',
-        'edge',
         'run',
-        'nodeRun',
         'event',
     );
 }
@@ -91,7 +62,6 @@ test('solution model resources list their tenant records', function () {
 
     Livewire::test(ListModuleSpecs::class)->assertCanSeeTableRecords([$records['spec']]);
     Livewire::test(ListUseCases::class)->assertCanSeeTableRecords([$records['useCase']]);
-    Livewire::test(ListImplementationNodes::class)->assertCanSeeTableRecords([$records['node']]);
     Livewire::test(ListWorkflowRuns::class)->assertCanSeeTableRecords([$records['run']]);
 });
 
@@ -151,59 +121,10 @@ test('solution model relation managers render the linked records', function () {
         'pageClass' => EditModuleSpec::class,
     ])->assertCanSeeTableRecords([$records['useCase']]);
 
-    Livewire::test(OutgoingEdgesRelationManager::class, [
-        'ownerRecord' => $records['node'],
-        'pageClass' => EditImplementationNode::class,
-    ])->assertCanSeeTableRecords([$records['edge']]);
-
-    Livewire::test(NodeRunsRelationManager::class, [
-        'ownerRecord' => $records['run'],
-        'pageClass' => EditWorkflowRun::class,
-    ])->assertCanSeeTableRecords([$records['nodeRun']]);
-
     Livewire::test(EventsRelationManager::class, [
         'ownerRecord' => $records['run'],
         'pageClass' => EditWorkflowRun::class,
     ])->assertCanSeeTableRecords([$records['event']]);
-});
-
-test('runtime relation managers only offer records from the owning run and feature', function () {
-    $records = solutionModelContext();
-    $otherUseCase = UseCase::factory()->forModule($records['spec']->module)->create();
-    $otherFeature = Feature::factory()->forUseCase($otherUseCase)->create();
-    $otherNode = ImplementationNode::factory()->create([
-        'project_id' => $records['project']->id,
-        'feature_id' => $otherFeature->id,
-    ]);
-    $otherRun = WorkflowRun::factory()->forUseCase($otherUseCase)->create([
-        'feature_id' => $otherFeature->id,
-    ]);
-    $otherNodeRun = NodeRun::factory()->create([
-        'workflow_run_id' => $otherRun->id,
-        'implementation_node_id' => $otherNode->id,
-    ]);
-
-    Livewire::test(EventsRelationManager::class, [
-        'ownerRecord' => $records['run'],
-        'pageClass' => EditWorkflowRun::class,
-    ])
-        ->callAction(TestAction::make(CreateAction::class)->table(), [
-            'node_run_id' => $otherNodeRun->id,
-            'event_type' => 'entered',
-        ])
-        ->assertHasFormErrors(['node_run_id']);
-
-    Livewire::test(NodeRunsRelationManager::class, [
-        'ownerRecord' => $records['run'],
-        'pageClass' => EditWorkflowRun::class,
-    ])
-        ->callAction(TestAction::make(CreateAction::class)->table(), [
-            'implementation_node_id' => $otherNode->id,
-            'mode' => 'oneshot',
-            'status' => 'pending',
-            'contract_snapshot' => ['contract' => 'test'],
-        ])
-        ->assertHasFormErrors(['implementation_node_id']);
 });
 
 test('owner-derived relation managers create records with the owner context', function () {

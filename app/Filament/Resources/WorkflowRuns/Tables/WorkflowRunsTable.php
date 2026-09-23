@@ -18,7 +18,7 @@ class WorkflowRunsTable
             ->stackedOnMobile()
             ->modifyQueryUsing(fn (Builder $query): Builder => $query
                 ->with(['useCase', 'feature'])
-                ->withCount(['nodeRuns', 'events']))
+                ->withCount(['events']))
             ->columns([
                 TextColumn::make('id')
                     ->label('Run')
@@ -33,9 +33,6 @@ class WorkflowRunsTable
                 TextColumn::make('status')
                     ->label('状态')
                     ->badge(),
-                TextColumn::make('node_runs_count')
-                    ->label('节点')
-                    ->numeric(),
                 TextColumn::make('events_count')
                     ->label('事件')
                     ->numeric(),

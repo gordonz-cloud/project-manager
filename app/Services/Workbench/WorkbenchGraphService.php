@@ -8,7 +8,6 @@ use App\Models\Feature;
 use App\Models\ModelField;
 use App\Models\Module;
 use App\Models\ModuleSpec;
-use App\Models\NodeRun;
 use App\Models\Project;
 use App\Models\RequestReply;
 use App\Models\Test;
@@ -16,7 +15,6 @@ use App\Models\UseCase;
 use App\Models\UseCaseGroup;
 use App\Models\UseCaseSpec;
 use App\Models\WorkflowRun;
-use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Model;
 
@@ -40,7 +38,6 @@ class WorkbenchGraphService
         'test' => Test::class,
         'commit' => Commit::class,
         'workflow_run' => WorkflowRun::class,
-        'node_run' => NodeRun::class,
     ];
 
     private const FEATURE_RELATIONS = ['module', 'requestReplies', 'tests', 'commits'];
@@ -126,15 +123,7 @@ class WorkbenchGraphService
             return null;
         }
 
-        $query = $modelClass::query()->whereKey((int) $id);
-
-        if ($modelClass === NodeRun::class) {
-            $query->whereHas('workflowRun', fn (Builder $run) => $run->where('project_id', $project->id));
-        } else {
-            $query->where('project_id', $project->id);
-        }
-
-        return $query->first();
+        return $modelClass::query()->whereKey((int) $id)->where('project_id', $project->id)->first();
     }
 
     /**
@@ -148,7 +137,6 @@ class WorkbenchGraphService
             "{$prefix}requestReplies.module",
             ...array_map(fn (string $relation): string => "{$prefix}features.{$relation}", self::FEATURE_RELATIONS),
             "{$prefix}workflowRuns" => fn ($runs) => $runs->latest('id'),
-            "{$prefix}workflowRuns.nodeRuns.implementationNode",
         ];
     }
 }

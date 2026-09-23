@@ -19,7 +19,7 @@ class RequestRepliesTable
             ->stackedOnMobile()
             ->modifyQueryUsing(fn (Builder $query): Builder => $query
                 ->with(['useCase', 'module'])
-                ->withCount(['features', 'implementationNodes', 'outgoingEdges']))
+                ->withCount(['features', 'outgoingEdges']))
             ->defaultSort('sort_order')
             ->columns([
                 TextColumn::make('method')
@@ -46,9 +46,6 @@ class RequestRepliesTable
                     ->color('gray'),
                 TextColumn::make('outgoing_edges_count')
                     ->label('下游')
-                    ->numeric(),
-                TextColumn::make('implementation_nodes_count')
-                    ->label('调用节点')
                     ->numeric(),
                 TextColumn::make('features_count')
                     ->label('功能')

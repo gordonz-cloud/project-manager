@@ -21,7 +21,6 @@ class RunEventFactory extends Factory
     {
         return [
             'workflow_run_id' => WorkflowRun::factory(),
-            'node_run_id' => null,
             'event_type' => RunEventType::Entered,
             'payload' => null,
             'created_at' => now(),

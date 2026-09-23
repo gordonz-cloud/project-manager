@@ -109,12 +109,4 @@ class RequestReply extends Model
     {
         return $this->hasMany(RequestReplyEdge::class, 'to_request_reply_id');
     }
-
-    /**
-     * @return HasMany<ImplementationNode, $this>
-     */
-    public function implementationNodes(): HasMany
-    {
-        return $this->hasMany(ImplementationNode::class);
-    }
 }

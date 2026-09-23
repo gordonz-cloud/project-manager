@@ -6,7 +6,6 @@ use App\Enums\UseCaseStatus;
 use App\Models\Concerns\BelongsToProject;
 use Database\Factories\UseCaseFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
-use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -128,18 +127,14 @@ class UseCase extends Model
     }
 
     /**
-     * Modules this use case touches: its request replies' modules plus the modules their call-tree nodes run in.
+     * Modules this use case touches: its request replies' modules.
      *
      * @return Collection<int, Module>
      */
     public function participatingModules(): Collection
     {
-        $requestReplies = RequestReply::withoutGlobalScopes()->where('use_case_id', $this->id);
-
         return Module::withoutGlobalScopes()
-            ->where(fn (Builder $query) => $query
-                ->whereIn('id', (clone $requestReplies)->whereNotNull('module_id')->select('module_id'))
-                ->orWhereIn('id', ImplementationNode::withoutGlobalScopes()->whereIn('request_reply_id', $requestReplies->select('id'))->whereNotNull('module_id')->select('module_id')))
+            ->whereIn('id', RequestReply::withoutGlobalScopes()->where('use_case_id', $this->id)->whereNotNull('module_id')->select('module_id'))
             ->orderBy('name')
             ->get();
     }

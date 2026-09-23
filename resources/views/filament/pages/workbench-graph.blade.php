@@ -53,38 +53,22 @@
                         <p class="whitespace-pre-wrap break-words text-sm leading-6 text-slate-700 dark:text-slate-300">{{ $body['text'] }}</p>
                     @endif
 
-                    @if ($record instanceof \App\Models\RequestReply && ($steps = $presenter->callSteps($record)) !== [])
-                        <table class="mt-4 w-full table-fixed text-left text-xs">
-                            <thead class="text-slate-500 dark:text-slate-400">
-                                <tr class="border-b border-slate-200 dark:border-white/10">
-                                    <th class="w-8 py-2 pr-2">#</th>
-                                    <th class="py-2 pr-2">文件::函数</th>
-                                    <th class="py-2 pr-2">输入</th>
-                                    <th class="py-2 pr-2">变化</th>
-                                    <th class="py-2">输出</th>
-                                </tr>
-                            </thead>
-                            <tbody class="align-top text-slate-700 dark:text-slate-300">
-                                @foreach ($steps as $index => $step)
-                                    @php($node = $step['node'])
-                                    <tr @class(['border-b border-slate-100 dark:border-white/5', 'text-red-600 dark:text-red-400' => $step['failureCondition'] !== null]) data-step="{{ $node->id }}">
-                                        <td class="py-2 pr-2">{{ $index + 1 }}</td>
-                                        <td class="break-words py-2 pr-2" style="padding-left: {{ $step['depth'] * 1 }}rem">
-                                            @if ($step['failureCondition'] !== null)
-                                                <span class="font-medium" data-failure>✗ {{ $step['failureCondition'] }}</span><br>
-                                            @endif
-                                            <span class="font-mono">{{ filled($node->file) ? $node->file.(filled($node->function) ? "::{$node->function}" : '') : $node->title }}</span>
-                                            @if (filled($node->file))
-                                                <span class="block text-[11px] text-slate-400">{{ $node->title }}</span>
-                                            @endif
-                                        </td>
-                                        <td class="whitespace-pre-wrap break-words py-2 pr-2 font-mono">{{ $node->input }}</td>
-                                        <td class="whitespace-pre-wrap break-words py-2 pr-2">{{ $node->change }}</td>
-                                        <td class="whitespace-pre-wrap break-words py-2 font-mono">{{ $node->output }}</td>
-                                    </tr>
-                                @endforeach
-                            </tbody>
-                        </table>
+                    @if (($mermaid = $presenter->flowchartMermaid($record)) !== null)
+                        <div
+                            wire:key="flowchart-{{ $record->getKey() }}-{{ md5($mermaid) }}"
+                            wire:ignore
+                            data-flowchart
+                            data-source="{{ $mermaid }}"
+                            x-data
+                            x-init="
+                                const draw = async () => { $el.innerHTML = (await window.mermaid.render('flowchart-' + Date.now(), $el.dataset.source)).svg };
+                                window.mermaid ? draw() : document.addEventListener('mermaid:ready', draw, { once: true });
+                            "
+                            class="mt-4 overflow-x-auto"
+                        ></div>
+                        @if (filled($record->flowchart->pseudocode))
+                            <pre class="mt-4 overflow-x-auto whitespace-pre-wrap rounded-md bg-slate-50 p-3 font-mono text-xs leading-5 text-slate-700 dark:bg-white/5 dark:text-slate-300" data-pseudocode>{{ $record->flowchart->pseudocode }}</pre>
+                        @endif
                     @endif
                 </div>
             @else

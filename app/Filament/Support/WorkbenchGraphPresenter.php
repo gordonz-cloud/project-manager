@@ -4,7 +4,6 @@ namespace App\Filament\Support;
 
 use App\Data\Workbench\WorkbenchTreeNode;
 use App\Enums\FeatureStatus;
-use App\Enums\ImplementationNodeEdgeKind;
 use App\Filament\Resources\Commits\CommitResource;
 use App\Filament\Resources\DataModels\DataModelResource;
 use App\Filament\Resources\Features\FeatureResource;
@@ -19,12 +18,9 @@ use App\Filament\Resources\WorkflowRuns\WorkflowRunResource;
 use App\Models\Commit;
 use App\Models\DataModel;
 use App\Models\Feature;
-use App\Models\ImplementationNode;
-use App\Models\ImplementationNodeEdge;
 use App\Models\ModelField;
 use App\Models\Module;
 use App\Models\ModuleSpec;
-use App\Models\NodeRun;
 use App\Models\Project;
 use App\Models\RequestReply;
 use App\Models\Test;
@@ -33,6 +29,7 @@ use App\Models\UseCaseGroup;
 use App\Models\UseCaseSpec;
 use App\Models\WorkflowRun;
 use App\Services\Workbench\WorkbenchGraphService;
+use App\Support\FlowchartMermaid;
 use BackedEnum;
 use Filament\Resources\Resource as FilamentResource;
 use Filament\Support\Contracts\HasColor;
@@ -55,7 +52,6 @@ class WorkbenchGraphPresenter
         'test' => 'Test',
         'commit' => 'Commit',
         'workflow_run' => 'Workflow Run',
-        'node_run' => 'Node Run',
     ];
 
     /** @var array<int, Collection<int, DataModel>> */
@@ -118,7 +114,6 @@ class WorkbenchGraphPresenter
             $record instanceof Feature, $record instanceof RequestReply, $record instanceof Test => $record->title,
             $record instanceof Commit => $record->subject,
             $record instanceof WorkflowRun => "Run #{$record->id}",
-            $record instanceof NodeRun => $record->implementationNode->title,
             default => (string) $record->getKey(),
         };
     }
@@ -154,7 +149,6 @@ class WorkbenchGraphPresenter
             $record instanceof Test => $record->location,
             $record instanceof Commit => $record->body ?? $record->hash,
             $record instanceof WorkflowRun => $record->feature?->title,
-            $record instanceof NodeRun => json_encode($record->contract_snapshot, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT) ?: null,
             default => null,
         };
 
@@ -305,52 +299,13 @@ class WorkbenchGraphPresenter
     }
 
     /**
-     * The entry's call tree flattened into numbered steps: depth-first from the roots along
-     * calls/on_success; an on_failure child comes right after its parent, one level deeper.
-     *
-     * @return list<array{node: ImplementationNode, depth: int, failureCondition: string|null}>
+     * The selected feature's flowchart as Mermaid source, or null when it has none.
      */
-    public function callSteps(RequestReply $requestReply): array
+    public function flowchartMermaid(Model $record): ?string
     {
-        $nodesById = $requestReply->implementationNodes()->with('outgoingEdges')->orderBy('id')->get()->keyBy('id');
-        $edges = $nodesById
-            ->flatMap(fn (ImplementationNode $node) => $node->outgoingEdges)
-            ->filter(fn (ImplementationNodeEdge $edge): bool => in_array($edge->kind, ImplementationNodeEdgeKind::callTree(), true) && $nodesById->has($edge->to_node_id));
-        $calledIds = $edges->pluck('to_node_id')->flip();
-        $edgesByFrom = $edges->groupBy('from_node_id')->all();
-        $steps = [];
-        $visited = [];
-
-        foreach ([...$nodesById->reject(fn (ImplementationNode $node): bool => $calledIds->has($node->id))->all(), ...$nodesById->all()] as $root) {
-            $this->collectSteps($root, 0, null, $nodesById->all(), $edgesByFrom, $visited, $steps);
-        }
-
-        return $steps;
-    }
-
-    /**
-     * @param  array<int, ImplementationNode>  $nodesById
-     * @param  array<int|string, Collection<int, ImplementationNodeEdge>>  $edgesByFrom
-     * @param  array<int, true>  $visited  a node is listed once, so a cycle ends
-     * @param  list<array{node: ImplementationNode, depth: int, failureCondition: string|null}>  $steps
-     */
-    private function collectSteps(ImplementationNode $node, int $depth, ?string $failureCondition, array $nodesById, array $edgesByFrom, array &$visited, array &$steps): void
-    {
-        if (isset($visited[$node->id])) {
-            return;
-        }
-
-        $visited[$node->id] = true;
-        $steps[] = ['node' => $node, 'depth' => $depth, 'failureCondition' => $failureCondition];
-        [$failures, $calls] = collect($edgesByFrom[$node->id] ?? [])->partition(fn (ImplementationNodeEdge $edge): bool => $edge->kind === ImplementationNodeEdgeKind::OnFailure);
-
-        foreach ($failures as $edge) {
-            $this->collectSteps($nodesById[$edge->to_node_id], $depth + 1, $edge->condition ?? '失败', $nodesById, $edgesByFrom, $visited, $steps);
-        }
-
-        foreach ($calls as $edge) {
-            $this->collectSteps($nodesById[$edge->to_node_id], $depth, null, $nodesById, $edgesByFrom, $visited, $steps);
-        }
+        return $record instanceof Feature && $record->flowchart !== null
+            ? FlowchartMermaid::fromFlowchart($record->flowchart)
+            : null;
     }
 
     /**
@@ -368,7 +323,6 @@ class WorkbenchGraphPresenter
                 icon: 'heroicon-m-arrow-path',
                 tone: $this->tone($run),
                 badge: $this->statusLabel($run),
-                children: $this->leaves($run->nodeRuns, 'heroicon-m-play-circle'),
             );
         }
 

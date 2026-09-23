@@ -8,7 +8,6 @@ use App\Filament\Resources\WorkflowRuns\Pages\EditWorkflowRun;
 use App\Filament\Resources\WorkflowRuns\Pages\ListWorkflowRuns;
 use App\Filament\Resources\WorkflowRuns\Pages\ViewWorkflowRun;
 use App\Filament\Resources\WorkflowRuns\RelationManagers\EventsRelationManager;
-use App\Filament\Resources\WorkflowRuns\RelationManagers\NodeRunsRelationManager;
 use App\Filament\Resources\WorkflowRuns\Schemas\WorkflowRunForm;
 use App\Filament\Resources\WorkflowRuns\Schemas\WorkflowRunInfolist;
 use App\Filament\Resources\WorkflowRuns\Tables\WorkflowRunsTable;
@@ -52,7 +51,6 @@ class WorkflowRunResource extends Resource
     public static function getRelations(): array
     {
         return [
-            NodeRunsRelationManager::class,
             EventsRelationManager::class,
         ];
     }

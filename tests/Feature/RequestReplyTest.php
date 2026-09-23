@@ -1,14 +1,11 @@
 <?php
 
 use App\Enums\FeatureTrigger;
-use App\Enums\ImplementationNodeKind;
 use App\Models\Feature;
-use App\Models\ImplementationNode;
 use App\Models\RequestReply;
 use App\Models\RequestReplyEdge;
 use App\Models\UseCase;
 use App\Services\RequestReplies\FeatureEntryParser;
-use Illuminate\Support\Facades\DB;
 
 test('a flow edge joins two different request replies of one use case', function () {
     $useCase = UseCase::factory()->create();
@@ -52,26 +49,3 @@ test('the parser finds routes, artisan signatures and command classes in free te
     'command class' => ['命令 GrantRole', ['CLI'], [[FeatureTrigger::Cli, 'GrantRole']]],
     'ui work' => ['修：登录页溢出', ['UI'], []],
 ]);
-
-test('the migration turns feature entries into request replies and moves call trees', function () {
-    $useCase = UseCase::factory()->create();
-    $checkout = Feature::factory()->forUseCase($useCase)->create(['entry' => 'POST /cart/checkout；GET /checkout/success', 'triggers' => ['HTTP']]);
-    $again = Feature::factory()->forUseCase($useCase)->create(['entry' => 'POST /cart/checkout 改文案']);
-    $visual = Feature::factory()->forUseCase($useCase)->create(['entry' => '修：登录页溢出']);
-    $node = ImplementationNode::factory()->create(['project_id' => $useCase->project_id, 'feature_id' => $checkout->id]);
-    DB::table('implementation_nodes')->where('id', $node->id)->update(['kind' => ImplementationNodeKind::Function->value]);
-    $design = ImplementationNode::factory()->create(['project_id' => $useCase->project_id, 'feature_id' => $checkout->id]);
-
-    (require base_path('database/migrations/2026_09_23_025808_move_feature_entries_into_request_replies.php'))->up();
-
-    $post = RequestReply::query()->where('method', 'POST')->sole();
-
-    expect(RequestReply::query()->orderBy('id')->pluck('entry')->all())->toBe(['/cart/checkout', '/checkout/success'])
-        ->and($post->title)->toBe($checkout->title)
-        ->and($post->features()->orderBy('features.id')->pluck('features.id')->all())->toBe([$checkout->id, $again->id])
-        ->and($visual->requestReplies()->exists())->toBeFalse()
-        ->and($node->fresh()->request_reply_id)->toBe($post->id)
-        ->and($node->fresh()->feature_id)->toBeNull()
-        ->and($design->fresh()->request_reply_id)->toBeNull()
-        ->and(RequestReplyEdge::query()->exists())->toBeFalse();
-});

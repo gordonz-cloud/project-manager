@@ -5,7 +5,6 @@ use App\Filament\Pages\WorkbenchGraph;
 use App\Filament\Resources\Commits\CommitResource;
 use App\Filament\Resources\DataModels\DataModelResource;
 use App\Filament\Resources\Features\FeatureResource;
-use App\Filament\Resources\ImplementationNodes\ImplementationNodeResource;
 use App\Filament\Resources\ModelFields\ModelFieldResource;
 use App\Filament\Resources\Modules\ModuleResource;
 use App\Filament\Resources\ModuleSpecs\ModuleSpecResource;
@@ -28,7 +27,6 @@ test('resources are grouped by solution model layer', function () {
         DataModelResource::class => NavigationGroup::Solution,
         ModelFieldResource::class => NavigationGroup::Solution,
         FeatureResource::class => NavigationGroup::Delivery,
-        ImplementationNodeResource::class => NavigationGroup::Delivery,
         WorkflowRunResource::class => NavigationGroup::Execution,
         TestResource::class => NavigationGroup::Evidence,
         CommitResource::class => NavigationGroup::Evidence,

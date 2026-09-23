@@ -18,13 +18,13 @@
             <button
                 type="button"
                 wire:click="toggleNode(@js($path))"
-                class="flex size-6 shrink-0 items-center justify-center rounded text-slate-400 hover:text-slate-900 dark:hover:text-white"
+                class="flex size-7 shrink-0 items-center justify-center rounded text-slate-400 hover:text-slate-900 dark:hover:text-white"
                 aria-label="{{ $isOpen ? '收起' : '展开' }}"
             >
-                <x-filament::icon icon="{{ $isOpen ? 'heroicon-m-chevron-down' : 'heroicon-m-chevron-right' }}" class="size-3.5" />
+                <x-filament::icon icon="{{ $isOpen ? 'heroicon-m-chevron-down' : 'heroicon-m-chevron-right' }}" class="size-4" />
             </button>
         @else
-            <span class="size-6 shrink-0"></span>
+            <span class="size-7 shrink-0"></span>
         @endif
 
         <button
@@ -34,20 +34,20 @@
             @else
                 wire:click="selectNode(@js($node->key))"
             @endif
-            class="flex min-h-7 min-w-0 flex-1 items-center gap-2 rounded-md px-1.5 text-left transition {{ $isSelected ? 'bg-slate-900 text-white dark:bg-white dark:text-slate-950' : 'hover:bg-slate-50 dark:hover:bg-white/5' }}"
+            class="flex min-h-8 min-w-0 flex-1 items-center gap-2 rounded-md px-2 py-1.5 text-left transition {{ $isSelected ? 'bg-slate-900 text-white dark:bg-white dark:text-slate-950' : 'hover:bg-slate-50 dark:hover:bg-white/5' }}"
         >
-            <x-filament::icon icon="{{ $node->icon }}" class="size-3.5 shrink-0 {{ $isSelected ? '' : 'text-slate-400' }}" />
-            <span class="min-w-0 flex-1 truncate text-xs {{ $node->isFolder ? 'text-slate-500 dark:text-slate-400' : '' }}">{{ $node->label }}</span>
+            <x-filament::icon icon="{{ $node->icon }}" class="size-4 shrink-0 {{ $isSelected ? '' : 'text-slate-400' }}" />
+            <span class="min-w-0 flex-1 truncate text-sm {{ $node->isFolder ? 'text-slate-500 dark:text-slate-400' : '' }}">{{ $node->label }}</span>
             @if ($node->badge !== null)
-                <span class="shrink-0 truncate text-[10px] tabular-nums opacity-60">{{ $node->badge }}</span>
+                <span class="shrink-0 truncate text-xs tabular-nums opacity-60">{{ $node->badge }}</span>
             @elseif ($dotClass !== null)
-                <span class="size-1.5 shrink-0 rounded-full {{ $dotClass }}"></span>
+                <span class="size-2 shrink-0 rounded-full {{ $dotClass }}"></span>
             @endif
         </button>
     </div>
 
     @if ($isOpen)
-        <div class="ml-3 border-l border-slate-200 pl-1 dark:border-white/10">
+        <div class="ml-3.5 border-l border-slate-200 pl-1 dark:border-white/10">
             @foreach ($node->children as $child)
                 @include('filament.pages.partials.workbench-tree-node', ['node' => $child, 'parentPath' => $path])
             @endforeach

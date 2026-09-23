@@ -14,12 +14,11 @@ use LogicException;
 /**
  * @property int $id
  * @property int $workflow_run_id
- * @property int|null $node_run_id
  * @property RunEventType $event_type
  * @property array<string, mixed>|null $payload
  * @property CarbonImmutable $created_at
  */
-#[Fillable(['workflow_run_id', 'node_run_id', 'event_type', 'payload', 'created_at'])]
+#[Fillable(['workflow_run_id', 'event_type', 'payload', 'created_at'])]
 class RunEvent extends Model
 {
     /** @use HasFactory<RunEventFactory> */
@@ -55,13 +54,5 @@ class RunEvent extends Model
     public function workflowRun(): BelongsTo
     {
         return $this->belongsTo(WorkflowRun::class);
-    }
-
-    /**
-     * @return BelongsTo<NodeRun, $this>
-     */
-    public function nodeRun(): BelongsTo
-    {
-        return $this->belongsTo(NodeRun::class);
     }
 }

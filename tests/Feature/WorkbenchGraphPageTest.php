@@ -1,18 +1,13 @@
 <?php
 
 use App\Enums\FeatureStatus;
-use App\Enums\ImplementationNodeEdgeKind;
-use App\Enums\ImplementationNodeKind;
-use App\Enums\ImplementationNodeState;
 use App\Enums\NavigationGroup;
 use App\Enums\UseCaseStatus;
 use App\Enums\WorkflowRunStatus;
 use App\Filament\Pages\WorkbenchGraph;
-use App\Filament\Support\WorkbenchGraphPresenter;
 use App\Models\DataModel;
 use App\Models\Feature;
-use App\Models\ImplementationNode;
-use App\Models\ImplementationNodeEdge;
+use App\Models\Flowchart;
 use App\Models\ModelField;
 use App\Models\Module;
 use App\Models\ModuleSpec;
@@ -27,7 +22,7 @@ use Filament\Facades\Filament;
 use Livewire\Livewire;
 
 /**
- * @return array{project: Project, group: UseCaseGroup, module: Module, moduleSpec: ModuleSpec, useCase: UseCase, useCaseSpec: UseCaseSpec, feature: Feature, requestReply: RequestReply, node: ImplementationNode, dataModel: DataModel, field: ModelField, run: WorkflowRun}
+ * @return array{project: Project, group: UseCaseGroup, module: Module, moduleSpec: ModuleSpec, useCase: UseCase, useCaseSpec: UseCaseSpec, feature: Feature, requestReply: RequestReply, dataModel: DataModel, field: ModelField, run: WorkflowRun}
  */
 function workbenchContext(): array
 {
@@ -59,19 +54,12 @@ function workbenchContext(): array
     ]);
     $requestReply = RequestReply::factory()->create(['use_case_id' => $useCase->id, 'method' => 'POST', 'entry' => '/trace', 'title' => 'Trace entry', 'module_id' => $module->id]);
     $feature->requestReplies()->attach($requestReply);
-    $node = ImplementationNode::factory()->create([
-        'project_id' => $project->id,
-        'feature_id' => $feature->id,
-        'kind' => ImplementationNodeKind::Code,
-        'state' => ImplementationNodeState::Accepted,
-        'title' => 'Trace node',
-    ]);
     $dataModel = DataModel::factory()->create(['project_id' => $project->id, 'name' => 'Trace data model']);
     $field = ModelField::factory()->create(['project_id' => $project->id, 'data_model_id' => $dataModel->id, 'name' => 'trace_field']);
     $feature->dataModels()->attach($dataModel);
     $run = WorkflowRun::factory()->forUseCase($useCase)->create(['feature_id' => $feature->id, 'status' => WorkflowRunStatus::Running]);
 
-    return compact('project', 'group', 'module', 'moduleSpec', 'useCase', 'useCaseSpec', 'feature', 'requestReply', 'node', 'dataModel', 'field', 'run');
+    return compact('project', 'group', 'module', 'moduleSpec', 'useCase', 'useCaseSpec', 'feature', 'requestReply', 'dataModel', 'field', 'run');
 }
 
 test('workbench graph page uses the expected navigation contract', function () {
@@ -226,50 +214,21 @@ test('entries under features carry their use case number', function () {
     ]);
 });
 
-test('the tree stops at entries: no call-tree nodes anywhere', function () {
+test('feature detail renders its flowchart as mermaid, then the pseudocode', function () {
     $records = workbenchContext();
-    ImplementationNode::factory()->create(['project_id' => $records['project']->id, 'feature_id' => null, 'request_reply_id' => $records['requestReply']->id, 'title' => 'Entry node']);
-
-    $keys = [];
-    $walk = function (array $nodes) use (&$walk, &$keys): void {
-        foreach ($nodes as $node) {
-            $keys[] = $node->key;
-            $walk($node->children);
-        }
-    };
-    $walk(Livewire::test(WorkbenchGraph::class)->instance()->tree);
-
-    expect(collect($keys)->filter(fn (string $key): bool => str_contains($key, 'implementation_node') || str_contains($key, 'call_tree'))->all())->toBe([]);
-});
-
-test('entry detail lists its call tree as ordered steps with failure rows marked, and a cycle ends', function () {
-    $records = workbenchContext();
-    $entry = $records['requestReply'];
-    $node = fn (string $title, ?string $file = null, ?string $function = null): ImplementationNode => ImplementationNode::factory()->create([
-        'project_id' => $records['project']->id, 'feature_id' => null, 'request_reply_id' => $entry->id,
-        'title' => $title, 'file' => $file, 'function' => $function, 'input' => "{$title} in", 'change' => "{$title} change", 'output' => "{$title} out",
-    ]);
-    $edge = fn (ImplementationNode $from, ImplementationNode $to, ImplementationNodeEdgeKind $kind, ?string $condition = null) => ImplementationNodeEdge::factory()->create([
-        'project_id' => $records['project']->id, 'from_node_id' => $from->id, 'to_node_id' => $to->id, 'kind' => $kind, 'condition' => $condition,
-    ]);
-    $save = $node('保存', 'app/Services/Save.php', 'store');
-    $controller = $node('路由/控制器', 'app/Http/LoginController.php', 'login');
-    $reject = $node('拒绝', 'app/Http/Reject.php', 'deny');
-    $edge($controller, $reject, ImplementationNodeEdgeKind::OnFailure, '密码错误');
-    $edge($controller, $save, ImplementationNodeEdgeKind::Calls);
-    $edge($save, $controller, ImplementationNodeEdgeKind::Calls);
-
-    $steps = app(WorkbenchGraphPresenter::class)->callSteps($entry);
-
-    expect(array_map(fn (array $step): array => [$step['node']->id, $step['depth'], $step['failureCondition']], $steps))->toBe([
-        [$save->id, 0, null],
-        [$controller->id, 0, null],
-        [$reject->id, 1, '密码错误'],
+    Flowchart::factory()->create([
+        'feature_id' => $records['feature']->id,
+        'chart' => ['nodes' => [['id' => 'a', 'label' => '收到请求', 'shape' => 'start']], 'edges' => []],
+        'pseudocode' => '1. app/Http/TraceController.php::store — 收到请求',
     ]);
 
-    $html = Livewire::test(WorkbenchGraph::class)
-        ->call('selectNode', "request_reply:{$entry->id}")
-        ->html();
+    Livewire::test(WorkbenchGraph::class)
+        ->call('selectNode', "feature:{$records['feature']->id}")
+        ->assertSeeHtml('data-flowchart')
+        ->assertSeeHtml('flowchart TD')
+        ->assertSeeHtmlInOrder(['data-flowchart', 'data-pseudocode', 'app/Http/TraceController.php::store']);
 
-    expect($html)->toMatch('#app/Services/Save.php::store.*app/Http/LoginController.php::login.*路由/控制器.*text-red-600.*✗ 密码错误.*app/Http/Reject.php::deny.*拒绝 in#su');
+    Livewire::test(WorkbenchGraph::class)
+        ->call('selectNode', "request_reply:{$records['requestReply']->id}")
+        ->assertDontSeeHtml('data-flowchart');
 });

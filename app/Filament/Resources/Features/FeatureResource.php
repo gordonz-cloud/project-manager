@@ -9,7 +9,6 @@ use App\Filament\Resources\Features\Pages\ListFeatures;
 use App\Filament\Resources\Features\Pages\ViewFeature;
 use App\Filament\Resources\Features\RelationManagers\CommitsRelationManager;
 use App\Filament\Resources\Features\RelationManagers\DataModelsRelationManager;
-use App\Filament\Resources\Features\RelationManagers\ImplementationNodesRelationManager;
 use App\Filament\Resources\Features\RelationManagers\TestsRelationManager;
 use App\Filament\Resources\Features\Schemas\FeatureForm;
 use App\Filament\Resources\Features\Tables\FeaturesTable;
@@ -52,7 +51,6 @@ class FeatureResource extends Resource
     public static function getRelations(): array
     {
         return [
-            ImplementationNodesRelationManager::class,
             TestsRelationManager::class,
             DataModelsRelationManager::class,
             CommitsRelationManager::class,

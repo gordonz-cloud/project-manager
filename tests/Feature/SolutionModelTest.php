@@ -1,23 +1,13 @@
 <?php
 
-use App\Enums\ImplementationNodeEdgeKind;
-use App\Enums\ImplementationNodeKind;
-use App\Enums\ImplementationNodeState;
-use App\Enums\NodeRunMode;
-use App\Enums\NodeRunStatus;
 use App\Enums\RunEventType;
 use App\Enums\UseCaseStatus;
 use App\Enums\WorkflowRunStatus;
-use App\Models\Commit;
 use App\Models\Feature;
-use App\Models\ImplementationNode;
-use App\Models\ImplementationNodeEdge;
 use App\Models\ModuleSpec;
-use App\Models\NodeRun;
 use App\Models\Project;
 use App\Models\Requirement;
 use App\Models\RunEvent;
-use App\Models\Test as TestModel;
 use App\Models\UseCase;
 use App\Models\WorkflowRun;
 
@@ -31,90 +21,24 @@ test('module spec and use case hierarchy connect the executable behavior chain',
         ->and($useCase->status)->toBe(UseCaseStatus::Ready);
 });
 
-test('implementation graph connects nodes and evidence', function () {
+test('runtime keeps append-only events', function () {
     $project = Project::factory()->create();
     $spec = ModuleSpec::factory()->forProject($project)->create();
     $useCase = UseCase::factory()->forModule($spec->module)->create();
     $feature = Feature::factory()->forUseCase($useCase)->create();
-    $first = ImplementationNode::factory()->create([
-        'project_id' => $project->id,
-        'feature_id' => $feature->id,
-        'kind' => ImplementationNodeKind::Code,
-        'state' => ImplementationNodeState::Accepted,
-    ]);
-    $second = ImplementationNode::factory()->create([
-        'project_id' => $project->id,
-        'feature_id' => $feature->id,
-        'parent_id' => $first->id,
-        'kind' => ImplementationNodeKind::Test,
-    ]);
-    $edge = ImplementationNodeEdge::factory()->create([
-        'project_id' => $project->id,
-        'from_node_id' => $first->id,
-        'to_node_id' => $second->id,
-        'kind' => ImplementationNodeEdgeKind::Forward,
-    ]);
-    $test = TestModel::factory()->create([
-        'project_id' => $project->id,
-    ]);
-    $commit = Commit::factory()->create([
-        'project_id' => $project->id,
-        'feature_id' => $feature->id,
-        'implementation_node_id' => $second->id,
-    ]);
-
-    expect($feature->useCase()->first()->is($useCase))->toBeTrue()
-        ->and($feature->implementationNodes()->count())->toBe(2)
-        ->and($first->children()->first()->is($second))->toBeTrue()
-        ->and($first->outgoingEdges()->first()->is($edge))->toBeTrue()
-        ->and($second->incomingEdges()->first()->is($edge))->toBeTrue()
-        ->and($edge->fromNode()->first()->is($first))->toBeTrue()
-        ->and($edge->toNode()->first()->is($second))->toBeTrue()
-        ->and($second->commits()->first()->is($commit))->toBeTrue();
-});
-
-test('runtime keeps focus, node state, and append-only events', function () {
-    $project = Project::factory()->create();
-    $spec = ModuleSpec::factory()->forProject($project)->create();
-    $useCase = UseCase::factory()->forModule($spec->module)->create();
-    $feature = Feature::factory()->forUseCase($useCase)->create();
-    $node = ImplementationNode::factory()->create([
-        'project_id' => $project->id,
-        'feature_id' => $feature->id,
-    ]);
     $run = WorkflowRun::factory()->forUseCase($useCase)->create([
         'feature_id' => $feature->id,
         'status' => WorkflowRunStatus::Running,
     ]);
-    $nodeRun = NodeRun::factory()->create([
-        'workflow_run_id' => $run->id,
-        'implementation_node_id' => $node->id,
-        'mode' => NodeRunMode::Sticky,
-        'status' => NodeRunStatus::Talking,
-    ]);
-
-    $run->update(['focus_node_run_id' => $nodeRun->id]);
-
-    $entered = RunEvent::factory()->create([
-        'workflow_run_id' => $run->id,
-        'node_run_id' => $nodeRun->id,
-        'event_type' => RunEventType::Entered,
-    ]);
     $message = RunEvent::factory()->create([
         'workflow_run_id' => $run->id,
-        'node_run_id' => $nodeRun->id,
         'event_type' => RunEventType::MessageAdded,
-        'payload' => ['role' => 'user', 'content' => '继续这个节点'],
+        'payload' => ['role' => 'user', 'content' => '继续'],
     ]);
 
-    expect($run->focusNodeRun()->first()->is($nodeRun))->toBeTrue()
-        ->and($nodeRun->workflowRun()->first()->is($run))->toBeTrue()
-        ->and($nodeRun->implementationNode()->first()->is($node))->toBeTrue()
-        ->and($nodeRun->mode)->toBe(NodeRunMode::Sticky)
-        ->and($nodeRun->status)->toBe(NodeRunStatus::Talking)
-        ->and($run->events()->count())->toBe(2)
-        ->and($message->payload)->toBe(['role' => 'user', 'content' => '继续这个节点'])
-        ->and($entered->created_at)->not->toBeNull();
+    expect($run->events()->count())->toBe(1)
+        ->and($message->payload)->toBe(['role' => 'user', 'content' => '继续'])
+        ->and($message->created_at)->not->toBeNull();
 
     expect(fn () => $message->update(['payload' => ['role' => 'user']]))
         ->toThrow(LogicException::class);
@@ -122,32 +46,7 @@ test('runtime keeps focus, node state, and append-only events', function () {
     expect(fn () => $message->delete())
         ->toThrow(LogicException::class);
 
-    expect(fn () => $nodeRun->delete())
-        ->toThrow(LogicException::class);
-
     expect(fn () => $run->delete())
-        ->toThrow(LogicException::class);
-});
-
-test('an implementation node cannot become its own ancestor', function () {
-    $project = Project::factory()->create();
-    $feature = Feature::factory()->create(['project_id' => $project->id]);
-    $root = ImplementationNode::factory()->create([
-        'project_id' => $project->id,
-        'feature_id' => $feature->id,
-    ]);
-    $child = ImplementationNode::factory()->create([
-        'project_id' => $project->id,
-        'feature_id' => $feature->id,
-        'parent_id' => $root->id,
-    ]);
-
-    expect(ImplementationNode::wouldCycle($root->id, $child->id))->toBeTrue();
-
-    expect(fn () => $root->update(['parent_id' => $child->id]))
-        ->toThrow(LogicException::class);
-
-    expect(fn () => $root->update(['parent_id' => $root->id]))
         ->toThrow(LogicException::class);
 });
 
@@ -178,10 +77,6 @@ test('a workflow run stays inside its use case', function () {
     $otherUseCase = UseCase::factory()->forModule($spec->module)->create();
     $feature = Feature::factory()->forUseCase($useCase)->create();
     $otherFeature = Feature::factory()->forUseCase($otherUseCase)->create();
-    $otherNode = ImplementationNode::factory()->create([
-        'project_id' => $project->id,
-        'feature_id' => $otherFeature->id,
-    ]);
 
     $derived = WorkflowRun::factory()->create([
         'use_case_id' => null,
@@ -193,13 +88,6 @@ test('a workflow run stays inside its use case', function () {
 
     expect(fn () => WorkflowRun::factory()->forUseCase($useCase)->create(['feature_id' => $otherFeature->id]))
         ->toThrow(LogicException::class, 'workflow use case');
-
-    $run = WorkflowRun::factory()->forUseCase($useCase)->create();
-
-    expect(fn () => NodeRun::factory()->create([
-        'workflow_run_id' => $run->id,
-        'implementation_node_id' => $otherNode->id,
-    ]))->toThrow(LogicException::class, 'workflow use case');
 });
 
 test('saving a feature under a use case keeps its own requirement', function () {

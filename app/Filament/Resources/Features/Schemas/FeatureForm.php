@@ -5,10 +5,14 @@ namespace App\Filament\Resources\Features\Schemas;
 use App\Enums\FeatureLayer;
 use App\Enums\FeatureStatus;
 use App\Enums\FeatureTrigger;
+use App\Models\Flowchart;
+use Closure;
 use Filament\Forms\Components\CheckboxList;
 use Filament\Forms\Components\Hidden;
 use Filament\Forms\Components\Select;
+use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
+use Filament\Schemas\Components\Section;
 use Filament\Schemas\Components\Utilities\Get;
 use Filament\Schemas\Schema;
 use Illuminate\Database\Eloquent\Builder;
@@ -48,6 +52,7 @@ class FeatureForm
                     ->live()
                     ->required(),
                 self::moduleSelect(),
+                self::flowchartSection(),
             ]);
     }
 
@@ -73,6 +78,39 @@ class FeatureForm
                 TextInput::make('entry')
                     ->label('入口'),
                 self::moduleSelect(),
+                self::flowchartSection(),
+            ]);
+    }
+
+    private static function flowchartSection(): Section
+    {
+        return Section::make('流程图')
+            ->relationship('flowchart', condition: fn (?array $state): bool => filled($state['chart'] ?? null))
+            ->columnSpanFull()
+            ->schema([
+                Textarea::make('chart')
+                    ->label('Chart JSON')
+                    ->helperText('{"nodes":[{"id","label","shape":"start|step|decision|end|io","file"?,"function"?}],"edges":[{"from","to","label"?,"kind"?:"next|failure"}]}')
+                    ->rows(15)
+                    ->extraInputAttributes(['class' => 'font-mono'])
+                    ->formatStateUsing(fn (mixed $state): ?string => is_array($state) ? json_encode($state, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?: null : $state)
+                    ->dehydrateStateUsing(fn (?string $state): mixed => filled($state) ? json_decode($state, true) : null)
+                    ->rule(fn (): Closure => function (string $attribute, mixed $value, Closure $fail): void {
+                        if (blank($value)) {
+                            return;
+                        }
+
+                        $chart = json_decode((string) $value, true);
+                        $error = $chart === null ? '不是合法 JSON' : Flowchart::chartError($chart);
+
+                        if ($error !== null) {
+                            $fail($error);
+                        }
+                    }),
+                Textarea::make('pseudocode')
+                    ->label('伪代码')
+                    ->rows(15)
+                    ->extraInputAttributes(['class' => 'font-mono']),
             ]);
     }
 

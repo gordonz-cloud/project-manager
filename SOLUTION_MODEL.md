@@ -35,9 +35,8 @@ Module 只保留一份当前 ModuleSpec，用文本章节保存本模块自己�
 - `use_cases`：谁为了什么目标，触发什么行为，成功和失败是什么。
 - `rules` / `invariants`：无论走哪条路径都必须成立的事实。
 - 决策章节：还有哪些问题没定，为什么这样定，影响哪些用例和功能。
-- `implementation_nodes`：实现这个功能需要做哪些节点，依赖什么，交付什么证据。
-- 入口（`request_replies`）：一次 request→response；入口之间的 `request_reply_edges`（`next` / `on_failure` / `optional`）组成 Use Case 的流程图。同一目标的不同走法写进 Use Case Spec 的 `## 异常与补偿`，由测试盖住（没有 scenarios 表）。
-- 调用树（`implementation_nodes` + `implementation_node_edges` 的 `calls` / `on_success` / `on_failure` 边）：一个入口内部代码怎么流动，一个节点一个函数。功能（Feature）是工作项，通过 `feature_request_reply` 记它改了哪些入口。
+- 入口（`request_replies`）：一次 request→response；入口之间的 `request_reply_edges`（`next` / `on_failure` / `optional`）是入口依赖。同一目标的不同走法写进 Use Case Spec 的 `## 异常与补偿`，由测试盖住（没有 scenarios 表）。
+- 流程图（`flowcharts`，功能 1:1）：这个功能的代码怎么流动——`chart` JSON（节点带 `file`/`function`，边 `next`/`failure`）+ `pseudocode` 编号伪代码。功能（Feature）是工作项，通过 `feature_request_reply` 记它改了哪些入口。
 
 这里最重要的是决策章节。AI 每发现一个新问题，不能直接开始修，而要先分类：
 
@@ -46,7 +45,7 @@ Module 只保留一份当前 ModuleSpec，用文本章节保存本模块自己�
 需要业务拍板 → decision
 缺少行为 → Use Case Spec 的异常与补偿 + 测试
 会破坏业务事实 → invariant
-只是实现拆分 → implementation node
+只是实现拆分 → 流程图节点
 ```
 
 分类完成后，沿边标记哪些用例、测试、代码和数据流受影响。这就是你前面说的“回边”，而且回边有原因、有范围、可恢复。
@@ -104,15 +103,9 @@ project-manager 现在保存的是业务事实和最终证据，适合接在这�
 
 ## 表关系设计
 
-### 第一原则：计划图和运行图分开
+### 第一原则：计划和运行分开
 
-`implementation_nodes` 是计划模板，描述“可能要做什么”。它不能直接保存当前节点、对话轮次和运行次数。
-
-运行状态必须放在 `workflow_runs`、`node_runs`、`node_turns`、`node_attempts` 和 `run_events` 中。模板可以修改，历史运行不能因此被改写。
-
-V1 有意把 `UseCase ↔ Feature`、`ImplementationNode ↔ Commit`
-先做成现有表上的单个可空外键。它们代表一个主归属，负责让界面和证据链先跑起来；
-下面的多对多关系是后续完整模型，不在 V1 中假装已经实现。
+流程图（`flowcharts`）是计划，描述代码要怎么走。运行状态放在 `workflow_runs` 和 `run_events` 中；计划可以改，历史运行不能因此被改写。
 
 ### 领域层
 
@@ -137,49 +130,20 @@ V1 有意把 `UseCase ↔ Feature`、`ImplementationNode ↔ Commit`
 规则和决策都是 Spec 的文本章节，不再独立建模；改变决策时直接保留清晰的历史文字，
 必要时在章节里写明 superseded/stale。
 
-### 功能与实现计划
+### 功能与流程图
 
-- `features 1 ── * implementation_nodes`
-- `implementation_nodes 1 ── * implementation_nodes`，通过 `parent_id`
-- `implementation_nodes * ── * implementation_nodes`，通过 `implementation_node_dependencies`
-
-`parent_id` 表达树形分解。`implementation_node_dependencies` 表达图和前后依赖，两个关系不能混为一个。
-
-一个实现节点至少要有：
-
-```text
-kind: discovery | decision | design | migration | code | test | review | release
-contract: 这个节点必须交付什么
-status: pending | ready | running | blocked | done | failed | stale
-evidence: 产出证据，不能只写一句完成
-```
-
-### 功能与实现节点
-
-- `request_replies 1 ── * implementation_nodes`：入口拥有调用树
+- `features 1 ── 1 flowcharts`：`chart` JSON `{"nodes":[{id,label,shape,file?,function?}],"edges":[{from,to,label?,kind?}]}`，保存时 Model 校验节点 id 唯一、边两端存在、shape/kind 合法；`pseudocode` 是编号伪代码，失败分支缩进并以「若 条件：」开头。
 - `features * ── * request_replies`，通过 `feature_request_reply`
 
-原来的 `flow_steps` 已迁成调用树节点（带 `file`、`function`、`input`、`change`、`output`、`module_id`）并删表：主路径串成 `calls` 链，其它路径挂在主路径上一步（按 `order`）之下，错误/拒绝类路径用 `on_failure`。
+调用树（`implementation_nodes` + 边）已迁成每个功能一张流程图并删表；共享入口的节点复制给每个挂它的功能。
 
 ### 测试与提交证据
 
 - `features * ── * tests`，通过 `feature_test`
-- `implementation_nodes * ── * tests`，通过 `implementation_node_tests`
-- `implementation_nodes * ── * commits`，通过 `commit_implementation_nodes`
-
-验收测试挂功能。单元和集成测试可以挂 `implementation_node`。这不是重复关系：
-
-- `feature_test` 证明业务行为成立。
-- `implementation_node_tests` 证明实现单元正确。
-
-提交可以同时实现多个节点，所以提交与节点是多对多，不使用单列外键。
+- `features 1 ── * commits`，通过 `commits.feature_id`
 
 ### 运行层
 
-- `workflow_runs 1 ── * node_runs`
-- `implementation_nodes 1 ── * node_runs`
-- `node_runs 1 ── * node_turns`
-- `node_runs 1 ── * node_attempts`
 - `workflow_runs 1 ── * run_events`
 
 `workflow_runs` 核心字段：
@@ -189,29 +153,14 @@ project_id
 use_case_id（运行挂在 UseCase 上；有 feature 时 feature 必须属于该 UseCase）
 requirement_id（legacy）
 graph_version
-cursor_node_run_id
 status: pending | talking | running | waiting | paused | done | failed
 ```
-
-`node_runs` 核心字段：
-
-```text
-implementation_node_id
-mode: oneshot | sticky | approval
-status: pending | talking | running | blocked | done | failed
-contract_snapshot
-payload
-```
-
-`node_turns` 保存节点里的多轮对话。`node_attempts` 保存一次回答后的多次执行。两者都挂 `node_run_id`，所以对话轮次不会推动图指针，只有节点变为 `done` 才允许 cursor 沿边移动。
 
 `run_events` 是追加式事件账：
 
 ```text
-run_id
-node_run_id
-event: entered | message_added | attempt_started | attempt_finished |
-       edge_taken | back_edge_taken | blocked | approved | completed
+workflow_run_id
+event_type
 payload
 created_at
 ```
@@ -230,30 +179,21 @@ erDiagram
 
     USE_CASE ||--o{ FEATURE : delivers
 
-    FEATURE ||--o{ IMPLEMENTATION_NODE : plans
-    IMPLEMENTATION_NODE ||--o{ IMPLEMENTATION_NODE : parent
-    IMPLEMENTATION_NODE }o--o{ IMPLEMENTATION_NODE : dependencies
-    IMPLEMENTATION_NODE ||--o{ IMPLEMENTATION_NODE : calls_on_success_on_failure
+    FEATURE ||--|| FLOWCHART : flowchart
     USE_CASE ||--o{ REQUEST_REPLY : entries
     REQUEST_REPLY ||--o{ REQUEST_REPLY : request_reply_edges
-    REQUEST_REPLY ||--o{ IMPLEMENTATION_NODE : call_tree
     FEATURE }o--o{ REQUEST_REPLY : feature_request_reply
 
     FEATURE }o--o{ TEST : feature_test
-    IMPLEMENTATION_NODE }o--o{ TEST : implementation_node_tests
-    IMPLEMENTATION_NODE }o--o{ COMMIT : commit_implementation_nodes
+    FEATURE ||--o{ COMMIT : commits
 
-    WORKFLOW_RUN ||--o{ NODE_RUN : contains
-    IMPLEMENTATION_NODE ||--o{ NODE_RUN : instantiated_as
-    NODE_RUN ||--o{ NODE_TURN : has
-    NODE_RUN ||--o{ NODE_ATTEMPT : has
     WORKFLOW_RUN ||--o{ RUN_EVENT : records
 ```
 
 ### 不能破坏的系统不变量
 
 - 一个项目下的所有关联对象必须属于同一个项目。
-- `tests` 和 `commits` 只能挂到同一项目的功能和节点；流程图边两端都必须是同一 UseCase 的入口；流程图边不许自环；功能和入口必须同项目。
+- `tests` 和 `commits` 只能挂到同一项目的功能；入口依赖边两端都必须是同一 UseCase 的入口，不许自环；功能和入口必须同项目。
 - Use Case Spec 里的走法没有测试盖住时，所属功能不能进入最终完成。
 - 运行中的契约使用快照，之后修改计划不能改写历史运行。
 - 决策变化保留在 Spec 的历史文字中，不删除旧证据。
@@ -264,8 +204,8 @@ erDiagram
 
 1. `use_cases`、`use_case_specs`
 2. 决策与业务规则写回 ModuleSpec / UseCaseSpec
-3. `implementation_nodes`、节点父子关系与依赖关系
-4. `workflow_runs`、`node_runs`、`node_turns`、`node_attempts`
+3. 功能的 `flowcharts`
+4. `workflow_runs`
 5. `run_events`
 6. 最后回填 `tests`、`commits` 的证据关系
 

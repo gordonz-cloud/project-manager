@@ -20,14 +20,13 @@ use LogicException;
  * @property int|null $use_case_id
  * @property int|null $feature_id
  * @property string|null $graph_version
- * @property int|null $focus_node_run_id
  * @property WorkflowRunStatus $status
  * @property Carbon|null $started_at
  * @property Carbon|null $finished_at
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at
  */
-#[Fillable(['requirement_id', 'use_case_id', 'feature_id', 'graph_version', 'focus_node_run_id', 'status', 'started_at', 'finished_at'])]
+#[Fillable(['requirement_id', 'use_case_id', 'feature_id', 'graph_version', 'status', 'started_at', 'finished_at'])]
 class WorkflowRun extends Model
 {
     /** @use HasFactory<WorkflowRunFactory> */
@@ -75,17 +74,9 @@ class WorkflowRun extends Model
             if (
                 $run->exists
                 && $run->isDirty(['requirement_id', 'use_case_id', 'feature_id'])
-                && ($run->nodeRuns()->exists() || $run->events()->exists())
+                && $run->events()->exists()
             ) {
                 throw new LogicException('A workflow with run history cannot change its use case, requirement, or feature.');
-            }
-
-            if ($run->focus_node_run_id !== null) {
-                $focus = NodeRun::withoutGlobalScopes()->find($run->focus_node_run_id);
-
-                if ($focus === null || ($run->exists && $focus->workflow_run_id !== $run->id)) {
-                    throw new LogicException('A workflow focus must be one of its own node runs.');
-                }
             }
         });
 
@@ -130,22 +121,6 @@ class WorkflowRun extends Model
     public function feature(): BelongsTo
     {
         return $this->belongsTo(Feature::class);
-    }
-
-    /**
-     * @return BelongsTo<NodeRun, $this>
-     */
-    public function focusNodeRun(): BelongsTo
-    {
-        return $this->belongsTo(NodeRun::class, 'focus_node_run_id');
-    }
-
-    /**
-     * @return HasMany<NodeRun, $this>
-     */
-    public function nodeRuns(): HasMany
-    {
-        return $this->hasMany(NodeRun::class);
     }
 
     /**

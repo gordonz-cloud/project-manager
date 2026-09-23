@@ -12,6 +12,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Support\Carbon;
 use LogicException;
 
@@ -72,13 +73,6 @@ class Feature extends Model
             if (WorkflowRun::withoutGlobalScopes()->where('feature_id', $feature->id)->exists()) {
                 throw new LogicException('A feature with workflow history cannot be deleted.');
             }
-
-            $nodeIds = $feature->implementationNodes()->pluck('id')->all();
-
-            if ($feature->implementationNodes()->whereHas('nodeRuns')->exists()) {
-                throw new LogicException('A feature with run history cannot be deleted.');
-            }
-
         });
     }
 
@@ -153,16 +147,15 @@ class Feature extends Model
     }
 
     /**
-     * @return HasMany<ImplementationNode, $this>
+     * @return HasOne<Flowchart, $this>
      */
-    public function implementationNodes(): HasMany
+    public function flowchart(): HasOne
     {
-        return $this->hasMany(ImplementationNode::class);
+        return $this->hasOne(Flowchart::class);
     }
 
     public function hasRunHistory(): bool
     {
-        return WorkflowRun::withoutGlobalScopes()->where('feature_id', $this->id)->exists()
-            || $this->implementationNodes()->whereHas('nodeRuns')->exists();
+        return WorkflowRun::withoutGlobalScopes()->where('feature_id', $this->id)->exists();
     }
 }

@@ -30,11 +30,6 @@ class CommitsTable
                     ->url(fn (Commit $record): ?string => $record->feature_id
                         ? FeatureResource::getUrl('view', ['record' => $record->feature_id])
                         : null),
-                TextColumn::make('implementationNode.title')
-                    ->label('实现节点')
-                    ->badge()
-                    ->color('gray')
-                    ->wrap(),
                 TextColumn::make('subject')
                     ->label('Subject')
                     ->wrap()

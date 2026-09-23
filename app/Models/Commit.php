@@ -11,13 +11,11 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Support\Carbon;
-use LogicException;
 
 /**
  * @property int $id
  * @property int $project_id
  * @property int|null $feature_id
- * @property int|null $implementation_node_id
  * @property string $hash
  * @property string $subject
  * @property string|null $body
@@ -26,34 +24,11 @@ use LogicException;
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at
  */
-#[Fillable(['hash', 'subject', 'body', 'author', 'committed_at', 'feature_id', 'implementation_node_id'])]
+#[Fillable(['hash', 'subject', 'body', 'author', 'committed_at', 'feature_id'])]
 class Commit extends Model
 {
     /** @use HasFactory<CommitFactory> */
     use BelongsToProject, HasFactory;
-
-    protected static function booted(): void
-    {
-        static::saving(function (self $commit): void {
-            if ($commit->implementation_node_id === null || $commit->feature_id === null) {
-                return;
-            }
-
-            $node = ImplementationNode::withoutGlobalScopes()->find($commit->implementation_node_id);
-
-            if ($node === null || $node->feature_id !== $commit->feature_id) {
-                throw new LogicException('A commit implementation node must belong to the same feature.');
-            }
-
-            $projectId = $commit->getRawOriginal('project_id');
-
-            if ($projectId === null) {
-                $commit->project_id = $node->project_id;
-            } elseif ((int) $projectId !== $node->project_id) {
-                throw new LogicException('A commit implementation node must belong to the same project.');
-            }
-        });
-    }
 
     protected function casts(): array
     {
@@ -68,14 +43,6 @@ class Commit extends Model
     public function feature(): BelongsTo
     {
         return $this->belongsTo(Feature::class);
-    }
-
-    /**
-     * @return BelongsTo<ImplementationNode, $this>
-     */
-    public function implementationNode(): BelongsTo
-    {
-        return $this->belongsTo(ImplementationNode::class);
     }
 
     public static function upsertFromGit(
