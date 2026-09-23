@@ -28,9 +28,7 @@ class FlowchartMermaid
         foreach ($flowchart->chart['nodes'] as $index => $node) {
             $mermaidIds[$node['id']] = "n{$index}";
             [$open, $close] = self::SHAPES[$node['shape']];
-            $location = trim(($node['file'] ?? '').(filled($node['function'] ?? null) ? '::'.$node['function'] : ''), ':');
-            $label = self::escape($node['label']).($location === '' ? '' : '<br>'.self::escape($location));
-            $lines[] = "    n{$index}{$open}\"{$label}\"{$close}";
+            $lines[] = "    n{$index}{$open}\"".self::escape($node['label'])."\"{$close}";
         }
 
         $failureLinks = [];
@@ -49,6 +47,26 @@ class FlowchartMermaid
         }
 
         return implode("\n", $lines);
+    }
+
+    /**
+     * Each Mermaid node id's file::function, shown as a hover tooltip instead of in the box.
+     *
+     * @return array<string, string>
+     */
+    public static function tooltips(Flowchart $flowchart): array
+    {
+        $tooltips = [];
+
+        foreach ($flowchart->chart['nodes'] as $index => $node) {
+            $location = trim(($node['file'] ?? '').(filled($node['function'] ?? null) ? '::'.$node['function'] : ''), ':');
+
+            if ($location !== '') {
+                $tooltips["n{$index}"] = $location;
+            }
+        }
+
+        return $tooltips;
     }
 
     private static function escape(string $text): string

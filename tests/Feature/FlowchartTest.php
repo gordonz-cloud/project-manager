@@ -51,12 +51,88 @@ test('mermaid maps shapes, renumbers ids and escapes labels', function () {
     expect($mermaid)->toBe(implode("\n", [
         'flowchart TD',
         '    n0(["Start #quot;here#quot;"])',
-        '    n1{"ok? #lt;yes#gt;<br>app/A.php::store"}',
+        '    n1{"ok? #lt;yes#gt;"}',
         '    n2[/"read #35;1"/]',
         '    n3["step"]',
         '    n0 --> n1',
-    ]));
+    ]))->not->toContain('app/A.php');
 });
+
+test('mermaid tooltips carry file::function per node id', function () {
+    expect(FlowchartMermaid::tooltips(chartOf(['nodes' => [
+        ['id' => 'a', 'label' => 'A', 'shape' => 'start'],
+        ['id' => 'b', 'label' => 'B', 'shape' => 'step', 'file' => 'app/A.php', 'function' => 'store'],
+    ], 'edges' => []])))->toBe(['n1' => 'app/A.php::store']);
+});
+
+/**
+ * start → decision → (是) end / (否) end, the smallest chart every drawing rule accepts.
+ *
+ * @return array{nodes: list<array<string, string>>, edges: list<array<string, string>>}
+ */
+function ruleChart(): array
+{
+    return [
+        'nodes' => [
+            ['id' => 's', 'label' => 'GET /member/orders', 'shape' => 'start'],
+            ['id' => 'd', 'label' => '有当前公会？', 'shape' => 'decision'],
+            ['id' => 'ok', 'label' => '返回订单列表页', 'shape' => 'end'],
+            ['id' => 'no', 'label' => '返回 422', 'shape' => 'end'],
+        ],
+        'edges' => [
+            ['from' => 's', 'to' => 'd'],
+            ['from' => 'd', 'to' => 'ok', 'label' => '是'],
+            ['from' => 'd', 'to' => 'no', 'label' => '否', 'kind' => 'failure'],
+        ],
+    ];
+}
+
+test('the model accepts a chart that follows the drawing rules', function () {
+    $long = ruleChart();
+    $long['nodes'][0]['label'] = str_repeat('入', 40);
+    $long['nodes'][2]['label'] = str_repeat('字', 24);
+
+    expect(Flowchart::chartError(ruleChart()))->toBeNull()
+        ->and(Flowchart::chartError($long))->toBeNull();
+});
+
+test('the model refuses a chart that breaks a drawing rule', function (Closure $break, string $message) {
+    $chart = ruleChart();
+    $break($chart);
+
+    expect(fn () => Flowchart::factory()->create(['chart' => $chart]))
+        ->toThrow(LogicException::class, $message);
+})->with([
+    'two starts' => [function (array &$c) {
+        $c['nodes'][1]['shape'] = 'start';
+    }, '必须恰好一个 start 节点，现在有 2 个'],
+    'no start' => [function (array &$c) {
+        $c['nodes'][0]['shape'] = 'step';
+    }, '现在有 0 个'],
+    'no end' => [function (array &$c) {
+        $c['nodes'][2]['shape'] = 'step';
+        $c['nodes'][3]['shape'] = 'step';
+    }, '至少要有一个 end 节点'],
+    'fan-out from a step' => [function (array &$c) {
+        $c['nodes'][1]['shape'] = 'step';
+    }, '节点 d 有多条出边'],
+    'unlabelled decision edge' => [function (array &$c) {
+        unset($c['edges'][2]['label']);
+    }, 'decision 节点 d 的每条出边都要带 label'],
+    'long label' => [function (array &$c) {
+        $c['nodes'][1]['label'] = str_repeat('字', 25);
+    }, '节点 d 的 label 超过 24 字'],
+    'too many nodes' => [function (array &$c) {
+        foreach (range(1, 17) as $i) {
+            $c['nodes'][] = ['id' => "x{$i}", 'label' => 'X', 'shape' => 'end'];
+            $c['edges'][] = ['from' => 'd', 'to' => "x{$i}", 'label' => '是'];
+        }
+    }, '节点数 21 超过 20'],
+    'unreachable node' => [function (array &$c) {
+        $c['edges'][] = ['from' => 'ok', 'to' => 's'];
+        array_splice($c['edges'], 0, 1);
+    }, '从 start 走不到'],
+]);
 
 test('mermaid styles only failure edges red', function () {
     $mermaid = FlowchartMermaid::fromFlowchart(chartOf(['nodes' => [
@@ -78,9 +154,9 @@ test('flowcharts:save upserts a feature flowchart and rejects a bad chart', func
     $file = tempnam(sys_get_temp_dir(), 'flowchart');
     $write = fn (array $chart) => file_put_contents($file, json_encode(['project' => 'fc', 'feature' => 7, 'chart' => $chart, 'pseudocode' => '1. go']));
 
-    $write(['nodes' => [['id' => 'a', 'label' => 'A', 'shape' => 'start']], 'edges' => []]);
+    $write(['nodes' => [['id' => 'a', 'label' => 'A', 'shape' => 'start'], ['id' => 'z', 'label' => 'Z', 'shape' => 'end']], 'edges' => [['from' => 'a', 'to' => 'z']]]);
     $this->artisan('flowcharts:save', ['file' => $file])->assertSuccessful();
-    $write(['nodes' => [['id' => 'a', 'label' => 'A2', 'shape' => 'start']], 'edges' => []]);
+    $write(['nodes' => [['id' => 'a', 'label' => 'A2', 'shape' => 'start'], ['id' => 'z', 'label' => 'Z', 'shape' => 'end']], 'edges' => [['from' => 'a', 'to' => 'z']]]);
     $this->artisan('flowcharts:save', ['file' => $file])->assertSuccessful();
     $write(['nodes' => [['id' => 'a', 'label' => 'A', 'shape' => 'start']], 'edges' => [['from' => 'a', 'to' => 'zz']]]);
     $this->artisan('flowcharts:save', ['file' => $file])->expectsOutputToContain('must connect existing nodes')->assertFailed();
@@ -94,7 +170,7 @@ test('flowcharts:save upserts a feature flowchart and rejects a bad chart', func
 test('flowcharts:check verifies files and functions in the repo', function (array $node, string $expected, bool $passes) {
     $project = Project::factory()->create(['slug' => 'fc', 'repo_path' => base_path('tests/Fixtures/repo')]);
     $feature = Feature::factory()->create(['project_id' => $project->id, 'number' => 1]);
-    Flowchart::factory()->create(['feature_id' => $feature->id, 'chart' => ['nodes' => [['id' => 'a', 'label' => 'A', 'shape' => 'step', ...$node]], 'edges' => []]]);
+    Flowchart::factory()->create(['feature_id' => $feature->id, 'chart' => ['nodes' => [['id' => 'a', 'label' => 'A', 'shape' => 'start', ...$node], ['id' => 'z', 'label' => 'Z', 'shape' => 'end']], 'edges' => [['from' => 'a', 'to' => 'z']]]]);
 
     $result = $this->artisan('flowcharts:check', ['project-slug' => 'fc', '--feature' => 1])->expectsOutputToContain($expected);
     $passes ? $result->assertSuccessful() : $result->assertFailed();
@@ -171,7 +247,7 @@ test('the feature form edits the flowchart as JSON and refuses a malformed chart
     $feature->project->users()->attach($user);
     auth()->login($user);
     Filament::setTenant($feature->project);
-    $chart = ['nodes' => [['id' => 'a', 'label' => 'A', 'shape' => 'start']], 'edges' => []];
+    $chart = ['nodes' => [['id' => 'a', 'label' => 'A', 'shape' => 'start'], ['id' => 'z', 'label' => 'Z', 'shape' => 'end']], 'edges' => [['from' => 'a', 'to' => 'z']]];
 
     Livewire::test(EditFeature::class, ['record' => $feature->getRouteKey()])
         ->fillForm(['flowchart.chart' => json_encode(['nodes' => [], 'edges' => [['from' => 'a', 'to' => 'b']]])])

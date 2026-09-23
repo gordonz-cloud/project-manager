@@ -219,7 +219,7 @@ test('feature detail renders its flowchart as mermaid, then the pseudocode', fun
     $records = workbenchContext();
     Flowchart::factory()->create([
         'feature_id' => $records['feature']->id,
-        'chart' => ['nodes' => [['id' => 'a', 'label' => '收到请求', 'shape' => 'start']], 'edges' => []],
+        'chart' => ['nodes' => [['id' => 'a', 'label' => '收到请求', 'shape' => 'start'], ['id' => 'b', 'label' => '返回', 'shape' => 'end']], 'edges' => [['from' => 'a', 'to' => 'b']]],
         'pseudocode' => '1. app/Http/TraceController.php::store — 收到请求',
     ]);
 
@@ -238,7 +238,7 @@ test('the flowchart has a fullscreen toggle button', function () {
     $records = workbenchContext();
     Flowchart::factory()->create([
         'feature_id' => $records['feature']->id,
-        'chart' => ['nodes' => [['id' => 'a', 'label' => '收到请求', 'shape' => 'start']], 'edges' => []],
+        'chart' => ['nodes' => [['id' => 'a', 'label' => '收到请求', 'shape' => 'start'], ['id' => 'b', 'label' => '返回', 'shape' => 'end']], 'edges' => [['from' => 'a', 'to' => 'b']]],
         'pseudocode' => '1. app/Http/TraceController.php::store — 收到请求',
     ]);
 
@@ -251,7 +251,7 @@ test('the feature has a flowchart leaf that renders the same chart when selected
     $records = workbenchContext();
     Flowchart::factory()->create([
         'feature_id' => $records['feature']->id,
-        'chart' => ['nodes' => [['id' => 'a', 'label' => '收到请求', 'shape' => 'start']], 'edges' => []],
+        'chart' => ['nodes' => [['id' => 'a', 'label' => '收到请求', 'shape' => 'start'], ['id' => 'b', 'label' => '返回', 'shape' => 'end']], 'edges' => [['from' => 'a', 'to' => 'b']]],
         'pseudocode' => '1. app/Http/TraceController.php::store — 收到请求',
     ]);
 

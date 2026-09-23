@@ -97,10 +97,18 @@
                                     wire:ignore
                                     data-flowchart
                                     data-source="{{ $mermaid }}"
+                                    data-tooltips="{{ json_encode(\App\Support\FlowchartMermaid::tooltips($record->flowchart)) }}"
                                     :style="fullscreen ? `transform: translate(${tx}px, ${ty}px) scale(${scale}); transform-origin: center center; height: 100%; display: flex; align-items: center; justify-content: center;` : ''"
                                     class="[&_svg]:max-w-full [&_svg]:max-h-full"
                                     x-init="
-                                        const draw = async () => { $el.innerHTML = (await window.mermaid.render('flowchart-' + Date.now(), $el.dataset.source)).svg };
+                                        const draw = async () => {
+                                            $el.innerHTML = (await window.mermaid.render('flowchart-' + Date.now(), $el.dataset.source)).svg;
+                                            const tooltips = JSON.parse($el.dataset.tooltips || '{}');
+                                            $el.querySelectorAll('g.node').forEach((node) => {
+                                                const tip = tooltips[node.dataset.id ?? (node.id.match(/-(n\d+)-\d+$/) || [])[1]];
+                                                if (tip) { const title = document.createElementNS('http://www.w3.org/2000/svg', 'title'); title.textContent = tip; node.prepend(title) }
+                                            });
+                                        };
                                         if (window.mermaid) { draw() } else { const id = setInterval(() => { if (window.mermaid) { clearInterval(id); draw() } }, 30) }
                                     "
                                 ></div>

@@ -32,6 +32,10 @@ class Flowchart extends Model
 
     public const EDGE_KINDS = ['next', 'failure'];
 
+    public const MAX_NODES = 20;
+
+    public const MAX_LABEL_LENGTH = 24;
+
     protected static function booted(): void
     {
         static::saving(function (self $flowchart): void {
@@ -57,11 +61,15 @@ class Flowchart extends Model
         }
 
         $ids = [];
+        $nodes = [];
+        $edges = [];
 
         foreach ($chart['nodes'] as $index => $node) {
             $id = is_array($node) ? ($node['id'] ?? null) : null;
+            $label = is_array($node) ? ($node['label'] ?? null) : null;
+            $shape = is_array($node) ? ($node['shape'] ?? null) : null;
 
-            if (! is_string($id) || $id === '' || ! is_string($node['label'] ?? null)) {
+            if (! is_string($id) || $id === '' || ! is_string($label)) {
                 return "node {$index} needs a string id and label";
             }
 
@@ -69,11 +77,12 @@ class Flowchart extends Model
                 return "duplicate node id {$id}";
             }
 
-            if (! in_array($node['shape'] ?? null, self::SHAPES, true)) {
+            if (! is_string($shape) || ! in_array($shape, self::SHAPES, true)) {
                 return "node {$id} shape must be one of ".implode('|', self::SHAPES);
             }
 
             $ids[$id] = true;
+            $nodes[] = ['id' => $id, 'label' => $label, 'shape' => $shape];
         }
 
         foreach ($chart['edges'] ?? [] as $index => $edge) {
@@ -86,6 +95,75 @@ class Flowchart extends Model
 
             if (! in_array($edge['kind'] ?? 'next', self::EDGE_KINDS, true)) {
                 return "edge {$index} kind must be one of ".implode('|', self::EDGE_KINDS);
+            }
+
+            $edges[] = ['from' => $from, 'to' => $to, 'label' => is_string($edge['label'] ?? null) ? $edge['label'] : ''];
+        }
+
+        return self::businessRuleError($nodes, $edges);
+    }
+
+    /**
+     * Why a structurally sound chart breaks the drawing rules (one start, ends, decisions own forks, short labels, all reachable).
+     *
+     * @param  list<array{id: string, label: string, shape: string}>  $nodes
+     * @param  list<array{from: string, to: string, label: string}>  $edges
+     */
+    private static function businessRuleError(array $nodes, array $edges): ?string
+    {
+        if (count($nodes) > self::MAX_NODES) {
+            return '节点数 '.count($nodes).' 超过 '.self::MAX_NODES.'，拆成多个功能';
+        }
+
+        $starts = array_values(array_filter($nodes, fn (array $node): bool => $node['shape'] === 'start'));
+
+        if (count($starts) !== 1) {
+            return '必须恰好一个 start 节点，现在有 '.count($starts).' 个';
+        }
+
+        $shapes = array_column($nodes, 'shape', 'id');
+
+        if (! in_array('end', $shapes, true)) {
+            return '至少要有一个 end 节点';
+        }
+
+        foreach ($nodes as $node) {
+            if ($node['shape'] !== 'start' && mb_strlen($node['label']) > self::MAX_LABEL_LENGTH) {
+                return "节点 {$node['id']} 的 label 超过 ".self::MAX_LABEL_LENGTH.' 字';
+            }
+        }
+
+        $outgoing = [];
+
+        foreach ($edges as $edge) {
+            $outgoing[$edge['from']][] = $edge;
+        }
+
+        foreach ($outgoing as $from => $fromEdges) {
+            if (count($fromEdges) > 1 && $shapes[$from] !== 'decision') {
+                return "节点 {$from} 有多条出边，分叉只能从 decision 出";
+            }
+
+            if ($shapes[$from] === 'decision' && ! collect($fromEdges)->every(fn (array $edge): bool => trim($edge['label']) !== '')) {
+                return "decision 节点 {$from} 的每条出边都要带 label";
+            }
+        }
+
+        $reached = [$starts[0]['id'] => true];
+        $queue = [$starts[0]['id']];
+
+        while ($queue !== []) {
+            foreach ($outgoing[array_shift($queue)] ?? [] as $edge) {
+                if (! isset($reached[$edge['to']])) {
+                    $reached[$edge['to']] = true;
+                    $queue[] = $edge['to'];
+                }
+            }
+        }
+
+        foreach (array_keys($shapes) as $id) {
+            if (! isset($reached[$id])) {
+                return "节点 {$id} 从 start 走不到";
             }
         }
 
