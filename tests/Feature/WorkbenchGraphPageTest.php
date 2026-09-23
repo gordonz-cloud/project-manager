@@ -1,5 +1,6 @@
 <?php
 
+use App\Data\Workbench\WorkbenchTreeNode;
 use App\Enums\DataModelStatus;
 use App\Enums\FeatureStatus;
 use App\Enums\NavigationGroup;
@@ -20,6 +21,7 @@ use App\Models\UseCaseSpec;
 use App\Models\User;
 use App\Models\WorkflowRun;
 use Filament\Facades\Filament;
+use Illuminate\Support\Collection;
 use Livewire\Livewire;
 
 /**
@@ -363,6 +365,44 @@ test('a group rolls up the progress of every use case inside it', function () {
         ->and($group->tone)->toBe('warning')
         ->and($group->badge)->toBe('2 Use Case · 功能 1/2');
 });
+
+test('a module spec dot is green when active, amber when draft, and never grey', function () {
+    $records = workbenchContext();
+
+    $module = collect(Livewire::test(WorkbenchGraph::class)->instance()->tree[0]->children[0]->children)->keyBy('label')['模块']->children[0];
+    $activeSpec = collect($module->children)->firstWhere('key', "module_spec:{$records['moduleSpec']->id}");
+
+    expect($activeSpec->tone)->toBe('success');
+
+    $records['moduleSpec']->update(['status' => 'draft']);
+
+    $module = collect(Livewire::test(WorkbenchGraph::class)->instance()->tree[0]->children[0]->children)->keyBy('label')['模块']->children[0];
+    $draftSpec = collect($module->children)->firstWhere('key', "module_spec:{$records['moduleSpec']->id}");
+
+    expect($draftSpec->tone)->toBe('warning');
+});
+
+test('the rendered tree never shows a dot tone other than success or warning', function () {
+    $records = workbenchContext();
+    $records['moduleSpec']->update(['status' => 'draft']);
+    Feature::factory()->forUseCase($records['useCase'])->create(['status' => FeatureStatus::Uncertain]);
+    DataModel::factory()->create(['project_id' => $records['project']->id, 'status' => DataModelStatus::Planned]);
+
+    $tree = Livewire::test(WorkbenchGraph::class)->instance()->tree;
+
+    $tones = collectTones($tree);
+
+    expect($tones->diff(['success', 'warning']))->toBeEmpty();
+});
+
+/**
+ * @param  list<WorkbenchTreeNode>  $nodes
+ * @return Collection<int, string>
+ */
+function collectTones(array $nodes): Collection
+{
+    return collect($nodes)->flatMap(fn ($node) => collect([$node->tone])->filter()->merge(collectTones($node->children)));
+}
 
 test('feature and data model rows show a status pill colored by meaning', function () {
     $records = workbenchContext();

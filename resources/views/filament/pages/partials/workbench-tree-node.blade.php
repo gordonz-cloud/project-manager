@@ -5,17 +5,11 @@
     $dotClass = match ($node->tone) {
         'success' => 'bg-emerald-500',
         'warning' => 'bg-amber-500',
-        'danger' => 'bg-red-500',
-        'info', 'primary' => 'bg-sky-500',
-        'gray' => 'bg-slate-400',
         default => null,
     };
     $pillClass = match ($node->tone) {
         'success' => 'bg-emerald-50 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-400',
         'warning' => 'bg-amber-50 text-amber-700 dark:bg-amber-500/10 dark:text-amber-400',
-        'danger' => 'bg-red-50 text-red-700 dark:bg-red-500/10 dark:text-red-400',
-        'info', 'primary' => 'bg-sky-50 text-sky-700 dark:bg-sky-500/10 dark:text-sky-400',
-        'gray' => 'bg-slate-100 text-slate-600 dark:bg-white/5 dark:text-slate-400',
         default => 'bg-slate-100 text-slate-600 dark:bg-white/5 dark:text-slate-400',
     };
 @endphp

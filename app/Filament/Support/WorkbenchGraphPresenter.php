@@ -4,6 +4,9 @@ namespace App\Filament\Support;
 
 use App\Data\Workbench\WorkbenchProgress;
 use App\Data\Workbench\WorkbenchTreeNode;
+use App\Enums\DataModelStatus;
+use App\Enums\FeatureStatus;
+use App\Enums\TestStatus;
 use App\Filament\Resources\Commits\CommitResource;
 use App\Filament\Resources\DataModels\DataModelResource;
 use App\Filament\Resources\Features\FeatureResource;
@@ -32,7 +35,6 @@ use App\Services\Workbench\WorkbenchGraphService;
 use App\Support\FlowchartMermaid;
 use BackedEnum;
 use Filament\Resources\Resource as FilamentResource;
-use Filament\Support\Contracts\HasColor;
 use Filament\Support\Contracts\HasLabel;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Model;
@@ -431,23 +433,25 @@ class WorkbenchGraphPresenter
         };
     }
 
+    /**
+     * The only two dot colors: green means finished, amber means not finished yet.
+     * "Finished" is defined per record type here; anything else (commits, workflow
+     * runs, groups) gets no dot at all.
+     */
     private function tone(Model $record): ?string
     {
-        $status = $this->status($record);
-
-        if ($status instanceof HasColor) {
-            $color = $status->getColor();
-
-            return is_string($color) ? $color : null;
-        }
-
-        return match ($status instanceof BackedEnum ? $status->value : $status) {
-            'verified', 'implemented', 'accepted', 'done', 'active' => 'success',
-            'ready', 'running', 'talking' => 'info',
-            'waiting', 'paused', 'proposed', 'stale' => 'warning',
-            'failed', 'blocked', 'void', 'obsolete' => 'danger',
-            null => null,
-            default => 'gray',
+        return match (true) {
+            $record instanceof Module => $this->specTone($record->spec),
+            $record instanceof ModuleSpec, $record instanceof UseCaseSpec => $this->specTone($record),
+            $record instanceof Feature => $record->status === FeatureStatus::Done || $record->status === FeatureStatus::Void ? 'success' : 'warning',
+            $record instanceof DataModel, $record instanceof ModelField => $record->status === DataModelStatus::Existing || $record->status === DataModelStatus::Deprecated ? 'success' : 'warning',
+            $record instanceof Test => $record->status === TestStatus::Valid ? 'success' : 'warning',
+            default => null,
         };
+    }
+
+    private function specTone(ModuleSpec|UseCaseSpec|null $spec): ?string
+    {
+        return $spec === null ? null : ($spec->status === 'active' ? 'success' : 'warning');
     }
 }
