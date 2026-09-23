@@ -1,6 +1,7 @@
 <?php
 
 use App\Enums\FeatureStatus;
+use App\Enums\ImplementationNodeEdgeKind;
 use App\Enums\ImplementationNodeKind;
 use App\Enums\ImplementationNodeState;
 use App\Enums\NavigationGroup;
@@ -8,9 +9,11 @@ use App\Enums\RequestReplyEdgeKind;
 use App\Enums\UseCaseStatus;
 use App\Enums\WorkflowRunStatus;
 use App\Filament\Pages\WorkbenchGraph;
+use App\Filament\Support\WorkbenchGraphPresenter;
 use App\Models\DataModel;
 use App\Models\Feature;
 use App\Models\ImplementationNode;
+use App\Models\ImplementationNodeEdge;
 use App\Models\ModelField;
 use App\Models\Module;
 use App\Models\ModuleSpec;
@@ -116,7 +119,7 @@ test('the tree shows business names only, never table or column names', function
 
     Livewire::test(WorkbenchGraph::class)
         ->set('search', 'trace')
-        ->assertSee(['Trace module', 'Trace feature', 'Trace node', 'trace_field', 'Trace scenario'])
+        ->assertSee(['Trace module', 'Trace feature', 'trace_field', 'Trace scenario'])
         ->assertDontSee(['module_use_cases', 'use_case_id', 'data_model_feature', '未建立']);
 });
 
@@ -126,9 +129,9 @@ test('search filters the tree and opens the branches that match', function () {
 
     Livewire::test(WorkbenchGraph::class)
         ->assertSee('Unrelated goal')
-        ->assertDontSee('Trace node')
-        ->set('search', 'Trace node')
-        ->assertSee('Trace node')
+        ->assertDontSee('Trace scenario')
+        ->set('search', 'Trace scenario')
+        ->assertSee('Trace scenario')
         ->assertDontSee('Unrelated goal');
 });
 
@@ -222,7 +225,6 @@ test('the flow graph follows edges from the roots, marks failure and optional, a
     $edge($login, $error, RequestReplyEdgeKind::OnFailure);
     $edge($error, $login, RequestReplyEdgeKind::Next);
     $edge($home, $tips, RequestReplyEdgeKind::Optional);
-    $call = ImplementationNode::factory()->create(['project_id' => $records['project']->id, 'feature_id' => null, 'request_reply_id' => $login->id, 'title' => 'Check password']);
     $records['scenario']->replaceSteps([$login->id, $error->id, $login->id, $home->id]);
 
     $page = Livewire::test(WorkbenchGraph::class);
@@ -232,8 +234,7 @@ test('the flow graph follows edges from the roots, marks failure and optional, a
 
     expect(count($folders['流程图']->children))->toBe(1)
         ->and($root->key)->toBe("request_reply:{$login->id}")
-        ->and($rows->keys()->all())->toBe(['调用树', '② GET /home', '③ GET /error'])
-        ->and($rows['调用树']->children[0]->key)->toBe("implementation_node:{$call->id}")
+        ->and($rows->keys()->all())->toBe(['② GET /home', '③ GET /error'])
         ->and($rows['② GET /home']->isFailureBranch)->toBeFalse()
         ->and($rows['② GET /home']->children[0]->label)->toBe('④ GET /tips')
         ->and($rows['② GET /home']->children[0]->isOptional)->toBeTrue()
@@ -242,4 +243,52 @@ test('the flow graph follows edges from the roots, marks failure and optional, a
         ->and($rows['③ GET /error']->children[0]->label)->toBe('↩ 回到 ① POST /trace')
         ->and($rows['③ GET /error']->children[0]->children)->toBe([])
         ->and($folders['场景']->children[0]->label)->toBe('Trace scenario  ①✗→③→①→②');
+});
+
+test('the tree stops at entries: no call-tree nodes anywhere', function () {
+    $records = workbenchContext();
+    ImplementationNode::factory()->create(['project_id' => $records['project']->id, 'feature_id' => null, 'request_reply_id' => $records['requestReply']->id, 'title' => 'Entry node']);
+
+    $keys = [];
+    $walk = function (array $nodes) use (&$walk, &$keys): void {
+        foreach ($nodes as $node) {
+            $keys[] = $node->key;
+            $walk($node->children);
+        }
+    };
+    $walk(Livewire::test(WorkbenchGraph::class)->instance()->tree);
+
+    expect(collect($keys)->filter(fn (string $key): bool => str_contains($key, 'implementation_node') || str_contains($key, 'call_tree'))->all())->toBe([]);
+});
+
+test('entry detail lists its call tree as ordered steps with failure rows marked, and a cycle ends', function () {
+    $records = workbenchContext();
+    $entry = $records['requestReply'];
+    $node = fn (string $title, ?string $file = null, ?string $function = null): ImplementationNode => ImplementationNode::factory()->create([
+        'project_id' => $records['project']->id, 'feature_id' => null, 'request_reply_id' => $entry->id,
+        'title' => $title, 'file' => $file, 'function' => $function, 'input' => "{$title} in", 'change' => "{$title} change", 'output' => "{$title} out",
+    ]);
+    $edge = fn (ImplementationNode $from, ImplementationNode $to, ImplementationNodeEdgeKind $kind, ?string $condition = null) => ImplementationNodeEdge::factory()->create([
+        'project_id' => $records['project']->id, 'from_node_id' => $from->id, 'to_node_id' => $to->id, 'kind' => $kind, 'condition' => $condition,
+    ]);
+    $save = $node('保存', 'app/Services/Save.php', 'store');
+    $controller = $node('路由/控制器', 'app/Http/LoginController.php', 'login');
+    $reject = $node('拒绝', 'app/Http/Reject.php', 'deny');
+    $edge($controller, $reject, ImplementationNodeEdgeKind::OnFailure, '密码错误');
+    $edge($controller, $save, ImplementationNodeEdgeKind::Calls);
+    $edge($save, $controller, ImplementationNodeEdgeKind::Calls);
+
+    $steps = app(WorkbenchGraphPresenter::class)->callSteps($entry);
+
+    expect(array_map(fn (array $step): array => [$step['node']->id, $step['depth'], $step['failureCondition']], $steps))->toBe([
+        [$save->id, 0, null],
+        [$controller->id, 0, null],
+        [$reject->id, 1, '密码错误'],
+    ]);
+
+    $html = Livewire::test(WorkbenchGraph::class)
+        ->call('selectNode', "request_reply:{$entry->id}")
+        ->html();
+
+    expect($html)->toMatch('#app/Services/Save.php::store.*app/Http/LoginController.php::login.*路由/控制器.*text-red-600.*✗ 密码错误.*app/Http/Reject.php::deny.*拒绝 in#su');
 });

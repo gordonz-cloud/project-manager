@@ -9,7 +9,6 @@ use App\Enums\RequestReplyEdgeKind;
 use App\Filament\Resources\Commits\CommitResource;
 use App\Filament\Resources\DataModels\DataModelResource;
 use App\Filament\Resources\Features\FeatureResource;
-use App\Filament\Resources\ImplementationNodes\ImplementationNodeResource;
 use App\Filament\Resources\ModelFields\ModelFieldResource;
 use App\Filament\Resources\Modules\ModuleResource;
 use App\Filament\Resources\ModuleSpecs\ModuleSpecResource;
@@ -58,7 +57,6 @@ class WorkbenchGraphPresenter
         'scenario' => 'Scenario',
         'feature' => '功能',
         'request_reply' => '入口',
-        'implementation_node' => '调用节点',
         'test' => 'Test',
         'commit' => 'Commit',
         'workflow_run' => 'Workflow Run',
@@ -122,7 +120,7 @@ class WorkbenchGraphPresenter
             $record instanceof UseCase => $record->goal,
             $record instanceof UseCaseSpec => $record->useCase->goal,
             $record instanceof ModuleSpec => $record->module->name,
-            $record instanceof Feature, $record instanceof RequestReply, $record instanceof ImplementationNode, $record instanceof Test => $record->title,
+            $record instanceof Feature, $record instanceof RequestReply, $record instanceof Test => $record->title,
             $record instanceof Commit => $record->subject,
             $record instanceof WorkflowRun => "Run #{$record->id}",
             $record instanceof NodeRun => $record->implementationNode->title,
@@ -159,7 +157,6 @@ class WorkbenchGraphPresenter
                 "触发：{$record->trigger->getLabel()}",
                 $record->module === null ? null : "模块：{$record->module->name}",
             ])),
-            $record instanceof ImplementationNode => $this->nodeText($record),
             $record instanceof Test => $record->location,
             $record instanceof Commit => $record->body ?? $record->hash,
             $record instanceof WorkflowRun => $record->feature?->title,
@@ -187,7 +184,6 @@ class WorkbenchGraphPresenter
             $record instanceof Scenario => ScenarioResource::class,
             $record instanceof Feature => FeatureResource::class,
             $record instanceof RequestReply => RequestReplyResource::class,
-            $record instanceof ImplementationNode => ImplementationNodeResource::class,
             $record instanceof Test => TestResource::class,
             $record instanceof Commit => CommitResource::class,
             $record instanceof WorkflowRun => WorkflowRunResource::class,
@@ -336,10 +332,7 @@ class WorkbenchGraphPresenter
             label: $label,
             icon: $arrivedBy === RequestReplyEdgeKind::OnFailure ? 'heroicon-m-exclamation-triangle' : 'heroicon-m-arrow-right-circle',
             badge: $requestReply->module?->name,
-            children: array_values(array_filter([
-                WorkbenchTreeNode::folder($key, 'call_tree', '调用树', 'heroicon-m-arrow-turn-down-right', $this->callTree($requestReply->implementationNodes)),
-                ...$next,
-            ])),
+            children: $next,
             isFailureBranch: $arrivedBy === RequestReplyEdgeKind::OnFailure,
             isOptional: $arrivedBy === RequestReplyEdgeKind::Optional,
             hasNoScenario: ! isset($stepIds[$requestReply->id]),
@@ -418,7 +411,6 @@ class WorkbenchGraphPresenter
                     WorkbenchTreeNode::folder($key, 'entries', '入口', 'heroicon-m-arrow-right-circle', array_values($feature->requestReplies->map(
                         fn (RequestReply $requestReply): WorkbenchTreeNode => $this->leaf($requestReply, $requestReply->label(), 'heroicon-m-arrow-right-circle'),
                     )->all())),
-                    WorkbenchTreeNode::folder($key, 'call_tree', '调用树', 'heroicon-m-arrow-turn-down-right', $this->callTree($feature->implementationNodes)),
                     WorkbenchTreeNode::folder($key, 'tests', '测试', 'heroicon-m-beaker', $this->leaves($feature->tests, 'heroicon-m-beaker')),
                     WorkbenchTreeNode::folder($key, 'commits', 'Commits', 'heroicon-m-code-bracket', $this->leaves($feature->commits, 'heroicon-m-code-bracket')),
                 ])),
@@ -429,66 +421,52 @@ class WorkbenchGraphPresenter
     }
 
     /**
-     * A call tree: roots are nodes no call-tree edge points at.
+     * The entry's call tree flattened into numbered steps: depth-first from the roots along
+     * calls/on_success; an on_failure child comes right after its parent, one level deeper.
      *
-     * @param  Collection<int, ImplementationNode>  $nodes
-     * @return list<WorkbenchTreeNode>
+     * @return list<array{node: ImplementationNode, depth: int, failureCondition: string|null}>
      */
-    private function callTree(Collection $nodes): array
+    public function callSteps(RequestReply $requestReply): array
     {
-        $nodesById = $nodes->keyBy('id');
-        $treeEdges = $nodes
+        $nodesById = $requestReply->implementationNodes()->with('outgoingEdges')->orderBy('id')->get()->keyBy('id');
+        $edges = $nodesById
             ->flatMap(fn (ImplementationNode $node) => $node->outgoingEdges)
             ->filter(fn (ImplementationNodeEdge $edge): bool => in_array($edge->kind, ImplementationNodeEdgeKind::callTree(), true) && $nodesById->has($edge->to_node_id));
-        $childEdgesByNode = $treeEdges->groupBy('from_node_id');
-        $calledIds = $treeEdges->pluck('to_node_id')->flip();
-        $branches = [];
+        $calledIds = $edges->pluck('to_node_id')->flip();
+        $edgesByFrom = $edges->groupBy('from_node_id')->all();
+        $steps = [];
+        $visited = [];
 
-        foreach ($nodesById as $node) {
-            if (! $calledIds->has($node->id)) {
-                $branches[] = $this->nodeBranch($node, false, $nodesById->all(), $childEdgesByNode->all(), []);
-            }
+        foreach ([...$nodesById->reject(fn (ImplementationNode $node): bool => $calledIds->has($node->id))->all(), ...$nodesById->all()] as $root) {
+            $this->collectSteps($root, 0, null, $nodesById->all(), $edgesByFrom, $visited, $steps);
         }
 
-        return $branches;
+        return $steps;
     }
 
     /**
      * @param  array<int, ImplementationNode>  $nodesById
-     * @param  array<int|string, \Illuminate\Support\Collection<int, ImplementationNodeEdge>>  $childEdgesByNode
-     * @param  array<int, true>  $ancestorIds  guards against a cycle in hand-drawn edges
+     * @param  array<int|string, Collection<int, ImplementationNodeEdge>>  $edgesByFrom
+     * @param  array<int, true>  $visited  a node is listed once, so a cycle ends
+     * @param  list<array{node: ImplementationNode, depth: int, failureCondition: string|null}>  $steps
      */
-    private function nodeBranch(ImplementationNode $node, bool $isFailureBranch, array $nodesById, array $childEdgesByNode, array $ancestorIds): WorkbenchTreeNode
+    private function collectSteps(ImplementationNode $node, int $depth, ?string $failureCondition, array $nodesById, array $edgesByFrom, array &$visited, array &$steps): void
     {
-        $ancestorIds[$node->id] = true;
-        $children = [];
-
-        foreach ($childEdgesByNode[$node->id] ?? [] as $edge) {
-            if (! isset($ancestorIds[$edge->to_node_id])) {
-                $children[] = $this->nodeBranch($nodesById[$edge->to_node_id], $edge->kind === ImplementationNodeEdgeKind::OnFailure, $nodesById, $childEdgesByNode, $ancestorIds);
-            }
+        if (isset($visited[$node->id])) {
+            return;
         }
 
-        return new WorkbenchTreeNode(
-            key: "implementation_node:{$node->id}",
-            label: $node->title,
-            icon: $isFailureBranch ? 'heroicon-m-exclamation-triangle' : 'heroicon-m-arrow-turn-down-right',
-            tone: $this->tone($node),
-            children: $children,
-            isFailureBranch: $isFailureBranch,
-        );
-    }
+        $visited[$node->id] = true;
+        $steps[] = ['node' => $node, 'depth' => $depth, 'failureCondition' => $failureCondition];
+        [$failures, $calls] = collect($edgesByFrom[$node->id] ?? [])->partition(fn (ImplementationNodeEdge $edge): bool => $edge->kind === ImplementationNodeEdgeKind::OnFailure);
 
-    private function nodeText(ImplementationNode $node): string
-    {
-        $lines = array_filter([
-            'file' => filled($node->file) ? $node->file.(filled($node->function) ? "::{$node->function}" : '') : null,
-            'input' => filled($node->input) ? "输入：{$node->input}" : null,
-            'change' => filled($node->change) ? "变化：{$node->change}" : null,
-            'output' => filled($node->output) ? "输出：{$node->output}" : null,
-        ]);
+        foreach ($failures as $edge) {
+            $this->collectSteps($nodesById[$edge->to_node_id], $depth + 1, $edge->condition ?? '失败', $nodesById, $edgesByFrom, $visited, $steps);
+        }
 
-        return $lines === [] ? $node->contract : implode("\n", $lines);
+        foreach ($calls as $edge) {
+            $this->collectSteps($nodesById[$edge->to_node_id], $depth, null, $nodesById, $edgesByFrom, $visited, $steps);
+        }
     }
 
     /**
@@ -546,7 +524,6 @@ class WorkbenchGraphPresenter
     private function status(Model $record): BackedEnum|string|null
     {
         return match (true) {
-            $record instanceof ImplementationNode => $record->state,
             $record instanceof Module => $record->spec?->status,
             $record instanceof Commit => substr($record->hash, 0, 8),
             $record instanceof UseCaseGroup => null,

@@ -5,7 +5,6 @@ namespace App\Services\Workbench;
 use App\Models\Commit;
 use App\Models\DataModel;
 use App\Models\Feature;
-use App\Models\ImplementationNode;
 use App\Models\ModelField;
 use App\Models\Module;
 use App\Models\ModuleSpec;
@@ -40,14 +39,13 @@ class WorkbenchGraphService
         'scenario' => Scenario::class,
         'feature' => Feature::class,
         'request_reply' => RequestReply::class,
-        'implementation_node' => ImplementationNode::class,
         'test' => Test::class,
         'commit' => Commit::class,
         'workflow_run' => WorkflowRun::class,
         'node_run' => NodeRun::class,
     ];
 
-    private const FEATURE_RELATIONS = ['module', 'requestReplies', 'implementationNodes.outgoingEdges', 'tests', 'commits'];
+    private const FEATURE_RELATIONS = ['module', 'requestReplies', 'tests', 'commits'];
 
     /**
      * @return Collection<int, UseCaseGroup>
@@ -152,7 +150,6 @@ class WorkbenchGraphService
             "{$prefix}scenarios.steps",
             "{$prefix}requestReplies.module",
             "{$prefix}requestReplies.outgoingEdges",
-            "{$prefix}requestReplies.implementationNodes.outgoingEdges",
             ...array_map(fn (string $relation): string => "{$prefix}features.{$relation}", self::FEATURE_RELATIONS),
             "{$prefix}workflowRuns" => fn ($runs) => $runs->latest('id'),
             "{$prefix}workflowRuns.nodeRuns.implementationNode",
