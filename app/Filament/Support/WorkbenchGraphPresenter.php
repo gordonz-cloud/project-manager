@@ -286,6 +286,9 @@ class WorkbenchGraphPresenter
                 tone: $this->tone($feature),
                 badge: $feature->module?->name,
                 children: array_values(array_filter([
+                    $feature->flowchart === null
+                        ? new WorkbenchTreeNode(key: "{$key}#no-flowchart", label: '无流程图', icon: 'heroicon-m-share', isFolder: true)
+                        : new WorkbenchTreeNode(key: "flowchart:{$feature->id}", label: '流程图', icon: 'heroicon-m-share'),
                     WorkbenchTreeNode::folder($key, 'entries', '入口', 'heroicon-m-arrow-right-circle', array_values($feature->requestReplies->map(
                         fn (RequestReply $requestReply): WorkbenchTreeNode => $this->leaf($requestReply, ltrim(($entryNumbers[$requestReply->id] ?? '').' '.$requestReply->label()), 'heroicon-m-arrow-right-circle'),
                     )->all())),

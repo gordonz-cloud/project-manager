@@ -85,8 +85,9 @@ test('the tree starts at use case groups, then use cases, then their modules and
         ->and($folders['模块']->children[0]->key)->toBe("module:{$records['module']->id}")
         ->and($folders['功能']->children[0]->key)->toBe("feature:{$records['feature']->id}")
         ->and($folders['功能']->children[0]->badge)->toBe('Trace module')
-        ->and($folders['功能']->children[0]->children[0]->children[0]->key)->toBe("request_reply:{$records['requestReply']->id}")
-        ->and($folders['功能']->children[0]->children[0]->children[0]->label)->toBe('① POST /trace');
+        ->and($folders['功能']->children[0]->children[0]->key)->toBe("feature:{$records['feature']->id}#no-flowchart")
+        ->and($folders['功能']->children[0]->children[1]->children[0]->key)->toBe("request_reply:{$records['requestReply']->id}")
+        ->and($folders['功能']->children[0]->children[1]->children[0]->label)->toBe('① POST /trace');
 
     $module = $folders['模块']->children[0];
     expect(collect($module->children)->pluck('key')->all())->toBe([
@@ -205,7 +206,7 @@ test('entries under features carry their use case number', function () {
     $records['feature']->requestReplies()->attach([$home->id, $error->id]);
 
     $folders = collect(Livewire::test(WorkbenchGraph::class)->instance()->tree[0]->children[0]->children)->keyBy('label');
-    $entries = collect($folders['功能']->children[0]->children[0]->children)->mapWithKeys(fn ($node): array => [$node->key => $node->label]);
+    $entries = collect($folders['功能']->children[0]->children[1]->children)->mapWithKeys(fn ($node): array => [$node->key => $node->label]);
 
     expect($entries->all())->toBe([
         "request_reply:{$login->id}" => '① POST /trace',
@@ -231,4 +232,48 @@ test('feature detail renders its flowchart as mermaid, then the pseudocode', fun
     Livewire::test(WorkbenchGraph::class)
         ->call('selectNode', "request_reply:{$records['requestReply']->id}")
         ->assertDontSeeHtml('data-flowchart');
+});
+
+test('the flowchart has a fullscreen toggle button', function () {
+    $records = workbenchContext();
+    Flowchart::factory()->create([
+        'feature_id' => $records['feature']->id,
+        'chart' => ['nodes' => [['id' => 'a', 'label' => '收到请求', 'shape' => 'start']], 'edges' => []],
+        'pseudocode' => '1. app/Http/TraceController.php::store — 收到请求',
+    ]);
+
+    Livewire::test(WorkbenchGraph::class)
+        ->call('selectNode', "feature:{$records['feature']->id}")
+        ->assertSeeHtml('data-flowchart-fullscreen-toggle');
+});
+
+test('the feature has a flowchart leaf that renders the same chart when selected', function () {
+    $records = workbenchContext();
+    Flowchart::factory()->create([
+        'feature_id' => $records['feature']->id,
+        'chart' => ['nodes' => [['id' => 'a', 'label' => '收到请求', 'shape' => 'start']], 'edges' => []],
+        'pseudocode' => '1. app/Http/TraceController.php::store — 收到请求',
+    ]);
+
+    $feature = collect(Livewire::test(WorkbenchGraph::class)->instance()->tree[0]->children[0]->children)
+        ->keyBy('label')['功能']->children[0];
+
+    expect($feature->children[0]->key)->toBe("flowchart:{$records['feature']->id}")
+        ->and($feature->children[0]->label)->toBe('流程图');
+
+    Livewire::test(WorkbenchGraph::class)
+        ->call('selectNode', "flowchart:{$records['feature']->id}")
+        ->assertSeeHtml('data-flowchart')
+        ->assertSeeHtmlInOrder(['data-flowchart', 'data-pseudocode', 'app/Http/TraceController.php::store']);
+});
+
+test('the feature shows a grey "无流程图" leaf when it has no flowchart', function () {
+    $records = workbenchContext();
+
+    $feature = collect(Livewire::test(WorkbenchGraph::class)->instance()->tree[0]->children[0]->children)
+        ->keyBy('label')['功能']->children[0];
+
+    expect($feature->children[0]->key)->toBe("feature:{$records['feature']->id}#no-flowchart")
+        ->and($feature->children[0]->label)->toBe('无流程图')
+        ->and($feature->children[0]->isFolder)->toBeTrue();
 });

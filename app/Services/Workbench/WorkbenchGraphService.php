@@ -34,13 +34,14 @@ class WorkbenchGraphService
         'data_model' => DataModel::class,
         'model_field' => ModelField::class,
         'feature' => Feature::class,
+        'flowchart' => Feature::class,
         'request_reply' => RequestReply::class,
         'test' => Test::class,
         'commit' => Commit::class,
         'workflow_run' => WorkflowRun::class,
     ];
 
-    private const FEATURE_RELATIONS = ['module', 'requestReplies', 'tests', 'commits'];
+    private const FEATURE_RELATIONS = ['module', 'requestReplies', 'tests', 'commits', 'flowchart'];
 
     /**
      * @return Collection<int, UseCaseGroup>
