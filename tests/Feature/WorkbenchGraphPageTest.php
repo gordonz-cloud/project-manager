@@ -1,40 +1,32 @@
 <?php
 
 use App\Enums\FeatureStatus;
-use App\Enums\ImplementationNodeEdgeKind;
 use App\Enums\ImplementationNodeKind;
 use App\Enums\ImplementationNodeState;
 use App\Enums\NavigationGroup;
-use App\Enums\NodeRunMode;
-use App\Enums\NodeRunStatus;
-use App\Enums\RunEventType;
-use App\Enums\ScenarioPriority;
-use App\Enums\ScenarioStatus;
-use App\Enums\ScenarioType;
-use App\Enums\TestLastResult;
-use App\Enums\TestStatus;
 use App\Enums\UseCaseStatus;
 use App\Enums\WorkflowRunStatus;
 use App\Filament\Pages\WorkbenchGraph;
-use App\Models\Commit;
+use App\Models\DataModel;
 use App\Models\Feature;
 use App\Models\ImplementationNode;
-use App\Models\ImplementationNodeEdge;
+use App\Models\ModelField;
 use App\Models\Module;
 use App\Models\ModuleSpec;
-use App\Models\NodeRun;
 use App\Models\Project;
-use App\Models\Requirement;
-use App\Models\RunEvent;
 use App\Models\Scenario;
-use App\Models\Test as TestModel;
 use App\Models\UseCase;
+use App\Models\UseCaseGroup;
+use App\Models\UseCaseSpec;
 use App\Models\User;
 use App\Models\WorkflowRun;
 use Filament\Facades\Filament;
 use Livewire\Livewire;
 
-function workbenchGraphContext(): array
+/**
+ * @return array{project: Project, group: UseCaseGroup, module: Module, moduleSpec: ModuleSpec, useCase: UseCase, useCaseSpec: UseCaseSpec, scenario: Scenario, feature: Feature, node: ImplementationNode, dataModel: DataModel, field: ModelField, run: WorkflowRun}
+ */
+function workbenchContext(): array
 {
     $user = User::factory()->create();
     $project = Project::factory()->create();
@@ -43,31 +35,25 @@ function workbenchGraphContext(): array
     auth()->login($user);
     Filament::setTenant($project);
 
-    $module = Module::factory()->create([
-        'project_id' => $project->id,
-        'name' => 'Trace module',
-    ]);
-    $spec = ModuleSpec::factory()->create([
+    $group = UseCaseGroup::factory()->create(['project_id' => $project->id, 'name' => 'Checkout group', 'sort_order' => 1]);
+    $module = Module::factory()->create(['project_id' => $project->id, 'name' => 'Trace module']);
+    $moduleSpec = ModuleSpec::factory()->create([
         'project_id' => $project->id,
         'module_id' => $module->id,
         'status' => 'active',
-        'summary' => 'Trace spec',
+        'content' => "## Module heading\n\nModule body",
     ]);
     $useCase = UseCase::factory()->forModule($module)->create([
+        'use_case_group_id' => $group->id,
         'status' => UseCaseStatus::Ready,
         'goal' => 'Trace goal',
     ]);
-    $scenario = Scenario::factory()->create([
-        'project_id' => $project->id,
-        'use_case_id' => $useCase->id,
-        'name' => 'Trace scenario',
-        'type' => ScenarioType::Happy,
-        'priority' => ScenarioPriority::Normal,
-        'status' => ScenarioStatus::Ready,
-    ]);
+    $useCaseSpec = UseCaseSpec::factory()->create(['use_case_id' => $useCase->id, 'content' => 'Use case flow']);
+    $scenario = Scenario::factory()->create(['project_id' => $project->id, 'use_case_id' => $useCase->id, 'name' => 'Trace scenario']);
     $feature = Feature::factory()->forUseCase($useCase)->create([
         'title' => 'Trace feature',
-        'status' => FeatureStatus::Todo,
+        'status' => FeatureStatus::Done,
+        'entry' => 'Feature entry text',
     ]);
     $node = ImplementationNode::factory()->create([
         'project_id' => $project->id,
@@ -76,64 +62,12 @@ function workbenchGraphContext(): array
         'state' => ImplementationNodeState::Accepted,
         'title' => 'Trace node',
     ]);
-    $secondNode = ImplementationNode::factory()->create([
-        'project_id' => $project->id,
-        'feature_id' => $feature->id,
-        'kind' => ImplementationNodeKind::Test,
-        'state' => ImplementationNodeState::Proposed,
-        'title' => 'Trace verification node',
-    ]);
-    ImplementationNodeEdge::factory()->create([
-        'project_id' => $project->id,
-        'from_node_id' => $node->id,
-        'to_node_id' => $secondNode->id,
-        'kind' => ImplementationNodeEdgeKind::Back,
-    ]);
-    $test = TestModel::factory()->create([
-        'project_id' => $project->id,
-        'scenario_id' => $scenario->id,
-        'title' => 'Trace test',
-        'status' => TestStatus::Valid,
-        'last_result' => TestLastResult::Passed,
-    ]);
-    $feature->tests()->attach($test);
-    $commit = Commit::factory()->create([
-        'project_id' => $project->id,
-        'feature_id' => $feature->id,
-        'implementation_node_id' => $node->id,
-        'subject' => 'Trace commit',
-    ]);
-    $run = WorkflowRun::factory()->forUseCase($useCase)->create([
-        'feature_id' => $feature->id,
-        'status' => WorkflowRunStatus::Running,
-    ]);
-    $nodeRun = NodeRun::factory()->create([
-        'workflow_run_id' => $run->id,
-        'implementation_node_id' => $node->id,
-        'mode' => NodeRunMode::Sticky,
-        'status' => NodeRunStatus::Talking,
-    ]);
-    $event = RunEvent::factory()->create([
-        'workflow_run_id' => $run->id,
-        'node_run_id' => $nodeRun->id,
-        'event_type' => RunEventType::Entered,
-    ]);
+    $dataModel = DataModel::factory()->create(['project_id' => $project->id, 'name' => 'Trace data model']);
+    $field = ModelField::factory()->create(['project_id' => $project->id, 'data_model_id' => $dataModel->id, 'name' => 'trace_field']);
+    $feature->dataModels()->attach($dataModel);
+    $run = WorkflowRun::factory()->forUseCase($useCase)->create(['feature_id' => $feature->id, 'status' => WorkflowRunStatus::Running]);
 
-    return compact(
-        'project',
-        'module',
-        'spec',
-        'useCase',
-        'scenario',
-        'feature',
-        'node',
-        'secondNode',
-        'test',
-        'commit',
-        'run',
-        'nodeRun',
-        'event',
-    );
+    return compact('project', 'group', 'module', 'moduleSpec', 'useCase', 'useCaseSpec', 'scenario', 'feature', 'node', 'dataModel', 'field', 'run');
 }
 
 test('workbench graph page uses the expected navigation contract', function () {
@@ -142,136 +76,128 @@ test('workbench graph page uses the expected navigation contract', function () {
         ->and(WorkbenchGraph::getNavigationSort())->toBe(0);
 });
 
-test('workbench graph renders the spec tree and detail pane', function () {
-    workbenchGraphContext();
+test('the tree starts at use case groups, then use cases, then their modules and features', function () {
+    $records = workbenchContext();
 
-    Livewire::test(WorkbenchGraph::class)
-        ->assertSee('关系工作台')
-        ->assertSee('数据库关系树')
-        ->assertSee('数据库关系树与详情')
-        ->assertSee('Trace module')
-        ->assertSee('Trace spec')
-        ->assertSee('module_use_cases')
-        ->assertSee('字段详情')
-        ->assertSee('状态与转换')
-        ->assertDontSee('全局关系图')
-        ->assertDontSee('选中节点 Inspector')
-        ->assertSeeHtml('xl:grid-cols-2');
+    $page = Livewire::test(WorkbenchGraph::class)
+        ->assertSet('selectedKey', "use_case:{$records['useCase']->id}");
+    $tree = $page->instance()->tree;
+    $useCase = $tree[0]->children[0];
+    $folders = collect($useCase->children)->keyBy('label');
+
+    expect($tree[0]->key)->toBe("use_case_group:{$records['group']->id}")
+        ->and($useCase->key)->toBe("use_case:{$records['useCase']->id}")
+        ->and($useCase->badge)->toBe('1/1')
+        ->and($useCase->children[0]->key)->toBe("use_case_spec:{$records['useCaseSpec']->id}")
+        ->and($folders->keys()->all())->toBe(['Use Case Spec', '模块', '场景', '功能', '执行记录'])
+        ->and($folders['模块']->children[0]->key)->toBe("module:{$records['module']->id}")
+        ->and($folders['功能']->children[0]->key)->toBe("feature:{$records['feature']->id}")
+        ->and($folders['功能']->children[0]->badge)->toBe('Trace module');
+
+    $module = $folders['模块']->children[0];
+    expect(collect($module->children)->pluck('key')->all())->toBe([
+        "module_spec:{$records['moduleSpec']->id}",
+        "module:{$records['module']->id}#data_models",
+    ])->and($module->children[1]->children[0]->children[0]->key)->toBe("model_field:{$records['field']->id}");
+
+    $page->assertSeeInOrder(['Checkout group', 'Trace goal']);
 });
 
-test('workbench graph expands tree groups and selects nodes', function () {
-    $records = workbenchGraphContext();
+test('the tree shows business names only, never table or column names', function () {
+    workbenchContext();
 
     Livewire::test(WorkbenchGraph::class)
-        ->assertSet('focusMode', false)
-        ->call('toggleTreeGroup', 'use_cases')
-        ->call('selectNode', "scenario:{$records['scenario']->id}")
-        ->assertSet('selectedKey', "scenario:{$records['scenario']->id}")
-        ->assertSet('focusMode', true)
-        ->assertSet('expandedTreeGroups.use_cases', true)
-        ->call('setFocusDepth', 1)
-        ->assertSet('focusDepth', 1)
-        ->set('search', 'Trace scenario')
+        ->set('search', 'trace')
+        ->assertSee(['Trace module', 'Trace feature', 'Trace node', 'trace_field', 'Trace scenario'])
+        ->assertDontSee(['module_use_cases', 'use_case_id', 'data_model_feature', '未建立']);
+});
+
+test('search filters the tree and opens the branches that match', function () {
+    $records = workbenchContext();
+    UseCase::factory()->create(['use_case_group_id' => $records['group']->id, 'goal' => 'Unrelated goal']);
+
+    Livewire::test(WorkbenchGraph::class)
+        ->assertSee('Unrelated goal')
+        ->assertDontSee('Trace node')
+        ->set('search', 'Trace node')
+        ->assertSee('Trace node')
+        ->assertDontSee('Unrelated goal');
+});
+
+test('toggling a row opens its children', function () {
+    $records = workbenchContext();
+    $useCasePath = "use_case_group:{$records['group']->id}>use_case:{$records['useCase']->id}";
+
+    Livewire::test(WorkbenchGraph::class)
+        ->assertDontSee('Trace scenario')
+        ->call('toggleNode', $useCasePath)
+        ->call('toggleNode', "{$useCasePath}>use_case:{$records['useCase']->id}#scenarios")
         ->assertSee('Trace scenario');
 });
 
-test('workbench graph shows state machine states and transitions', function () {
-    $records = workbenchGraphContext();
+test('the detail panel shows one rendered text block and no relation lists', function () {
+    $records = workbenchContext();
 
     Livewire::test(WorkbenchGraph::class)
+        ->call('selectNode', "module_spec:{$records['moduleSpec']->id}")
+        ->assertSeeHtml('<h2>Module heading</h2>')
+        ->assertSee('编辑')
+        ->assertDontSee(['上游', '下游', '字段详情', '打开原始记录'])
         ->call('selectNode', "feature:{$records['feature']->id}")
-        ->assertSee('状态与转换')
-        ->assertSee('当前：待做')
-        ->assertSee('开发中')
-        ->assertSee('开始开发')
-        ->assertSee('验收失败');
+        ->assertSee('Feature entry text');
 });
 
-test('workbench graph exposes use cases and evidence in the tree', function () {
-    $records = workbenchGraphContext();
+test('the selected node survives a reload through the url and opens its branch', function () {
+    $records = workbenchContext();
+    $featureKey = "feature:{$records['feature']->id}";
 
-    Livewire::test(WorkbenchGraph::class)
-        ->call('toggleTreeGroup', 'use_cases')
-        ->call('toggleTreeUseCase', $records['useCase']->id)
-        ->assertSee($records['scenario']->name)
-        ->assertSeeHtml('wire:click="selectNode(\'feature:'.$records['feature']->id.'\')"')
-        ->call('toggleTreeFeature', $records['feature']->id)
-        ->assertSee($records['node']->title)
-        ->assertSee($records['test']->title)
-        ->assertSee($records['commit']->title)
-        ->call('selectNode', "feature:{$records['feature']->id}")
-        ->assertSet('selectedKey', "feature:{$records['feature']->id}")
-        ->assertSee($records['feature']->title);
+    Livewire::withQueryParams(['selectedKey' => $featureKey])
+        ->test(WorkbenchGraph::class)
+        ->assertSet('selectedKey', $featureKey)
+        ->assertSee('Trace feature')
+        ->assertSee('Feature entry text');
 });
 
-test('workbench graph shows unassigned legacy features under the spec', function () {
-    $records = workbenchGraphContext();
-    $requirement = Requirement::factory()->create([
-        'project_id' => $records['project']->id,
-        'title' => 'Legacy source requirement',
-    ]);
-    $requirement->modules()->attach($records['module']);
-    $feature = Feature::factory()->create([
-        'project_id' => $records['project']->id,
-        'requirement_id' => $requirement->id,
-        'title' => 'Feature linked test',
-        'status' => FeatureStatus::Done,
-    ]);
-    $test = TestModel::factory()->create([
-        'project_id' => $records['project']->id,
-        'scenario_id' => null,
-        'title' => 'Feature only evidence',
-        'status' => TestStatus::Valid,
-        'last_result' => TestLastResult::Passed,
-    ]);
-    $feature->tests()->attach($test);
+test('features without a use case sit in their own bucket', function () {
+    $records = workbenchContext();
+    Feature::factory()->create(['project_id' => $records['project']->id, 'use_case_id' => null, 'title' => 'Loose feature']);
 
-    Livewire::test(WorkbenchGraph::class)
-        ->call('selectSpec', $records['spec']->id)
-        ->assertSee('Unassigned Features')
-        ->call('toggleTreeGroup', 'unassigned_features')
-        ->call('toggleTreeFeature', $feature->id)
-        ->assertSee('Feature only evidence');
+    $tree = Livewire::test(WorkbenchGraph::class)->instance()->tree;
+
+    expect(end($tree)->label)->toBe('未归入 Use Case')
+        ->and(end($tree)->children[0]->label)->toBe('Loose feature');
 });
 
-test('workbench graph switches project and module scopes without crossing tenants', function () {
-    $records = workbenchGraphContext();
-    $otherProject = Project::factory()->create();
-    $otherSpec = ModuleSpec::factory()->forProject($otherProject)->create();
-    $otherModule = Module::factory()->create([
-        'project_id' => $otherProject->id,
-        'name' => 'Other tenant module',
-    ]);
+test('records from another project cannot be selected', function () {
+    $records = workbenchContext();
+    $otherFeature = Feature::factory()->create(['project_id' => Project::factory()->create()->id]);
 
     Livewire::test(WorkbenchGraph::class)
-        ->call('selectProjectScope')
-        ->assertSet('scopeType', 'project')
-        ->assertSet('focusMode', false)
-        ->call('startModuleScope')
-        ->assertSet('scopeType', 'module')
-        ->call('selectModuleScope', $records['module']->id)
-        ->assertSet('selectedKey', "module:{$records['module']->id}");
-
-    Livewire::test(WorkbenchGraph::class)
-        ->set('moduleSpecId', $otherSpec->id)
-        ->assertSet('moduleSpecId', null)
-        ->assertSet('selectedKey', null);
-
-    Livewire::test(WorkbenchGraph::class)
-        ->call('selectSpec', $otherSpec->id)
+        ->call('selectNode', "feature:{$otherFeature->id}")
         ->assertNotFound();
 
-    Livewire::test(WorkbenchGraph::class)
-        ->call('selectModuleScope', $otherModule->id)
-        ->assertNotFound();
+    Livewire::withQueryParams(['selectedKey' => "feature:{$otherFeature->id}"])
+        ->test(WorkbenchGraph::class)
+        ->assertSet('selectedKey', "use_case:{$records['useCase']->id}");
 });
 
-test('workbench graph escapes tenant content in the graph', function () {
-    $records = workbenchGraphContext();
-    $records['spec']->update(['summary' => "<script>alert('xss')</script>"]);
+test('the edit slide-over saves the selected record', function () {
+    $records = workbenchContext();
 
     Livewire::test(WorkbenchGraph::class)
-        ->call('selectSpec', $records['spec']->id)
-        ->assertSeeHtml('&lt;script&gt;')
+        ->call('selectNode', "use_case_group:{$records['group']->id}")
+        ->callAction('edit', data: ['name' => 'Renamed group'])
+        ->assertHasNoActionErrors()
+        ->assertSee('Renamed group');
+
+    expect($records['group']->fresh()->name)->toBe('Renamed group');
+});
+
+test('markdown in specs is escaped', function () {
+    $records = workbenchContext();
+    $records['useCaseSpec']->update(['content' => "<script>alert('xss')</script>"]);
+
+    Livewire::test(WorkbenchGraph::class)
+        ->call('selectNode', "use_case_spec:{$records['useCaseSpec']->id}")
         ->assertDontSeeHtml("<script>alert('xss')</script>");
 });

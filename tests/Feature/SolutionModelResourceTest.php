@@ -13,6 +13,8 @@ use App\Filament\Resources\ModuleSpecs\RelationManagers\UseCasesRelationManager;
 use App\Filament\Resources\Scenarios\Pages\EditScenario;
 use App\Filament\Resources\Scenarios\Pages\ListScenarios;
 use App\Filament\Resources\Scenarios\RelationManagers\ImplementationNodesRelationManager;
+use App\Filament\Resources\UseCaseGroups\Pages\CreateUseCaseGroup;
+use App\Filament\Resources\UseCaseGroups\Pages\ListUseCaseGroups;
 use App\Filament\Resources\UseCases\Pages\EditUseCase;
 use App\Filament\Resources\UseCases\Pages\ListUseCases;
 use App\Filament\Resources\UseCases\RelationManagers\FeaturesRelationManager as FeatureUseCaseRelationManager;
@@ -31,6 +33,7 @@ use App\Models\Project;
 use App\Models\RunEvent;
 use App\Models\Scenario;
 use App\Models\UseCase;
+use App\Models\UseCaseGroup;
 use App\Models\User;
 use App\Models\WorkflowRun;
 use Filament\Actions\CreateAction;
@@ -276,4 +279,20 @@ test('owner-derived relation managers create records with the owner context', fu
 
     expect($flowStep->feature_id)->toBe($records['feature']->id)
         ->and($flowStep->implementation_node_id)->toBe($records['node']->id);
+});
+
+test('use case groups are listed per project and can be created', function () {
+    $records = solutionModelContext();
+    $otherGroup = UseCaseGroup::factory()->create(['name' => 'Other tenant group']);
+
+    Livewire::test(ListUseCaseGroups::class)
+        ->assertCanSeeTableRecords([$records['useCase']->group])
+        ->assertCanNotSeeTableRecords([$otherGroup]);
+
+    Livewire::test(CreateUseCaseGroup::class)
+        ->fillForm(['name' => 'Checkout', 'sort_order' => 3])
+        ->call('create')
+        ->assertHasNoFormErrors();
+
+    expect(UseCaseGroup::query()->where('name', 'Checkout')->value('project_id'))->toBe($records['project']->id);
 });

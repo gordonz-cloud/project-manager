@@ -116,4 +116,12 @@ class UseCase extends Model
     {
         return $this->hasMany(Feature::class);
     }
+
+    /**
+     * @return HasMany<WorkflowRun, $this>
+     */
+    public function workflowRuns(): HasMany
+    {
+        return $this->hasMany(WorkflowRun::class);
+    }
 }

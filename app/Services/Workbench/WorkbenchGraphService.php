@@ -2,240 +2,157 @@
 
 namespace App\Services\Workbench;
 
-use App\Data\Workbench\WorkbenchGraphState;
+use App\Models\Commit;
+use App\Models\DataModel;
+use App\Models\Feature;
+use App\Models\FlowStep;
+use App\Models\ImplementationNode;
+use App\Models\ModelField;
 use App\Models\Module;
 use App\Models\ModuleSpec;
+use App\Models\NodeRun;
 use App\Models\Project;
-use App\Models\RunEvent;
-use App\Services\TraceGraphProjection;
-use App\Support\TraceGraph;
-use App\Support\TraceNode;
-use Illuminate\Support\Collection;
+use App\Models\Scenario;
+use App\Models\Test;
+use App\Models\UseCase;
+use App\Models\UseCaseGroup;
+use App\Models\UseCaseSpec;
+use App\Models\WorkflowRun;
+use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Collection;
+use Illuminate\Database\Eloquent\Model;
 
+/**
+ * Reads what the workbench tree shows. Loads the whole project in one go.
+ * ponytail: eager loads every use case at once; load branches on expand if a project grows past a few hundred use cases.
+ */
 class WorkbenchGraphService
 {
-    public function __construct(
-        private TraceGraphProjection $traceGraphProjection,
-    ) {}
+    /** @var array<string, class-string<Model>> */
+    public const RECORD_TYPES = [
+        'use_case_group' => UseCaseGroup::class,
+        'use_case' => UseCase::class,
+        'use_case_spec' => UseCaseSpec::class,
+        'module' => Module::class,
+        'module_spec' => ModuleSpec::class,
+        'data_model' => DataModel::class,
+        'model_field' => ModelField::class,
+        'scenario' => Scenario::class,
+        'feature' => Feature::class,
+        'implementation_node' => ImplementationNode::class,
+        'test' => Test::class,
+        'flow_step' => FlowStep::class,
+        'commit' => Commit::class,
+        'workflow_run' => WorkflowRun::class,
+        'node_run' => NodeRun::class,
+    ];
 
-    public function module(Project $project, int $moduleId): ?Module
-    {
-        return Module::query()
-            ->where('project_id', $project->id)
-            ->whereKey($moduleId)
-            ->first();
-    }
-
-    public function moduleSpec(Project $project, int $moduleSpecId): ?ModuleSpec
-    {
-        return ModuleSpec::query()
-            ->where('project_id', $project->id)
-            ->whereKey($moduleSpecId)
-            ->first();
-    }
+    private const FEATURE_RELATIONS = ['module', 'implementationNodes', 'tests', 'flowSteps', 'commits'];
 
     /**
-     * @return Collection<int, ModuleSpec>
+     * @return Collection<int, UseCaseGroup>
      */
-    public function moduleSpecOptions(Project $project): Collection
+    public function useCaseGroups(Project $project): Collection
     {
-        $moduleOrder = Module::inBuildOrder($project)->pluck('id')->flip();
-
-        return ModuleSpec::query()
+        return UseCaseGroup::query()
             ->where('project_id', $project->id)
-            ->with('module')
-            ->get()
-            ->sortBy(fn (ModuleSpec $spec): array => [
-                (int) ($moduleOrder[$spec->module_id] ?? PHP_INT_MAX),
-                $spec->id,
+            ->with([
+                'useCases' => fn ($useCases) => $useCases->orderBy('goal')->orderBy('id'),
+                ...$this->useCaseTreeRelations('useCases.'),
             ])
-            ->values();
-    }
-
-    /**
-     * @return Collection<int, Module>
-     */
-    public function moduleOptions(Project $project): Collection
-    {
-        return Module::query()
-            ->where('project_id', $project->id)
-            ->withCount('requirements')
-            ->orderBy('name')
+            ->orderBy('sort_order')
             ->orderBy('id')
             ->get();
     }
 
     /**
-     * @param  Collection<int, ModuleSpec>  $moduleSpecOptions
-     * @return Collection<int, ModuleSpec>
+     * @return Collection<int, UseCase>
      */
-    public function scopeSpecs(
-        WorkbenchGraphState $state,
-        Collection $moduleSpecOptions,
-    ): Collection {
-        if ($state->scopeType === 'project') {
-            $active = $moduleSpecOptions
-                ->filter(fn (ModuleSpec $spec): bool => $spec->status !== 'stale');
-
-            if ($state->moduleSpecId !== null && ! $active->contains('id', $state->moduleSpecId)) {
-                $selected = $moduleSpecOptions->firstWhere('id', $state->moduleSpecId);
-
-                if ($selected !== null) {
-                    $active = $active->prepend($selected);
-                }
-            }
-
-            return $active->take(8)->values();
-        }
-
-        if ($state->scopeType === 'module' && $state->moduleId !== null) {
-            return $moduleSpecOptions
-                ->where('module_id', $state->moduleId)
-                ->values();
-        }
-
-        if ($state->moduleSpecId === null) {
-            return collect();
-        }
-
-        return $moduleSpecOptions
-            ->where('id', $state->moduleSpecId)
-            ->values();
-    }
-
-    /**
-     * @return list<array{id: int, key: string, label: string, selected: bool, expanded: bool, show_all: bool, spec_count: int, specs: list<array{id: int, key: string, label: string, title: string, status: string, status_label: string, selected: bool}>}>
-     */
-    public function treeModules(Project $project, WorkbenchGraphState $state): array
+    public function ungroupedUseCases(Project $project): Collection
     {
-        $specsByModule = ModuleSpec::query()
+        return UseCase::query()
             ->where('project_id', $project->id)
-            ->with('module')
-            ->get()
-            ->groupBy('module_id');
-
-        return array_values(Module::inBuildOrder($project)
-            ->map(function (Module $module) use ($specsByModule, $state): array {
-                $specs = $specsByModule->get($module->id, collect());
-
-                return [
-                    'id' => $module->id,
-                    'key' => "module:{$module->id}",
-                    'label' => $module->name,
-                    'selected' => $state->moduleId === $module->id
-                        && $state->selectedKey === "module:{$module->id}",
-                    'expanded' => $state->expandedTreeModules[$module->id] ?? false,
-                    'show_all' => $state->expandedTreeModulesAll[$module->id] ?? false,
-                    'spec_count' => $specs->count(),
-                    'specs' => array_values($specs
-                        ->map(function (ModuleSpec $spec) use ($state): array {
-                            $title = $spec->summary ?: mb_strimwidth(
-                                (string) $spec->content,
-                                0,
-                                100,
-                                '...',
-                            );
-
-                            return [
-                                'id' => $spec->id,
-                                'key' => "module_spec:{$spec->id}",
-                                'label' => 'Spec v'.$spec->version,
-                                'title' => $title,
-                                'status' => $spec->status,
-                                'status_label' => ucfirst($spec->status),
-                                'selected' => $state->moduleSpecId === $spec->id,
-                            ];
-                        })
-                        ->values()
-                        ->all()),
-                ];
-            })
-            ->values()
-            ->all());
+            ->whereNull('use_case_group_id')
+            ->with($this->useCaseTreeRelations())
+            ->orderBy('goal')
+            ->orderBy('id')
+            ->get();
     }
 
     /**
-     * @param  Collection<int, ModuleSpec>  $scopeSpecs
+     * @return Collection<int, Feature>
      */
-    public function graph(Project $project, Collection $scopeSpecs): TraceGraph
+    public function featuresWithoutUseCase(Project $project): Collection
     {
-        $graph = new TraceGraph;
+        return Feature::query()
+            ->where('project_id', $project->id)
+            ->whereNull('use_case_id')
+            ->with(self::FEATURE_RELATIONS)
+            ->orderBy('number')
+            ->get();
+    }
 
-        foreach ($scopeSpecs as $spec) {
-            $specGraph = $this->traceGraphProjection->forModuleSpec($project, $spec);
+    /**
+     * Data models a module's features use; a model has no module of its own.
+     *
+     * @return array<int, Collection<int, DataModel>>
+     */
+    public function dataModelsByModule(Project $project): array
+    {
+        $features = Feature::query()
+            ->where('project_id', $project->id)
+            ->whereNotNull('module_id')
+            ->with('dataModels.modelFields')
+            ->get();
+        $dataModelsByModule = [];
 
-            foreach ($specGraph->nodes() as $node) {
-                $graph->addNode($node);
-            }
-
-            foreach ($specGraph->edges() as $edge) {
-                $graph->addEdge($edge);
+        foreach ($features as $feature) {
+            foreach ($feature->dataModels as $dataModel) {
+                $dataModelsByModule[(int) $feature->module_id][$dataModel->id] = $dataModel;
             }
         }
 
-        return $graph;
+        return array_map(
+            fn (array $dataModels): Collection => (new Collection(array_values($dataModels)))->sortBy('name')->values(),
+            $dataModelsByModule,
+        );
     }
 
     /**
-     * @param  Collection<int, ModuleSpec>  $moduleSpecOptions
+     * The record a tree key points at, only when it belongs to this project.
      */
-    public function graphForSpec(
-        Project $project,
-        Collection $moduleSpecOptions,
-        ?int $moduleSpecId,
-    ): ?TraceGraph {
-        $spec = $moduleSpecOptions->firstWhere('id', $moduleSpecId);
+    public function record(Project $project, string $key): ?Model
+    {
+        [$type, $id] = array_pad(explode(':', $key, 2), 2, null);
+        $modelClass = self::RECORD_TYPES[$type] ?? null;
 
-        if ($spec === null) {
+        if ($modelClass === null || ! ctype_digit((string) $id)) {
             return null;
         }
 
-        return $this->traceGraphProjection->forModuleSpec($project, $spec);
+        $query = $modelClass::query()->whereKey((int) $id);
+
+        if ($modelClass === NodeRun::class) {
+            $query->whereHas('workflowRun', fn (Builder $run) => $run->where('project_id', $project->id));
+        } else {
+            $query->where('project_id', $project->id);
+        }
+
+        return $query->first();
     }
 
     /**
-     * @return list<array{label: string, time: string, tone: string}>
+     * @return array<int|string, mixed>
      */
-    public function stateHistory(Project $project, ?TraceNode $selectedNode): array
+    private function useCaseTreeRelations(string $prefix = ''): array
     {
-        if ($selectedNode === null) {
-            return [];
-        }
-
-        if (! in_array($selectedNode->type, ['Workflow Run', 'Node Run', 'Implementation Node'], true)) {
-            return [];
-        }
-
-        $query = RunEvent::query()
-            ->whereHas('workflowRun', fn ($query) => $query->where('project_id', $project->id))
-            ->with(['nodeRun.implementationNode'])
-            ->latest();
-
-        if ($selectedNode->type === 'Workflow Run') {
-            $query->where('workflow_run_id', $selectedNode->id);
-        } elseif ($selectedNode->type === 'Node Run') {
-            $query->where('node_run_id', $selectedNode->id);
-        } else {
-            $query->whereHas(
-                'nodeRun',
-                fn ($query) => $query->where('implementation_node_id', $selectedNode->id),
-            );
-        }
-
-        return array_values($query
-            ->limit(20)
-            ->get()
-            ->map(fn (RunEvent $event): array => [
-                'label' => $event->event_type->getLabel(),
-                'time' => $event->created_at->format('Y-m-d H:i'),
-                'tone' => match ($event->event_type->value) {
-                    'blocked', 'gap_detected' => 'danger',
-                    'back_edge_taken', 'attempt_finished' => 'warning',
-                    'completed', 'approved', 'edge_taken' => 'success',
-                    default => 'info',
-                },
-            ])
-            ->values()
-            ->all());
+        return [
+            "{$prefix}spec",
+            "{$prefix}modules.spec",
+            "{$prefix}scenarios",
+            ...array_map(fn (string $relation): string => "{$prefix}features.{$relation}", self::FEATURE_RELATIONS),
+            "{$prefix}workflowRuns" => fn ($runs) => $runs->latest('id'),
+            "{$prefix}workflowRuns.nodeRuns.implementationNode",
+        ];
     }
 }

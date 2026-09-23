@@ -13,6 +13,7 @@ use App\Filament\Resources\ModuleSpecs\ModuleSpecResource;
 use App\Filament\Resources\Requirements\RequirementResource;
 use App\Filament\Resources\Scenarios\ScenarioResource;
 use App\Filament\Resources\Tests\TestResource;
+use App\Filament\Resources\UseCaseGroups\UseCaseGroupResource;
 use App\Filament\Resources\UseCases\UseCaseResource;
 use App\Filament\Resources\WorkflowRuns\WorkflowRunResource;
 
@@ -22,6 +23,7 @@ test('resources are grouped by solution model layer', function () {
         ModuleSpecResource::class => NavigationGroup::Scope,
         WorkbenchGraph::class => NavigationGroup::Scope,
         RequirementResource::class => NavigationGroup::Requirements,
+        UseCaseGroupResource::class => NavigationGroup::Behavior,
         UseCaseResource::class => NavigationGroup::Behavior,
         ScenarioResource::class => NavigationGroup::Behavior,
         DataModelResource::class => NavigationGroup::Solution,
