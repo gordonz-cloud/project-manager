@@ -97,13 +97,12 @@ test('the tree starts at use case groups, then use cases, then their modules and
         ->and($useCase->key)->toBe("use_case:{$records['useCase']->id}")
         ->and($useCase->badge)->toBe('1/1')
         ->and($useCase->children[0]->key)->toBe("use_case_spec:{$records['useCaseSpec']->id}")
-        ->and($folders->keys()->all())->toBe(['Use Case Spec', '模块', '流程图', '场景', '功能', '执行记录'])
+        ->and($folders->keys()->all())->toBe(['Use Case Spec', '模块', '场景', '功能', '执行记录'])
         ->and($folders['模块']->children[0]->key)->toBe("module:{$records['module']->id}")
-        ->and($folders['流程图']->children[0]->key)->toBe("request_reply:{$records['requestReply']->id}")
-        ->and($folders['流程图']->children[0]->label)->toBe('① POST /trace')
         ->and($folders['功能']->children[0]->key)->toBe("feature:{$records['feature']->id}")
         ->and($folders['功能']->children[0]->badge)->toBe('Trace module')
-        ->and($folders['功能']->children[0]->children[0]->children[0]->key)->toBe("request_reply:{$records['requestReply']->id}");
+        ->and($folders['功能']->children[0]->children[0]->children[0]->key)->toBe("request_reply:{$records['requestReply']->id}")
+        ->and($folders['功能']->children[0]->children[0]->children[0]->label)->toBe('① POST /trace');
 
     $module = $folders['模块']->children[0];
     expect(collect($module->children)->pluck('key')->all())->toBe([
@@ -213,36 +212,24 @@ test('markdown in specs is escaped', function () {
         ->assertDontSeeHtml("<script>alert('xss')</script>");
 });
 
-test('the flow graph follows edges from the roots, marks failure and optional, and ends loops with a reference', function () {
+test('entries under features carry the use case number that scenario paths use', function () {
     $records = workbenchContext();
     $login = $records['requestReply'];
     $entry = fn (string $path): RequestReply => RequestReply::factory()->create(['use_case_id' => $records['useCase']->id, 'method' => 'GET', 'entry' => $path]);
-    $edge = fn (RequestReply $from, RequestReply $to, RequestReplyEdgeKind $kind) => RequestReplyEdge::factory()->create(['from_request_reply_id' => $from->id, 'to_request_reply_id' => $to->id, 'kind' => $kind]);
     $home = $entry('/home');
     $error = $entry('/error');
-    $tips = $entry('/tips');
-    $edge($login, $home, RequestReplyEdgeKind::Next);
-    $edge($login, $error, RequestReplyEdgeKind::OnFailure);
-    $edge($error, $login, RequestReplyEdgeKind::Next);
-    $edge($home, $tips, RequestReplyEdgeKind::Optional);
+    $records['feature']->requestReplies()->attach([$home->id, $error->id]);
+    RequestReplyEdge::factory()->create(['from_request_reply_id' => $login->id, 'to_request_reply_id' => $error->id, 'kind' => RequestReplyEdgeKind::OnFailure]);
     $records['scenario']->replaceSteps([$login->id, $error->id, $login->id, $home->id]);
 
-    $page = Livewire::test(WorkbenchGraph::class);
-    $folders = collect($page->instance()->tree[0]->children[0]->children)->keyBy('label');
-    $root = $folders['流程图']->children[0];
-    $rows = collect($root->children)->keyBy('label');
+    $folders = collect(Livewire::test(WorkbenchGraph::class)->instance()->tree[0]->children[0]->children)->keyBy('label');
+    $entries = collect($folders['功能']->children[0]->children[0]->children)->mapWithKeys(fn ($node): array => [$node->key => $node->label]);
 
-    expect(count($folders['流程图']->children))->toBe(1)
-        ->and($root->key)->toBe("request_reply:{$login->id}")
-        ->and($rows->keys()->all())->toBe(['② GET /home', '③ GET /error'])
-        ->and($rows['② GET /home']->isFailureBranch)->toBeFalse()
-        ->and($rows['② GET /home']->children[0]->label)->toBe('④ GET /tips')
-        ->and($rows['② GET /home']->children[0]->isOptional)->toBeTrue()
-        ->and($rows['② GET /home']->children[0]->hasNoScenario)->toBeTrue()
-        ->and($rows['③ GET /error']->isFailureBranch)->toBeTrue()
-        ->and($rows['③ GET /error']->children[0]->label)->toBe('↩ 回到 ① POST /trace')
-        ->and($rows['③ GET /error']->children[0]->children)->toBe([])
-        ->and($folders['场景']->children[0]->label)->toBe('Trace scenario  ①✗→③→①→②');
+    expect($entries->all())->toBe([
+        "request_reply:{$login->id}" => '① POST /trace',
+        "request_reply:{$home->id}" => '② GET /home',
+        "request_reply:{$error->id}" => '③ GET /error',
+    ])->and($folders['场景']->children[0]->label)->toBe('Trace scenario  ①✗→③→①→②');
 });
 
 test('the tree stops at entries: no call-tree nodes anywhere', function () {

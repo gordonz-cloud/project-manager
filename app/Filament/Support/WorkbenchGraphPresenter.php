@@ -221,9 +221,8 @@ class WorkbenchGraphPresenter
                 children: array_values(array_filter([
                     $useCase->spec === null ? null : $this->leaf($useCase->spec, 'Use Case Spec', 'heroicon-m-document-text'),
                     WorkbenchTreeNode::folder($key, 'modules', '模块', 'heroicon-m-cube', $this->moduleNodes($useCase->participatingModules()->load('spec'))),
-                    WorkbenchTreeNode::folder($key, 'flow', '流程图', 'heroicon-m-arrows-right-left', $this->flowGraph($useCase)),
                     WorkbenchTreeNode::folder($key, 'scenarios', '场景', 'heroicon-m-play', $this->scenarioNodes($useCase)),
-                    WorkbenchTreeNode::folder($key, 'features', '功能', 'heroicon-m-bolt', $this->featureNodes($useCase->features)),
+                    WorkbenchTreeNode::folder($key, 'features', '功能', 'heroicon-m-bolt', $this->featureNodes($useCase->features, $this->entryNumbers($useCase))),
                     WorkbenchTreeNode::folder($key, 'runs', '执行记录', 'heroicon-m-arrow-path', $this->workflowRunNodes($useCase->workflowRuns)),
                 ])),
             );
@@ -264,79 +263,6 @@ class WorkbenchGraphPresenter
         }
 
         return $nodes;
-    }
-
-    /**
-     * The use case's flow graph drawn as a tree: roots are entries nothing leads to, children follow
-     * the edges, and an entry already drawn shows up again only as a "↩ 回到" reference, so a loop ends.
-     *
-     * @return list<WorkbenchTreeNode>
-     */
-    private function flowGraph(UseCase $useCase): array
-    {
-        $requestReplies = $useCase->requestReplies->keyBy('id');
-        $edges = $useCase->requestReplies
-            ->flatMap(fn (RequestReply $requestReply) => $requestReply->outgoingEdges)
-            ->filter(fn (RequestReplyEdge $edge): bool => $requestReplies->has($edge->to_request_reply_id));
-        $edgesByFrom = $edges->groupBy('from_request_reply_id');
-        $reachedIds = $edges->pluck('to_request_reply_id')->flip();
-        $numbers = $this->entryNumbers($useCase);
-        $stepIds = $useCase->scenarios->flatMap(fn (Scenario $scenario) => $scenario->steps->pluck('request_reply_id'))->flip();
-        $drawn = [];
-        $branches = [];
-        $roots = [
-            ...$requestReplies->reject(fn (RequestReply $requestReply): bool => $reachedIds->has($requestReply->id))->all(),
-            ...$requestReplies->all(),
-        ];
-
-        foreach ($roots as $root) {
-            if (! isset($drawn[$root->id])) {
-                $branches[] = $this->flowBranch($root, null, $requestReplies->all(), $edgesByFrom->all(), $numbers, $stepIds->all(), $drawn);
-            }
-        }
-
-        return $branches;
-    }
-
-    /**
-     * @param  array<int, RequestReply>  $requestReplies
-     * @param  array<int|string, \Illuminate\Support\Collection<int, RequestReplyEdge>>  $edgesByFrom
-     * @param  array<int, string>  $numbers
-     * @param  array<int|string, int>  $stepIds  entries some scenario walks through
-     * @param  array<int, true>  $drawn
-     */
-    private function flowBranch(RequestReply $requestReply, ?RequestReplyEdgeKind $arrivedBy, array $requestReplies, array $edgesByFrom, array $numbers, array $stepIds, array &$drawn): WorkbenchTreeNode
-    {
-        $label = "{$numbers[$requestReply->id]} {$requestReply->label()}";
-
-        if (isset($drawn[$requestReply->id])) {
-            return new WorkbenchTreeNode(
-                key: "request_reply:{$requestReply->id}",
-                label: "↩ 回到 {$label}",
-                icon: 'heroicon-m-arrow-uturn-left',
-                isFailureBranch: $arrivedBy === RequestReplyEdgeKind::OnFailure,
-                isOptional: $arrivedBy === RequestReplyEdgeKind::Optional,
-            );
-        }
-
-        $drawn[$requestReply->id] = true;
-        $key = "request_reply:{$requestReply->id}";
-        $next = [];
-
-        foreach ($edgesByFrom[$requestReply->id] ?? [] as $edge) {
-            $next[] = $this->flowBranch($requestReplies[$edge->to_request_reply_id], $edge->kind, $requestReplies, $edgesByFrom, $numbers, $stepIds, $drawn);
-        }
-
-        return new WorkbenchTreeNode(
-            key: $key,
-            label: $label,
-            icon: $arrivedBy === RequestReplyEdgeKind::OnFailure ? 'heroicon-m-exclamation-triangle' : 'heroicon-m-arrow-right-circle',
-            badge: $requestReply->module?->name,
-            children: $next,
-            isFailureBranch: $arrivedBy === RequestReplyEdgeKind::OnFailure,
-            isOptional: $arrivedBy === RequestReplyEdgeKind::Optional,
-            hasNoScenario: ! isset($stepIds[$requestReply->id]),
-        );
     }
 
     /**
@@ -392,9 +318,10 @@ class WorkbenchGraphPresenter
 
     /**
      * @param  iterable<Feature>  $features
+     * @param  array<int, string>  $entryNumbers  the use case's ①②③, so entry rows match scenario paths
      * @return list<WorkbenchTreeNode>
      */
-    private function featureNodes(iterable $features): array
+    private function featureNodes(iterable $features, array $entryNumbers = []): array
     {
         $nodes = [];
 
@@ -409,7 +336,7 @@ class WorkbenchGraphPresenter
                 badge: $feature->module?->name,
                 children: array_values(array_filter([
                     WorkbenchTreeNode::folder($key, 'entries', '入口', 'heroicon-m-arrow-right-circle', array_values($feature->requestReplies->map(
-                        fn (RequestReply $requestReply): WorkbenchTreeNode => $this->leaf($requestReply, $requestReply->label(), 'heroicon-m-arrow-right-circle'),
+                        fn (RequestReply $requestReply): WorkbenchTreeNode => $this->leaf($requestReply, ltrim(($entryNumbers[$requestReply->id] ?? '').' '.$requestReply->label()), 'heroicon-m-arrow-right-circle'),
                     )->all())),
                     WorkbenchTreeNode::folder($key, 'tests', '测试', 'heroicon-m-beaker', $this->leaves($feature->tests, 'heroicon-m-beaker')),
                     WorkbenchTreeNode::folder($key, 'commits', 'Commits', 'heroicon-m-code-bracket', $this->leaves($feature->commits, 'heroicon-m-code-bracket')),

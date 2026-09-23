@@ -19,9 +19,6 @@ final readonly class WorkbenchTreeNode
         public ?string $badge = null,
         public array $children = [],
         public bool $isFolder = false,
-        public bool $isFailureBranch = false,
-        public bool $hasNoScenario = false,
-        public bool $isOptional = false,
     ) {}
 
     /**
@@ -58,7 +55,7 @@ final readonly class WorkbenchTreeNode
             return null;
         }
 
-        return new self($this->key, $this->label, $this->icon, $this->tone, $this->badge, $children, $this->isFolder, $this->isFailureBranch, $this->hasNoScenario, $this->isOptional);
+        return new self($this->key, $this->label, $this->icon, $this->tone, $this->badge, $children, $this->isFolder);
     }
 
     /**
