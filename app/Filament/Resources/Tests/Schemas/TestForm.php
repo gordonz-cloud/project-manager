@@ -33,7 +33,7 @@ class TestForm
                     ->searchable()
                     ->preload(),
                 Select::make('features')
-                    ->label('功能')
+                    ->label('入口')
                     ->multiple()
                     ->relationship('features', 'title')
                     ->preload(),

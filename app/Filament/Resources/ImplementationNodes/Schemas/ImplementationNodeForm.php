@@ -24,7 +24,7 @@ class ImplementationNodeForm
         return $schema
             ->components([
                 Select::make('feature_id')
-                    ->label('功能')
+                    ->label('入口')
                     ->relationship('feature', 'title')
                     ->searchable()
                     ->preload()
@@ -50,9 +50,24 @@ class ImplementationNodeForm
                 TextInput::make('title')
                     ->label('节点')
                     ->required(),
+                Select::make('module_id')
+                    ->label('模块')
+                    ->relationship('module', 'name')
+                    ->searchable()
+                    ->preload(),
+                TextInput::make('file')
+                    ->label('文件'),
+                TextInput::make('function')
+                    ->label('函数'),
+                Textarea::make('input')
+                    ->label('输入'),
+                Textarea::make('change')
+                    ->label('变化'),
+                Textarea::make('output')
+                    ->label('输出'),
                 Textarea::make('contract')
                     ->label('交付契约')
-                    ->required()
+                    ->dehydrateStateUsing(fn (?string $state): string => $state ?? '')
                     ->columnSpanFull(),
                 Select::make('state')
                     ->label('状态')
@@ -60,7 +75,7 @@ class ImplementationNodeForm
                     ->required(),
                 Textarea::make('evidence_required')
                     ->label('所需证据')
-                    ->required()
+                    ->dehydrateStateUsing(fn (?string $state): string => $state ?? '')
                     ->columnSpanFull(),
             ]);
     }
@@ -78,9 +93,23 @@ class ImplementationNodeForm
                 TextInput::make('title')
                     ->label('节点')
                     ->required(),
+                Select::make('module_id')
+                    ->label('模块')
+                    ->relationship('module', 'name')
+                    ->searchable()
+                    ->preload(),
+                TextInput::make('file')
+                    ->label('文件'),
+                TextInput::make('function')
+                    ->label('函数'),
+                Textarea::make('input')
+                    ->label('输入'),
+                Textarea::make('change')
+                    ->label('变化'),
+                Textarea::make('output')
+                    ->label('输出'),
                 Textarea::make('contract')
                     ->label('交付契约')
-                    ->required()
                     ->columnSpanFull(),
                 Select::make('state')
                     ->label('状态')
@@ -88,7 +117,6 @@ class ImplementationNodeForm
                     ->required(),
                 Textarea::make('evidence_required')
                     ->label('所需证据')
-                    ->required()
                     ->columnSpanFull(),
             ]);
     }

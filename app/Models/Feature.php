@@ -129,14 +129,6 @@ class Feature extends Model
     }
 
     /**
-     * @return HasMany<FlowStep, $this>
-     */
-    public function flowSteps(): HasMany
-    {
-        return $this->hasMany(FlowStep::class);
-    }
-
-    /**
      * @return BelongsToMany<Test, $this>
      */
     public function tests(): BelongsToMany

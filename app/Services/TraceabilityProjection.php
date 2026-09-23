@@ -5,7 +5,6 @@ namespace App\Services;
 use App\Models\Commit;
 use App\Models\DataModel;
 use App\Models\Feature;
-use App\Models\FlowStep;
 use App\Models\ImplementationNode;
 use App\Models\Project;
 use App\Models\Requirement;
@@ -67,10 +66,9 @@ class TraceabilityProjection
             ],
             'evidence' => [
                 'label' => 'Evidence',
-                'count' => FlowStep::query()->where('project_id', $project->id)->count()
-                    + Test::query()->where('project_id', $project->id)->count()
+                'count' => Test::query()->where('project_id', $project->id)->count()
                     + Commit::query()->where('project_id', $project->id)->count(),
-                'detail' => 'FlowSteps + Tests + Commits',
+                'detail' => 'Tests + Commits',
             ],
         ];
     }
@@ -94,7 +92,6 @@ class TraceabilityProjection
                 'count' => ImplementationNode::query()
                     ->where('project_id', $project->id)
                     ->whereDoesntHave('children')
-                    ->whereDoesntHave('flowSteps')
                     ->whereDoesntHave('commits')
                     ->whereDoesntHave('scenarios.tests', fn ($query) => $query->where('status', '有效'))
                     ->count(),

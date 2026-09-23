@@ -25,6 +25,7 @@ test('creating a feature assigns the current tenant and the first sequence numbe
         ->fillForm([
             'title' => 'Checkout flow',
             'status' => FeatureStatus::Todo->value,
+            'entry' => 'POST /checkout',
             'use_case_id' => $useCase->id,
         ])
         ->call('create')

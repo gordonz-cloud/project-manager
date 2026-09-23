@@ -5,7 +5,6 @@ namespace App\Services\Workbench;
 use App\Models\Commit;
 use App\Models\DataModel;
 use App\Models\Feature;
-use App\Models\FlowStep;
 use App\Models\ImplementationNode;
 use App\Models\ModelField;
 use App\Models\Module;
@@ -41,13 +40,12 @@ class WorkbenchGraphService
         'feature' => Feature::class,
         'implementation_node' => ImplementationNode::class,
         'test' => Test::class,
-        'flow_step' => FlowStep::class,
         'commit' => Commit::class,
         'workflow_run' => WorkflowRun::class,
         'node_run' => NodeRun::class,
     ];
 
-    private const FEATURE_RELATIONS = ['module', 'implementationNodes', 'tests', 'flowSteps', 'commits'];
+    private const FEATURE_RELATIONS = ['module', 'implementationNodes.outgoingEdges', 'tests', 'commits'];
 
     /**
      * @return Collection<int, UseCaseGroup>

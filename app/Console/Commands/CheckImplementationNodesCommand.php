@@ -2,24 +2,23 @@
 
 namespace App\Console\Commands;
 
-use App\Models\Feature;
-use App\Models\FlowStep;
+use App\Models\ImplementationNode;
 use App\Models\Project;
 use Illuminate\Console\Command;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\File;
 
 /**
- * Checks every flow step's `file`/`function` against the project's repo
+ * Checks every call-tree node's `file`/`function` against the project's repo
  * (`Project.repo_path`), so a data-flow page that drifted from the code
  * (files moved, functions renamed) gets caught before it misleads a reader.
  * Meant to run in CI.
  */
-class CheckFlowStepsCommand extends Command
+class CheckImplementationNodesCommand extends Command
 {
-    protected $signature = 'flow-steps:check {project-slug} {--feature=}';
+    protected $signature = 'implementation-nodes:check {project-slug} {--feature=}';
 
-    protected $description = "Check a project's flow steps against its repo";
+    protected $description = "Check a project's call-tree nodes against its repo";
 
     public function handle(): int
     {
@@ -37,18 +36,18 @@ class CheckFlowStepsCommand extends Command
             return self::FAILURE;
         }
 
-        $steps = FlowStep::where('project_id', $project->id)
+        $steps = ImplementationNode::where('project_id', $project->id)
+            ->whereNotNull('file')
             ->when($this->option('feature'), fn ($query, $featureNumber) => $query->whereHas(
                 'feature',
                 fn ($q) => $q->where('number', (int) $featureNumber)
             ))
             ->with('feature')
             ->orderBy('feature_id')
-            ->orderBy('path')
-            ->orderBy('order')
+            ->orderBy('id')
             ->get();
 
-        $stale = $steps->map(fn (FlowStep $step) => $this->checkStep($step, $project->repo_path))
+        $stale = $steps->map(fn (ImplementationNode $step) => $this->checkStep($step, $project->repo_path))
             ->filter()
             ->values();
 
@@ -61,7 +60,7 @@ class CheckFlowStepsCommand extends Command
         $stale->groupBy('feature')->each(function (Collection $rows, string $feature) {
             $this->line("功能 {$feature}：");
             foreach ($rows as $row) {
-                $this->line("  #{$row['order']} {$row['path']} {$row['file']} {$row['function']} — {$row['reason']}");
+                $this->line("  #{$row['id']} {$row['title']} {$row['file']} {$row['function']} — {$row['reason']}");
             }
         });
 
@@ -71,9 +70,9 @@ class CheckFlowStepsCommand extends Command
     }
 
     /**
-     * @return array{feature: string, order: int, path: string, file: string, function: string, reason: string}|null
+     * @return array{feature: string, id: int, title: string, file: string, function: string, reason: string}|null
      */
-    private function checkStep(FlowStep $step, string $repoPath): ?array
+    private function checkStep(ImplementationNode $step, string $repoPath): ?array
     {
         $filePath = preg_replace('/:\d+$/', '', (string) $step->file);
         $fullPath = rtrim($repoPath, '/').'/'.ltrim((string) $filePath, '/');
@@ -83,8 +82,8 @@ class CheckFlowStepsCommand extends Command
         if (! File::exists($fullPath)) {
             return [
                 'feature' => $feature,
-                'order' => $step->order,
-                'path' => $step->path,
+                'id' => $step->id,
+                'title' => $step->title,
                 'file' => (string) $step->file,
                 'function' => (string) $step->function,
                 'reason' => '文件不存在',
@@ -103,8 +102,8 @@ class CheckFlowStepsCommand extends Command
         if (! $found) {
             return [
                 'feature' => $feature,
-                'order' => $step->order,
-                'path' => $step->path,
+                'id' => $step->id,
+                'title' => $step->title,
                 'file' => (string) $step->file,
                 'function' => (string) $step->function,
                 'reason' => '函数不存在',

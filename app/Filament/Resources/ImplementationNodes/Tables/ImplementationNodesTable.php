@@ -19,10 +19,10 @@ class ImplementationNodesTable
             ->stackedOnMobile()
             ->modifyQueryUsing(fn (Builder $query): Builder => $query
                 ->with(['feature', 'parent'])
-                ->withCount(['children', 'scenarios', 'flowSteps', 'commits']))
+                ->withCount(['children', 'scenarios', 'commits']))
             ->columns([
                 TextColumn::make('feature.title')
-                    ->label('功能')
+                    ->label('入口')
                     ->badge()
                     ->color('gray')
                     ->searchable(),
@@ -41,7 +41,6 @@ class ImplementationNodesTable
                     ->badge(),
                 TextColumn::make('children_count')->label('子节点')->numeric(),
                 TextColumn::make('scenarios_count')->label('场景')->numeric(),
-                TextColumn::make('flow_steps_count')->label('Flow')->numeric(),
                 TextColumn::make('commits_count')->label('Commits')->numeric(),
             ])
             ->filters([

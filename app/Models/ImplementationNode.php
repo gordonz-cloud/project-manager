@@ -22,6 +22,12 @@ use LogicException;
  * @property int $project_id
  * @property int $feature_id
  * @property int|null $parent_id
+ * @property int|null $module_id
+ * @property string|null $file
+ * @property string|null $function
+ * @property string|null $input
+ * @property string|null $change
+ * @property string|null $output
  * @property ImplementationNodeKind $kind
  * @property string $title
  * @property string $contract
@@ -30,7 +36,7 @@ use LogicException;
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at
  */
-#[Fillable(['feature_id', 'parent_id', 'kind', 'title', 'contract', 'state', 'evidence_required'])]
+#[Fillable(['feature_id', 'parent_id', 'module_id', 'kind', 'title', 'contract', 'state', 'evidence_required', 'file', 'function', 'input', 'change', 'output'])]
 class ImplementationNode extends Model
 {
     /** @use HasFactory<ImplementationNodeFactory> */
@@ -202,11 +208,19 @@ class ImplementationNode extends Model
     }
 
     /**
-     * @return HasMany<FlowStep, $this>
+     * @return BelongsTo<Module, $this>
      */
-    public function flowSteps(): HasMany
+    public function module(): BelongsTo
     {
-        return $this->hasMany(FlowStep::class);
+        return $this->belongsTo(Module::class);
+    }
+
+    /**
+     * @return HasMany<Scenario, $this>
+     */
+    public function endingScenarios(): HasMany
+    {
+        return $this->hasMany(Scenario::class, 'end_node_id');
     }
 
     /**

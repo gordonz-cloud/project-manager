@@ -15,7 +15,7 @@ class ImplementationNodeInfolist
                 Section::make()
                     ->columns(3)
                     ->schema([
-                        TextEntry::make('feature.title')->label('功能'),
+                        TextEntry::make('feature.title')->label('入口'),
                         TextEntry::make('parent.title')->label('父节点')->placeholder('—'),
                         TextEntry::make('kind')->label('类型')->badge(),
                         TextEntry::make('title')->label('节点')->columnSpanFull(),

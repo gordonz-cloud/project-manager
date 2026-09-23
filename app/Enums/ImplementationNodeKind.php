@@ -6,6 +6,7 @@ use Filament\Support\Contracts\HasLabel;
 
 enum ImplementationNodeKind: string implements HasLabel
 {
+    case Function = 'function';
     case Discovery = 'discovery';
     case Decision = 'decision';
     case Design = 'design';
@@ -18,6 +19,7 @@ enum ImplementationNodeKind: string implements HasLabel
     public function getLabel(): string
     {
         return match ($this) {
+            self::Function => '函数',
             self::Discovery => '发现',
             self::Decision => '决策',
             self::Design => '设计',

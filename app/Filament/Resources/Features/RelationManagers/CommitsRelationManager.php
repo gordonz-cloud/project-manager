@@ -26,7 +26,7 @@ class CommitsRelationManager extends RelationManager
         return $schema
             ->components([
                 Select::make('feature_id')
-                    ->label('改挂到功能')
+                    ->label('改挂到入口')
                     ->relationship(name: 'feature', titleAttribute: 'title')
                     ->searchable()
                     ->preload(),
@@ -73,7 +73,7 @@ class CommitsRelationManager extends RelationManager
             ])
             ->recordActions([
                 EditAction::make()
-                    ->label('改挂到别的功能')
+                    ->label('改挂到别的入口')
                     ->slideOver(),
                 DetachAction::make()
                     ->label('取消挂载')

@@ -37,7 +37,7 @@ Module 只保留一份当前 ModuleSpec，用文本章节保存本模块自己�
 - `rules` / `invariants`：无论走哪条路径都必须成立的事实。
 - 决策章节：还有哪些问题没定，为什么这样定，影响哪些用例和功能。
 - `implementation_nodes`：实现这个功能需要做哪些节点，依赖什么，交付什么证据。
-- `flow_steps`：最后代码实际怎么流动；它是实现证据，不是需求发现工具。
+- 调用树（`implementation_nodes` + `implementation_node_edges` 的 `calls` / `on_success` / `on_failure` 边）：入口（Feature）之后代码实际怎么流动，一个节点一个函数；场景用 `end_node_id` 指向树上的终点，路径 = 入口根 → 终点。
 
 这里最重要的是决策章节。AI 每发现一个新问题，不能直接开始修，而要先分类：
 
@@ -161,11 +161,11 @@ evidence: 产出证据，不能只写一句完成
 ### 场景、功能与实现节点
 
 - `scenarios * ── * implementation_nodes`，通过 `scenario_implementation_nodes`
-- `implementation_nodes 1 ── * flow_steps`
+- `scenarios * ── 1 implementation_nodes`，通过可空 `scenarios.end_node_id`（场景路径的终点）
 
 一个场景可能横跨数据库、服务、接口和页面，所以需要多个实现节点。一个实现节点也可能服务多个场景。
 
-`flow_steps` 是代码实际流动的证据。给现有表增加可空的 `implementation_node_id`，让它最终挂回计划节点。尚未回填的历史数据保持为空。
+原来的 `flow_steps` 已迁成调用树节点（带 `file`、`function`、`input`、`change`、`output`、`module_id`）并删表：主路径串成 `calls` 链，其它路径挂在主路径上一步（按 `order`）之下，错误/拒绝类路径用 `on_failure`。
 
 ### 测试与提交证据
 
@@ -241,7 +241,8 @@ erDiagram
     IMPLEMENTATION_NODE ||--o{ IMPLEMENTATION_NODE : parent
     IMPLEMENTATION_NODE }o--o{ IMPLEMENTATION_NODE : dependencies
     SCENARIO }o--o{ IMPLEMENTATION_NODE : scenario_implementation_nodes
-    IMPLEMENTATION_NODE ||--o{ FLOW_STEP : evidences
+    IMPLEMENTATION_NODE ||--o{ IMPLEMENTATION_NODE : calls_on_success_on_failure
+    IMPLEMENTATION_NODE ||--o{ SCENARIO : end_node
 
     SCENARIO }o--o{ TEST : scenario_tests
     IMPLEMENTATION_NODE }o--o{ TEST : implementation_node_tests
@@ -257,7 +258,7 @@ erDiagram
 ### 不能破坏的系统不变量
 
 - 一个项目下的所有关联对象必须属于同一个项目。
-- `flow_steps`、`tests` 和 `commits` 只能挂到同一项目的节点和场景。
+- `tests` 和 `commits` 只能挂到同一项目的节点和场景；场景终点节点必须属于同一 UseCase 的入口。
 - 场景没有验收测试时，所属功能不能进入最终完成。
 - 运行中的契约使用快照，之后修改计划不能改写历史运行。
 - 决策变化保留在 Spec 的历史文字中，不删除旧证据。
@@ -272,6 +273,6 @@ erDiagram
 4. `scenario_implementation_nodes`
 5. `workflow_runs`、`node_runs`、`node_turns`、`node_attempts`
 6. `run_events`
-7. 最后回填 `flow_steps`、`tests`、`commits` 的证据关系
+7. 最后回填 `tests`、`commits` 的证据关系
 
 这样每一层都能单独使用。前面三层即使没有运行时，也能阻止 AI 从一句粗需求直接跳到代码。

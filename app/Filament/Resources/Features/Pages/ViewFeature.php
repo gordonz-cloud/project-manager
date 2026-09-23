@@ -34,7 +34,7 @@ class ViewFeature extends ViewRecord
                         TextEntry::make('number')
                             ->label('Feature ID'),
                         TextEntry::make('title')
-                            ->label('功能'),
+                            ->label('入口'),
                         TextEntry::make('status')
                             ->label('状态')
                             ->badge(),

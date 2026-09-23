@@ -6,6 +6,8 @@ use App\Enums\UseCaseStatus;
 use App\Models\Concerns\BelongsToProject;
 use Database\Factories\UseCaseFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
+use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -123,5 +125,22 @@ class UseCase extends Model
     public function workflowRuns(): HasMany
     {
         return $this->hasMany(WorkflowRun::class);
+    }
+
+    /**
+     * Modules this use case touches: its entries' modules plus the modules its call-tree nodes run in.
+     *
+     * @return Collection<int, Module>
+     */
+    public function participatingModules(): Collection
+    {
+        $featureIds = Feature::withoutGlobalScopes()->where('use_case_id', $this->id)->select('id');
+
+        return Module::withoutGlobalScopes()
+            ->where(fn (Builder $query) => $query
+                ->whereIn('id', Feature::withoutGlobalScopes()->where('use_case_id', $this->id)->whereNotNull('module_id')->select('module_id'))
+                ->orWhereIn('id', ImplementationNode::withoutGlobalScopes()->whereIn('feature_id', $featureIds)->whereNotNull('module_id')->select('module_id')))
+            ->orderBy('name')
+            ->get();
     }
 }

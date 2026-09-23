@@ -9,7 +9,6 @@ use App\Filament\Resources\ImplementationNodes\Pages\ListImplementationNodes;
 use App\Filament\Resources\ImplementationNodes\Pages\ViewImplementationNode;
 use App\Filament\Resources\ImplementationNodes\RelationManagers\ChildrenRelationManager;
 use App\Filament\Resources\ImplementationNodes\RelationManagers\CommitsRelationManager;
-use App\Filament\Resources\ImplementationNodes\RelationManagers\FlowStepsRelationManager;
 use App\Filament\Resources\ImplementationNodes\RelationManagers\IncomingEdgesRelationManager;
 use App\Filament\Resources\ImplementationNodes\RelationManagers\NodeRunsRelationManager;
 use App\Filament\Resources\ImplementationNodes\RelationManagers\OutgoingEdgesRelationManager;
@@ -59,7 +58,6 @@ class ImplementationNodeResource extends Resource
         return [
             ChildrenRelationManager::class,
             ScenariosRelationManager::class,
-            FlowStepsRelationManager::class,
             CommitsRelationManager::class,
             NodeRunsRelationManager::class,
             OutgoingEdgesRelationManager::class,

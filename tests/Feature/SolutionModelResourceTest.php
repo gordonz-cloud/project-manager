@@ -3,7 +3,6 @@
 use App\Enums\FeatureStatus;
 use App\Filament\Resources\ImplementationNodes\Pages\EditImplementationNode;
 use App\Filament\Resources\ImplementationNodes\Pages\ListImplementationNodes;
-use App\Filament\Resources\ImplementationNodes\RelationManagers\FlowStepsRelationManager;
 use App\Filament\Resources\ImplementationNodes\RelationManagers\OutgoingEdgesRelationManager;
 use App\Filament\Resources\Modules\Pages\CreateModule;
 use App\Filament\Resources\ModuleSpecs\Pages\CreateModuleSpec;
@@ -23,7 +22,6 @@ use App\Filament\Resources\WorkflowRuns\Pages\ListWorkflowRuns;
 use App\Filament\Resources\WorkflowRuns\RelationManagers\EventsRelationManager;
 use App\Filament\Resources\WorkflowRuns\RelationManagers\NodeRunsRelationManager;
 use App\Models\Feature;
-use App\Models\FlowStep;
 use App\Models\ImplementationNode;
 use App\Models\ImplementationNodeEdge;
 use App\Models\Module;
@@ -262,23 +260,6 @@ test('owner-derived relation managers create records with the owner context', fu
     $feature = Feature::query()->where('title', 'Owner context feature')->sole();
 
     expect($feature->use_case_id)->toBe($records['useCase']->id);
-
-    Livewire::test(FlowStepsRelationManager::class, [
-        'ownerRecord' => $records['node'],
-        'pageClass' => EditImplementationNode::class,
-    ])
-        ->callAction(TestAction::make(CreateAction::class)->table(), [
-            'step' => 'Owner context step',
-            'path' => '主路径',
-            'order' => 1,
-            'output' => 'ok',
-        ])
-        ->assertHasNoFormErrors();
-
-    $flowStep = FlowStep::query()->where('step', 'Owner context step')->sole();
-
-    expect($flowStep->feature_id)->toBe($records['feature']->id)
-        ->and($flowStep->implementation_node_id)->toBe($records['node']->id);
 });
 
 test('use case groups are listed per project and can be created', function () {

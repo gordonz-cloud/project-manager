@@ -5,6 +5,8 @@ use Illuminate\Support\Facades\Schema;
 test('the notion_url drop migration removes the column from every business table', function () {
     $tables = ['modules', 'requirements', 'features', 'data_models', 'model_fields', 'flow_steps', 'tests'];
 
+    Schema::create('flow_steps', fn ($blueprint) => $blueprint->id()); // dropped since; the old migration still names it
+
     foreach ($tables as $table) {
         if (! Schema::hasColumn($table, 'notion_url')) {
             Schema::table($table, fn ($blueprint) => $blueprint->string('notion_url')->nullable()->unique());

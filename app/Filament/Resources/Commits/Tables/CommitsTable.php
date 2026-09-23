@@ -24,7 +24,7 @@ class CommitsTable
                     ->formatStateUsing(fn (string $state): string => substr($state, 0, 8))
                     ->fontFamily(FontFamily::Mono),
                 TextColumn::make('feature.title')
-                    ->label('功能')
+                    ->label('入口')
                     ->badge()
                     ->color('gray')
                     ->url(fn (Commit $record): ?string => $record->feature_id
@@ -48,12 +48,12 @@ class CommitsTable
             ])
             ->filters([
                 Filter::make('unassigned')
-                    ->label('未挂功能')
+                    ->label('未挂入口')
                     ->query(fn (Builder $query): Builder => $query->whereNull('feature_id')),
             ])
             ->recordActions([
                 EditAction::make()
-                    ->label('改挂功能')
+                    ->label('改挂入口')
                     ->slideOver(),
             ]);
     }

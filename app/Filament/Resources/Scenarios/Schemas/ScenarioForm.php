@@ -8,7 +8,9 @@ use App\Enums\ScenarioType;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
+use Filament\Schemas\Components\Utilities\Get;
 use Filament\Schemas\Schema;
+use Illuminate\Database\Eloquent\Builder;
 
 class ScenarioForm
 {
@@ -22,7 +24,21 @@ class ScenarioForm
                     ->getOptionLabelFromRecordUsing(fn ($record): string => $record->actor.' · '.$record->goal)
                     ->searchable()
                     ->preload()
+                    ->live()
                     ->required(),
+                Select::make('end_node_id')
+                    ->label('终点节点')
+                    ->helperText('场景走的路径：入口根节点 → 这个节点。')
+                    ->relationship(
+                        'endNode',
+                        'title',
+                        fn (Builder $query, Get $get): Builder => $query->whereHas(
+                            'feature',
+                            fn (Builder $feature): Builder => $feature->where('use_case_id', $get('use_case_id')),
+                        ),
+                    )
+                    ->searchable()
+                    ->preload(),
                 TextInput::make('name')
                     ->label('场景')
                     ->required(),

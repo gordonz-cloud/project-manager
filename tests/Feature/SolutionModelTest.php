@@ -13,7 +13,6 @@ use App\Enums\UseCaseStatus;
 use App\Enums\WorkflowRunStatus;
 use App\Models\Commit;
 use App\Models\Feature;
-use App\Models\FlowStep;
 use App\Models\ImplementationNode;
 use App\Models\ImplementationNodeEdge;
 use App\Models\ModuleSpec;
@@ -72,11 +71,6 @@ test('implementation graph connects scenarios to nodes and evidence', function (
         'to_node_id' => $second->id,
         'kind' => ImplementationNodeEdgeKind::Forward,
     ]);
-    $flowStep = FlowStep::factory()->create([
-        'project_id' => $project->id,
-        'feature_id' => $feature->id,
-        'implementation_node_id' => $first->id,
-    ]);
     $test = TestModel::factory()->create([
         'project_id' => $project->id,
         'scenario_id' => $scenario->id,
@@ -97,7 +91,6 @@ test('implementation graph connects scenarios to nodes and evidence', function (
         ->and($edge->fromNode()->first()->is($first))->toBeTrue()
         ->and($edge->toNode()->first()->is($second))->toBeTrue()
         ->and($first->scenarios()->first()->is($scenario))->toBeTrue()
-        ->and($first->flowSteps()->first()->is($flowStep))->toBeTrue()
         ->and($scenario->tests()->first()->is($test))->toBeTrue()
         ->and($second->commits()->first()->is($commit))->toBeTrue();
 });

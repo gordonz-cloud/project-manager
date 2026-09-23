@@ -1,6 +1,7 @@
 <?php
 
 use App\Enums\FeatureStatus;
+use App\Enums\ImplementationNodeEdgeKind;
 use App\Enums\ImplementationNodeKind;
 use App\Enums\ImplementationNodeState;
 use App\Enums\NavigationGroup;
@@ -10,6 +11,7 @@ use App\Filament\Pages\WorkbenchGraph;
 use App\Models\DataModel;
 use App\Models\Feature;
 use App\Models\ImplementationNode;
+use App\Models\ImplementationNodeEdge;
 use App\Models\ModelField;
 use App\Models\Module;
 use App\Models\ModuleSpec;
@@ -89,10 +91,10 @@ test('the tree starts at use case groups, then use cases, then their modules and
         ->and($useCase->key)->toBe("use_case:{$records['useCase']->id}")
         ->and($useCase->badge)->toBe('1/1')
         ->and($useCase->children[0]->key)->toBe("use_case_spec:{$records['useCaseSpec']->id}")
-        ->and($folders->keys()->all())->toBe(['Use Case Spec', '模块', '场景', '功能', '执行记录'])
+        ->and($folders->keys()->all())->toBe(['Use Case Spec', '模块', '入口', '场景', '执行记录'])
         ->and($folders['模块']->children[0]->key)->toBe("module:{$records['module']->id}")
-        ->and($folders['功能']->children[0]->key)->toBe("feature:{$records['feature']->id}")
-        ->and($folders['功能']->children[0]->badge)->toBe('Trace module');
+        ->and($folders['入口']->children[0]->key)->toBe("feature:{$records['feature']->id}")
+        ->and($folders['入口']->children[0]->badge)->toBe('Trace module');
 
     $module = $folders['模块']->children[0];
     expect(collect($module->children)->pluck('key')->all())->toBe([
@@ -200,4 +202,38 @@ test('markdown in specs is escaped', function () {
     Livewire::test(WorkbenchGraph::class)
         ->call('selectNode', "use_case_spec:{$records['useCaseSpec']->id}")
         ->assertDontSeeHtml("<script>alert('xss')</script>");
+});
+
+test('an entry shows its call tree with failure branches marked and scenario end points counted', function () {
+    $records = workbenchContext();
+    $root = $records['node'];
+    $nodeUnder = fn (string $title, ImplementationNode $parent, ImplementationNodeEdgeKind $kind): ImplementationNode => tap(
+        ImplementationNode::factory()->create(['project_id' => $records['project']->id, 'feature_id' => $records['feature']->id, 'title' => $title]),
+        fn (ImplementationNode $node) => ImplementationNodeEdge::factory()->create([
+            'project_id' => $records['project']->id,
+            'from_node_id' => $parent->id,
+            'to_node_id' => $node->id,
+            'kind' => $kind,
+        ]),
+    );
+    $saved = $nodeUnder('Save order', $root, ImplementationNodeEdgeKind::Calls);
+    $deepest = $nodeUnder('Send receipt', $saved, ImplementationNodeEdgeKind::Calls);
+    $rejected = $nodeUnder('Reject bad cart', $root, ImplementationNodeEdgeKind::OnFailure);
+    $records['scenario']->update(['end_node_id' => $deepest->id]);
+
+    $page = Livewire::test(WorkbenchGraph::class);
+    $page->set('search', 'Reject bad cart')->assertSeeHtml('title="失败分支"');
+    $useCase = $page->set('search', '')->instance()->tree[0]->children[0];
+    $entry = collect($useCase->children)->keyBy('label')['入口']->children[0];
+    $rootRow = $entry->children[0];
+    $rows = collect($rootRow->children)->keyBy('label');
+
+    expect($rootRow->key)->toBe("implementation_node:{$root->id}")
+        ->and($rows->keys()->all())->toBe(['Save order', 'Reject bad cart'])
+        ->and($rows['Save order']->isFailureBranch)->toBeFalse()
+        ->and($rows['Save order']->children[0]->key)->toBe("implementation_node:{$deepest->id}")
+        ->and($rows['Save order']->children[0]->badge)->toBe('1 场景')
+        ->and($rows['Save order']->children[0]->hasNoScenario)->toBeFalse()
+        ->and($rows['Reject bad cart']->isFailureBranch)->toBeTrue()
+        ->and($rows['Reject bad cart']->hasNoScenario)->toBeTrue();
 });

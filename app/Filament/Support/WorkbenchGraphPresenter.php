@@ -4,10 +4,10 @@ namespace App\Filament\Support;
 
 use App\Data\Workbench\WorkbenchTreeNode;
 use App\Enums\FeatureStatus;
+use App\Enums\ImplementationNodeEdgeKind;
 use App\Filament\Resources\Commits\CommitResource;
 use App\Filament\Resources\DataModels\DataModelResource;
 use App\Filament\Resources\Features\FeatureResource;
-use App\Filament\Resources\FlowSteps\FlowStepResource;
 use App\Filament\Resources\ImplementationNodes\ImplementationNodeResource;
 use App\Filament\Resources\ModelFields\ModelFieldResource;
 use App\Filament\Resources\Modules\ModuleResource;
@@ -20,8 +20,8 @@ use App\Filament\Resources\WorkflowRuns\WorkflowRunResource;
 use App\Models\Commit;
 use App\Models\DataModel;
 use App\Models\Feature;
-use App\Models\FlowStep;
 use App\Models\ImplementationNode;
+use App\Models\ImplementationNodeEdge;
 use App\Models\ModelField;
 use App\Models\Module;
 use App\Models\ModuleSpec;
@@ -52,10 +52,9 @@ class WorkbenchGraphPresenter
         'data_model' => 'Data Model',
         'model_field' => 'Model Field',
         'scenario' => 'Scenario',
-        'feature' => 'Feature',
-        'implementation_node' => 'Implementation Node',
+        'feature' => '入口',
+        'implementation_node' => '调用节点',
         'test' => 'Test',
-        'flow_step' => 'Flow Step',
         'commit' => 'Commit',
         'workflow_run' => 'Workflow Run',
         'node_run' => 'Node Run',
@@ -119,7 +118,6 @@ class WorkbenchGraphPresenter
             $record instanceof UseCaseSpec => $record->useCase->goal,
             $record instanceof ModuleSpec => $record->module->name,
             $record instanceof Feature, $record instanceof ImplementationNode, $record instanceof Test => $record->title,
-            $record instanceof FlowStep => $record->step,
             $record instanceof Commit => $record->subject,
             $record instanceof WorkflowRun => "Run #{$record->id}",
             $record instanceof NodeRun => $record->implementationNode->title,
@@ -151,9 +149,8 @@ class WorkbenchGraphPresenter
             $record instanceof ModelField => trim(($record->type ?? '').' — '.($record->description ?? ''), ' —'),
             $record instanceof Scenario => "Given {$record->given}\nWhen {$record->when}\nThen {$record->then}",
             $record instanceof Feature => $record->entry,
-            $record instanceof ImplementationNode => $record->contract,
+            $record instanceof ImplementationNode => $this->nodeText($record),
             $record instanceof Test => $record->location,
-            $record instanceof FlowStep => $record->file,
             $record instanceof Commit => $record->body ?? $record->hash,
             $record instanceof WorkflowRun => $record->feature?->title,
             $record instanceof NodeRun => json_encode($record->contract_snapshot, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT) ?: null,
@@ -181,7 +178,6 @@ class WorkbenchGraphPresenter
             $record instanceof Feature => FeatureResource::class,
             $record instanceof ImplementationNode => ImplementationNodeResource::class,
             $record instanceof Test => TestResource::class,
-            $record instanceof FlowStep => FlowStepResource::class,
             $record instanceof Commit => CommitResource::class,
             $record instanceof WorkflowRun => WorkflowRunResource::class,
             default => null,
@@ -217,9 +213,9 @@ class WorkbenchGraphPresenter
                 badge: "{$doneFeatures}/{$useCase->features->count()}",
                 children: array_values(array_filter([
                     $useCase->spec === null ? null : $this->leaf($useCase->spec, 'Use Case Spec', 'heroicon-m-document-text'),
-                    WorkbenchTreeNode::folder($key, 'modules', '模块', 'heroicon-m-cube', $this->moduleNodes($useCase->modules)),
+                    WorkbenchTreeNode::folder($key, 'modules', '模块', 'heroicon-m-cube', $this->moduleNodes($useCase->participatingModules()->load('spec'))),
+                    WorkbenchTreeNode::folder($key, 'features', '入口', 'heroicon-m-bolt', $this->featureNodes($useCase->features, $useCase->scenarios->countBy('end_node_id')->all())),
                     WorkbenchTreeNode::folder($key, 'scenarios', '场景', 'heroicon-m-play', $this->leaves($useCase->scenarios, 'heroicon-m-play')),
-                    WorkbenchTreeNode::folder($key, 'features', '功能', 'heroicon-m-bolt', $this->featureNodes($useCase->features)),
                     WorkbenchTreeNode::folder($key, 'runs', '执行记录', 'heroicon-m-arrow-path', $this->workflowRunNodes($useCase->workflowRuns)),
                 ])),
             );
@@ -264,9 +260,10 @@ class WorkbenchGraphPresenter
 
     /**
      * @param  iterable<Feature>  $features
+     * @param  array<int|string, int>  $scenarioCountsByEndNode
      * @return list<WorkbenchTreeNode>
      */
-    private function featureNodes(iterable $features): array
+    private function featureNodes(iterable $features, array $scenarioCountsByEndNode = []): array
     {
         $nodes = [];
 
@@ -280,15 +277,82 @@ class WorkbenchGraphPresenter
                 tone: $this->tone($feature),
                 badge: $feature->module?->name,
                 children: array_values(array_filter([
-                    WorkbenchTreeNode::folder($key, 'nodes', '实现节点', 'heroicon-m-squares-2x2', $this->leaves($feature->implementationNodes, 'heroicon-m-squares-2x2')),
+                    ...$this->callTree($feature, $scenarioCountsByEndNode),
                     WorkbenchTreeNode::folder($key, 'tests', '测试', 'heroicon-m-beaker', $this->leaves($feature->tests, 'heroicon-m-beaker')),
-                    WorkbenchTreeNode::folder($key, 'flow_steps', '流程步骤', 'heroicon-m-arrow-right', $this->leaves($feature->flowSteps, 'heroicon-m-arrow-right')),
                     WorkbenchTreeNode::folder($key, 'commits', 'Commits', 'heroicon-m-code-bracket', $this->leaves($feature->commits, 'heroicon-m-code-bracket')),
                 ])),
             );
         }
 
         return $nodes;
+    }
+
+    /**
+     * The entry's call tree: roots are nodes no call-tree edge points at.
+     *
+     * @param  array<int|string, int>  $scenarioCountsByEndNode
+     * @return list<WorkbenchTreeNode>
+     */
+    private function callTree(Feature $feature, array $scenarioCountsByEndNode): array
+    {
+        $nodesById = $feature->implementationNodes->keyBy('id');
+        $treeEdges = $feature->implementationNodes
+            ->flatMap(fn (ImplementationNode $node) => $node->outgoingEdges)
+            ->filter(fn (ImplementationNodeEdge $edge): bool => in_array($edge->kind, ImplementationNodeEdgeKind::callTree(), true) && $nodesById->has($edge->to_node_id));
+        $childEdgesByNode = $treeEdges->groupBy('from_node_id');
+        $calledIds = $treeEdges->pluck('to_node_id')->flip();
+        $branches = [];
+
+        foreach ($nodesById as $node) {
+            if (! $calledIds->has($node->id)) {
+                $branches[] = $this->nodeBranch($node, false, $nodesById->all(), $childEdgesByNode->all(), $scenarioCountsByEndNode, []);
+            }
+        }
+
+        return $branches;
+    }
+
+    /**
+     * @param  array<int, ImplementationNode>  $nodesById
+     * @param  array<int|string, \Illuminate\Support\Collection<int, ImplementationNodeEdge>>  $childEdgesByNode
+     * @param  array<int|string, int>  $scenarioCountsByEndNode
+     * @param  array<int, true>  $ancestorIds  guards against a cycle in hand-drawn edges
+     */
+    private function nodeBranch(ImplementationNode $node, bool $isFailureBranch, array $nodesById, array $childEdgesByNode, array $scenarioCountsByEndNode, array $ancestorIds): WorkbenchTreeNode
+    {
+        $ancestorIds[$node->id] = true;
+        $children = [];
+
+        foreach ($childEdgesByNode[$node->id] ?? [] as $edge) {
+            if (! isset($ancestorIds[$edge->to_node_id])) {
+                $children[] = $this->nodeBranch($nodesById[$edge->to_node_id], $edge->kind === ImplementationNodeEdgeKind::OnFailure, $nodesById, $childEdgesByNode, $scenarioCountsByEndNode, $ancestorIds);
+            }
+        }
+
+        $scenarioCount = $scenarioCountsByEndNode[$node->id] ?? 0;
+
+        return new WorkbenchTreeNode(
+            key: "implementation_node:{$node->id}",
+            label: $node->title,
+            icon: $isFailureBranch ? 'heroicon-m-exclamation-triangle' : 'heroicon-m-arrow-turn-down-right',
+            tone: $this->tone($node),
+            badge: $scenarioCount > 0 ? "{$scenarioCount} 场景" : null,
+            children: $children,
+            isFailureBranch: $isFailureBranch,
+            hasNoScenario: $children === [] && $scenarioCount === 0,
+        );
+    }
+
+    private function nodeText(ImplementationNode $node): string
+    {
+        $lines = array_filter([
+            'file' => filled($node->file) ? $node->file.(filled($node->function) ? "::{$node->function}" : '') : null,
+            'input' => filled($node->input) ? "输入：{$node->input}" : null,
+            'change' => filled($node->change) ? "变化：{$node->change}" : null,
+            'output' => filled($node->output) ? "输出：{$node->output}" : null,
+        ]);
+
+        return $lines === [] ? $node->contract : implode("\n", $lines);
     }
 
     /**
@@ -349,7 +413,7 @@ class WorkbenchGraphPresenter
             $record instanceof ImplementationNode => $record->state,
             $record instanceof Module => $record->spec?->status,
             $record instanceof Commit => substr($record->hash, 0, 8),
-            $record instanceof UseCaseGroup, $record instanceof FlowStep => null,
+            $record instanceof UseCaseGroup => null,
             default => $record->getAttribute('status'),
         };
     }
