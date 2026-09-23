@@ -3,23 +3,7 @@
 use App\Enums\FeatureTrigger;
 use App\Models\Feature;
 use App\Models\RequestReply;
-use App\Models\RequestReplyEdge;
-use App\Models\UseCase;
 use App\Services\RequestReplies\FeatureEntryParser;
-
-test('a flow edge joins two different request replies of one use case', function () {
-    $useCase = UseCase::factory()->create();
-    [$login, $home] = RequestReply::factory()->count(2)->create(['use_case_id' => $useCase->id]);
-    $foreign = RequestReply::factory()->create();
-
-    $edge = RequestReplyEdge::factory()->create(['from_request_reply_id' => $login->id, 'to_request_reply_id' => $home->id]);
-
-    expect($edge->project_id)->toBe($useCase->project_id)
-        ->and(fn () => RequestReplyEdge::factory()->create(['from_request_reply_id' => $login->id, 'to_request_reply_id' => $login->id]))
-        ->toThrow(LogicException::class, 'cannot depend on itself')
-        ->and(fn () => RequestReplyEdge::factory()->create(['from_request_reply_id' => $login->id, 'to_request_reply_id' => $foreign->id]))
-        ->toThrow(LogicException::class, 'same use case');
-});
 
 test('a feature links only request replies of its own project', function () {
     $requestReply = RequestReply::factory()->create();

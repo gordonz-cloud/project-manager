@@ -3,13 +3,11 @@
 use App\Filament\Resources\RequestReplies\Pages\EditRequestReply;
 use App\Filament\Resources\RequestReplies\Pages\ListRequestReplies;
 use App\Filament\Resources\RequestReplies\RelationManagers\FeaturesRelationManager;
-use App\Filament\Resources\RequestReplies\RelationManagers\OutgoingEdgesRelationManager;
 use App\Filament\Resources\UseCases\Pages\EditUseCase;
 use App\Filament\Resources\UseCases\RelationManagers\RequestRepliesRelationManager;
 use App\Models\Feature;
 use App\Models\Project;
 use App\Models\RequestReply;
-use App\Models\RequestReplyEdge;
 use App\Models\UseCase;
 use App\Models\UseCaseGroup;
 use App\Models\User;
@@ -34,13 +32,10 @@ test('request replies are listed and shown on their use case', function () {
         ->assertCanSeeTableRecords([$this->login, $this->home]);
 });
 
-test('a request reply shows its downstream edges and features', function () {
-    $edge = RequestReplyEdge::factory()->create(['from_request_reply_id' => $this->login->id, 'to_request_reply_id' => $this->home->id]);
+test('a request reply shows its features', function () {
     $feature = Feature::factory()->forUseCase($this->useCase)->create();
     $feature->requestReplies()->attach($this->login);
 
-    Livewire::test(OutgoingEdgesRelationManager::class, ['ownerRecord' => $this->login, 'pageClass' => EditRequestReply::class])
-        ->assertCanSeeTableRecords([$edge]);
     Livewire::test(FeaturesRelationManager::class, ['ownerRecord' => $this->login, 'pageClass' => EditRequestReply::class])
         ->assertCanSeeTableRecords([$feature]);
 });

@@ -35,7 +35,7 @@ Module 只保留一份当前 ModuleSpec，用文本章节保存本模块自己�
 - `use_cases`：谁为了什么目标，触发什么行为，成功和失败是什么。
 - `rules` / `invariants`：无论走哪条路径都必须成立的事实。
 - 决策章节：还有哪些问题没定，为什么这样定，影响哪些用例和功能。
-- 入口（`request_replies`）：一次 request→response；入口之间的 `request_reply_edges`（`next` / `on_failure` / `optional`）是入口依赖。同一目标的不同走法写进 Use Case Spec 的 `## 异常与补偿`，由测试盖住（没有 scenarios 表）。
+- 入口（`request_replies`）：一次 request→response。同一目标的不同走法写进 Use Case Spec 的 `## 异常与补偿`，由测试盖住（没有 scenarios 表）。
 - 流程图（`flowcharts`，功能 1:1）：这个功能的代码怎么流动——`chart` JSON（节点带 `file`/`function`，边 `next`/`failure`）+ `pseudocode` 编号伪代码。功能（Feature）是工作项，通过 `feature_request_reply` 记它改了哪些入口。
 
 这里最重要的是决策章节。AI 每发现一个新问题，不能直接开始修，而要先分类：
@@ -181,7 +181,6 @@ erDiagram
 
     FEATURE ||--|| FLOWCHART : flowchart
     USE_CASE ||--o{ REQUEST_REPLY : entries
-    REQUEST_REPLY ||--o{ REQUEST_REPLY : request_reply_edges
     FEATURE }o--o{ REQUEST_REPLY : feature_request_reply
 
     FEATURE }o--o{ TEST : feature_test
@@ -193,7 +192,7 @@ erDiagram
 ### 不能破坏的系统不变量
 
 - 一个项目下的所有关联对象必须属于同一个项目。
-- `tests` 和 `commits` 只能挂到同一项目的功能；入口依赖边两端都必须是同一 UseCase 的入口，不许自环；功能和入口必须同项目。
+- `tests` 和 `commits` 只能挂到同一项目的功能；功能和入口必须同项目。
 - Use Case Spec 里的走法没有测试盖住时，所属功能不能进入最终完成。
 - 运行中的契约使用快照，之后修改计划不能改写历史运行。
 - 决策变化保留在 Spec 的历史文字中，不删除旧证据。

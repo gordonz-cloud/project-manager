@@ -7,7 +7,6 @@ use App\Filament\Resources\RequestReplies\Pages\CreateRequestReply;
 use App\Filament\Resources\RequestReplies\Pages\EditRequestReply;
 use App\Filament\Resources\RequestReplies\Pages\ListRequestReplies;
 use App\Filament\Resources\RequestReplies\RelationManagers\FeaturesRelationManager;
-use App\Filament\Resources\RequestReplies\RelationManagers\OutgoingEdgesRelationManager;
 use App\Filament\Resources\RequestReplies\Schemas\RequestReplyForm;
 use App\Filament\Resources\RequestReplies\Tables\RequestRepliesTable;
 use App\Models\RequestReply;
@@ -49,7 +48,6 @@ class RequestReplyResource extends Resource
     public static function getRelations(): array
     {
         return [
-            OutgoingEdgesRelationManager::class,
             FeaturesRelationManager::class,
         ];
     }
