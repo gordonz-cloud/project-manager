@@ -30,13 +30,13 @@
         </aside>
 
         <div class="flex min-w-0 flex-col gap-4 xl:h-[calc(100vh-6rem)]">
-        <section class="min-w-0 shrink-0 rounded-lg border border-slate-200 bg-white dark:border-white/10 dark:bg-slate-950">
+        <section class="flex min-h-0 min-w-0 flex-col rounded-lg border border-slate-200 bg-white dark:border-white/10 dark:bg-slate-950 xl:basis-[60%]">
             @if ($record)
                 @php
                     $status = $presenter->statusLabel($record);
                     $body = $presenter->mainText($record);
                 @endphp
-                <div class="flex items-start gap-3 border-b border-slate-200 px-5 py-4 dark:border-white/10">
+                <div class="flex shrink-0 items-start gap-3 border-b border-slate-200 px-5 py-4 dark:border-white/10">
                     <div class="min-w-0 flex-1">
                         <div class="flex flex-wrap items-center gap-2 text-xs">
                             <span class="text-slate-500 dark:text-slate-400">{{ $presenter->typeLabel($record) }}</span>
@@ -49,7 +49,7 @@
                     {{ $this->editAction }}
                 </div>
 
-                <div class="max-h-[calc(100vh-14rem)] overflow-y-auto px-5 py-4">
+                <div class="min-h-0 flex-1 overflow-y-auto px-5 py-4">
                     @if ($body['text'] === null)
                         <p class="text-sm text-slate-400">没有正文。</p>
                     @elseif ($body['markdown'])
@@ -91,7 +91,7 @@
 
                             <div
                                 class="relative"
-                                :class="fullscreen ? 'flex-1 overflow-hidden' : 'overflow-x-auto'"
+                                :class="fullscreen ? 'flex-1 overflow-hidden' : 'max-h-[45vh] overflow-auto'"
                                 @wheel="onWheel"
                                 @mousedown="onDown"
                                 @mousemove.window="onMove"
@@ -129,7 +129,7 @@
             @endif
         </section>
 
-        <section class="flex min-h-0 flex-1 flex-col rounded-lg border border-slate-200 bg-white dark:border-white/10 dark:bg-slate-950">
+        <section class="flex min-h-0 flex-1 flex-col rounded-lg border border-slate-200 bg-white dark:border-white/10 dark:bg-slate-950 xl:basis-[40%]">
             <h3 class="shrink-0 border-b border-slate-200 px-4 py-2.5 text-xs font-medium text-slate-500 dark:border-white/10 dark:text-slate-400">最近 Commits</h3>
             <div class="min-h-0 flex-1 divide-y divide-slate-100 overflow-y-auto dark:divide-white/5">
                 @forelse ($this->recentCommits as $commit)
