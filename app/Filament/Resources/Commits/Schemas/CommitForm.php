@@ -18,7 +18,7 @@ class CommitForm
         return $schema
             ->components([
                 Select::make('feature_id')
-                    ->label('入口')
+                    ->label('功能')
                     ->relationship(name: 'feature', titleAttribute: 'title')
                     ->searchable()
                     ->preload()

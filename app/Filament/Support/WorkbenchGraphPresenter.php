@@ -5,6 +5,7 @@ namespace App\Filament\Support;
 use App\Data\Workbench\WorkbenchTreeNode;
 use App\Enums\FeatureStatus;
 use App\Enums\ImplementationNodeEdgeKind;
+use App\Enums\RequestReplyEdgeKind;
 use App\Filament\Resources\Commits\CommitResource;
 use App\Filament\Resources\DataModels\DataModelResource;
 use App\Filament\Resources\Features\FeatureResource;
@@ -12,6 +13,7 @@ use App\Filament\Resources\ImplementationNodes\ImplementationNodeResource;
 use App\Filament\Resources\ModelFields\ModelFieldResource;
 use App\Filament\Resources\Modules\ModuleResource;
 use App\Filament\Resources\ModuleSpecs\ModuleSpecResource;
+use App\Filament\Resources\RequestReplies\RequestReplyResource;
 use App\Filament\Resources\Scenarios\ScenarioResource;
 use App\Filament\Resources\Tests\TestResource;
 use App\Filament\Resources\UseCaseGroups\UseCaseGroupResource;
@@ -27,6 +29,8 @@ use App\Models\Module;
 use App\Models\ModuleSpec;
 use App\Models\NodeRun;
 use App\Models\Project;
+use App\Models\RequestReply;
+use App\Models\RequestReplyEdge;
 use App\Models\Scenario;
 use App\Models\Test;
 use App\Models\UseCase;
@@ -52,7 +56,8 @@ class WorkbenchGraphPresenter
         'data_model' => 'Data Model',
         'model_field' => 'Model Field',
         'scenario' => 'Scenario',
-        'feature' => '入口',
+        'feature' => '功能',
+        'request_reply' => '入口',
         'implementation_node' => '调用节点',
         'test' => 'Test',
         'commit' => 'Commit',
@@ -117,7 +122,7 @@ class WorkbenchGraphPresenter
             $record instanceof UseCase => $record->goal,
             $record instanceof UseCaseSpec => $record->useCase->goal,
             $record instanceof ModuleSpec => $record->module->name,
-            $record instanceof Feature, $record instanceof ImplementationNode, $record instanceof Test => $record->title,
+            $record instanceof Feature, $record instanceof RequestReply, $record instanceof ImplementationNode, $record instanceof Test => $record->title,
             $record instanceof Commit => $record->subject,
             $record instanceof WorkflowRun => "Run #{$record->id}",
             $record instanceof NodeRun => $record->implementationNode->title,
@@ -149,6 +154,11 @@ class WorkbenchGraphPresenter
             $record instanceof ModelField => trim(($record->type ?? '').' — '.($record->description ?? ''), ' —'),
             $record instanceof Scenario => "Given {$record->given}\nWhen {$record->when}\nThen {$record->then}",
             $record instanceof Feature => $record->entry,
+            $record instanceof RequestReply => implode("\n", array_filter([
+                $record->label(),
+                "触发：{$record->trigger->getLabel()}",
+                $record->module === null ? null : "模块：{$record->module->name}",
+            ])),
             $record instanceof ImplementationNode => $this->nodeText($record),
             $record instanceof Test => $record->location,
             $record instanceof Commit => $record->body ?? $record->hash,
@@ -176,6 +186,7 @@ class WorkbenchGraphPresenter
             $record instanceof ModelField => ModelFieldResource::class,
             $record instanceof Scenario => ScenarioResource::class,
             $record instanceof Feature => FeatureResource::class,
+            $record instanceof RequestReply => RequestReplyResource::class,
             $record instanceof ImplementationNode => ImplementationNodeResource::class,
             $record instanceof Test => TestResource::class,
             $record instanceof Commit => CommitResource::class,
@@ -214,8 +225,9 @@ class WorkbenchGraphPresenter
                 children: array_values(array_filter([
                     $useCase->spec === null ? null : $this->leaf($useCase->spec, 'Use Case Spec', 'heroicon-m-document-text'),
                     WorkbenchTreeNode::folder($key, 'modules', '模块', 'heroicon-m-cube', $this->moduleNodes($useCase->participatingModules()->load('spec'))),
-                    WorkbenchTreeNode::folder($key, 'features', '入口', 'heroicon-m-bolt', $this->featureNodes($useCase->features, $useCase->scenarios->countBy('end_node_id')->all())),
-                    WorkbenchTreeNode::folder($key, 'scenarios', '场景', 'heroicon-m-play', $this->leaves($useCase->scenarios, 'heroicon-m-play')),
+                    WorkbenchTreeNode::folder($key, 'flow', '流程图', 'heroicon-m-arrows-right-left', $this->flowGraph($useCase)),
+                    WorkbenchTreeNode::folder($key, 'scenarios', '场景', 'heroicon-m-play', $this->scenarioNodes($useCase)),
+                    WorkbenchTreeNode::folder($key, 'features', '功能', 'heroicon-m-bolt', $this->featureNodes($useCase->features)),
                     WorkbenchTreeNode::folder($key, 'runs', '执行记录', 'heroicon-m-arrow-path', $this->workflowRunNodes($useCase->workflowRuns)),
                 ])),
             );
@@ -259,11 +271,137 @@ class WorkbenchGraphPresenter
     }
 
     /**
-     * @param  iterable<Feature>  $features
-     * @param  array<int|string, int>  $scenarioCountsByEndNode
+     * The use case's flow graph drawn as a tree: roots are entries nothing leads to, children follow
+     * the edges, and an entry already drawn shows up again only as a "↩ 回到" reference, so a loop ends.
+     *
      * @return list<WorkbenchTreeNode>
      */
-    private function featureNodes(iterable $features, array $scenarioCountsByEndNode = []): array
+    private function flowGraph(UseCase $useCase): array
+    {
+        $requestReplies = $useCase->requestReplies->keyBy('id');
+        $edges = $useCase->requestReplies
+            ->flatMap(fn (RequestReply $requestReply) => $requestReply->outgoingEdges)
+            ->filter(fn (RequestReplyEdge $edge): bool => $requestReplies->has($edge->to_request_reply_id));
+        $edgesByFrom = $edges->groupBy('from_request_reply_id');
+        $reachedIds = $edges->pluck('to_request_reply_id')->flip();
+        $numbers = $this->entryNumbers($useCase);
+        $stepIds = $useCase->scenarios->flatMap(fn (Scenario $scenario) => $scenario->steps->pluck('request_reply_id'))->flip();
+        $drawn = [];
+        $branches = [];
+        $roots = [
+            ...$requestReplies->reject(fn (RequestReply $requestReply): bool => $reachedIds->has($requestReply->id))->all(),
+            ...$requestReplies->all(),
+        ];
+
+        foreach ($roots as $root) {
+            if (! isset($drawn[$root->id])) {
+                $branches[] = $this->flowBranch($root, null, $requestReplies->all(), $edgesByFrom->all(), $numbers, $stepIds->all(), $drawn);
+            }
+        }
+
+        return $branches;
+    }
+
+    /**
+     * @param  array<int, RequestReply>  $requestReplies
+     * @param  array<int|string, \Illuminate\Support\Collection<int, RequestReplyEdge>>  $edgesByFrom
+     * @param  array<int, string>  $numbers
+     * @param  array<int|string, int>  $stepIds  entries some scenario walks through
+     * @param  array<int, true>  $drawn
+     */
+    private function flowBranch(RequestReply $requestReply, ?RequestReplyEdgeKind $arrivedBy, array $requestReplies, array $edgesByFrom, array $numbers, array $stepIds, array &$drawn): WorkbenchTreeNode
+    {
+        $label = "{$numbers[$requestReply->id]} {$requestReply->label()}";
+
+        if (isset($drawn[$requestReply->id])) {
+            return new WorkbenchTreeNode(
+                key: "request_reply:{$requestReply->id}",
+                label: "↩ 回到 {$label}",
+                icon: 'heroicon-m-arrow-uturn-left',
+                isFailureBranch: $arrivedBy === RequestReplyEdgeKind::OnFailure,
+                isOptional: $arrivedBy === RequestReplyEdgeKind::Optional,
+            );
+        }
+
+        $drawn[$requestReply->id] = true;
+        $key = "request_reply:{$requestReply->id}";
+        $next = [];
+
+        foreach ($edgesByFrom[$requestReply->id] ?? [] as $edge) {
+            $next[] = $this->flowBranch($requestReplies[$edge->to_request_reply_id], $edge->kind, $requestReplies, $edgesByFrom, $numbers, $stepIds, $drawn);
+        }
+
+        return new WorkbenchTreeNode(
+            key: $key,
+            label: $label,
+            icon: $arrivedBy === RequestReplyEdgeKind::OnFailure ? 'heroicon-m-exclamation-triangle' : 'heroicon-m-arrow-right-circle',
+            badge: $requestReply->module?->name,
+            children: array_values(array_filter([
+                WorkbenchTreeNode::folder($key, 'call_tree', '调用树', 'heroicon-m-arrow-turn-down-right', $this->callTree($requestReply->implementationNodes)),
+                ...$next,
+            ])),
+            isFailureBranch: $arrivedBy === RequestReplyEdgeKind::OnFailure,
+            isOptional: $arrivedBy === RequestReplyEdgeKind::Optional,
+            hasNoScenario: ! isset($stepIds[$requestReply->id]),
+        );
+    }
+
+    /**
+     * ① ② ③… by the use case's entry order, so a scenario path reads as ③→④→⑤.
+     *
+     * @return array<int, string>
+     */
+    private function entryNumbers(UseCase $useCase): array
+    {
+        $numbers = [];
+
+        foreach ($useCase->requestReplies->values() as $index => $requestReply) {
+            $numbers[$requestReply->id] = $index < 20 ? mb_chr(0x2460 + $index) : '('.($index + 1).')';
+        }
+
+        return $numbers;
+    }
+
+    /**
+     * Each scenario with its path, a failed step marked ✗: ③→④✗→③→④→⑤.
+     *
+     * @return list<WorkbenchTreeNode>
+     */
+    private function scenarioNodes(UseCase $useCase): array
+    {
+        $numbers = $this->entryNumbers($useCase);
+        $failureEdges = $useCase->requestReplies
+            ->flatMap(fn (RequestReply $requestReply) => $requestReply->outgoingEdges)
+            ->filter(fn (RequestReplyEdge $edge): bool => $edge->kind === RequestReplyEdgeKind::OnFailure)
+            ->mapWithKeys(fn (RequestReplyEdge $edge): array => ["{$edge->from_request_reply_id}>{$edge->to_request_reply_id}" => true])
+            ->all();
+        $nodes = [];
+
+        foreach ($useCase->scenarios as $scenario) {
+            $ids = $scenario->steps->pluck('request_reply_id')->values()->all();
+            $path = [];
+
+            foreach ($ids as $index => $id) {
+                $failed = isset($ids[$index + 1], $failureEdges["{$id}>{$ids[$index + 1]}"]);
+                $path[] = ($numbers[$id] ?? '?').($failed ? '✗' : '');
+            }
+
+            $nodes[] = new WorkbenchTreeNode(
+                key: "scenario:{$scenario->id}",
+                label: $path === [] ? $scenario->name : "{$scenario->name}  ".implode('→', $path),
+                icon: 'heroicon-m-play',
+                tone: $this->tone($scenario),
+            );
+        }
+
+        return $nodes;
+    }
+
+    /**
+     * @param  iterable<Feature>  $features
+     * @return list<WorkbenchTreeNode>
+     */
+    private function featureNodes(iterable $features): array
     {
         $nodes = [];
 
@@ -277,7 +415,10 @@ class WorkbenchGraphPresenter
                 tone: $this->tone($feature),
                 badge: $feature->module?->name,
                 children: array_values(array_filter([
-                    ...$this->callTree($feature, $scenarioCountsByEndNode),
+                    WorkbenchTreeNode::folder($key, 'entries', '入口', 'heroicon-m-arrow-right-circle', array_values($feature->requestReplies->map(
+                        fn (RequestReply $requestReply): WorkbenchTreeNode => $this->leaf($requestReply, $requestReply->label(), 'heroicon-m-arrow-right-circle'),
+                    )->all())),
+                    WorkbenchTreeNode::folder($key, 'call_tree', '调用树', 'heroicon-m-arrow-turn-down-right', $this->callTree($feature->implementationNodes)),
                     WorkbenchTreeNode::folder($key, 'tests', '测试', 'heroicon-m-beaker', $this->leaves($feature->tests, 'heroicon-m-beaker')),
                     WorkbenchTreeNode::folder($key, 'commits', 'Commits', 'heroicon-m-code-bracket', $this->leaves($feature->commits, 'heroicon-m-code-bracket')),
                 ])),
@@ -288,15 +429,15 @@ class WorkbenchGraphPresenter
     }
 
     /**
-     * The entry's call tree: roots are nodes no call-tree edge points at.
+     * A call tree: roots are nodes no call-tree edge points at.
      *
-     * @param  array<int|string, int>  $scenarioCountsByEndNode
+     * @param  Collection<int, ImplementationNode>  $nodes
      * @return list<WorkbenchTreeNode>
      */
-    private function callTree(Feature $feature, array $scenarioCountsByEndNode): array
+    private function callTree(Collection $nodes): array
     {
-        $nodesById = $feature->implementationNodes->keyBy('id');
-        $treeEdges = $feature->implementationNodes
+        $nodesById = $nodes->keyBy('id');
+        $treeEdges = $nodes
             ->flatMap(fn (ImplementationNode $node) => $node->outgoingEdges)
             ->filter(fn (ImplementationNodeEdge $edge): bool => in_array($edge->kind, ImplementationNodeEdgeKind::callTree(), true) && $nodesById->has($edge->to_node_id));
         $childEdgesByNode = $treeEdges->groupBy('from_node_id');
@@ -305,7 +446,7 @@ class WorkbenchGraphPresenter
 
         foreach ($nodesById as $node) {
             if (! $calledIds->has($node->id)) {
-                $branches[] = $this->nodeBranch($node, false, $nodesById->all(), $childEdgesByNode->all(), $scenarioCountsByEndNode, []);
+                $branches[] = $this->nodeBranch($node, false, $nodesById->all(), $childEdgesByNode->all(), []);
             }
         }
 
@@ -315,31 +456,26 @@ class WorkbenchGraphPresenter
     /**
      * @param  array<int, ImplementationNode>  $nodesById
      * @param  array<int|string, \Illuminate\Support\Collection<int, ImplementationNodeEdge>>  $childEdgesByNode
-     * @param  array<int|string, int>  $scenarioCountsByEndNode
      * @param  array<int, true>  $ancestorIds  guards against a cycle in hand-drawn edges
      */
-    private function nodeBranch(ImplementationNode $node, bool $isFailureBranch, array $nodesById, array $childEdgesByNode, array $scenarioCountsByEndNode, array $ancestorIds): WorkbenchTreeNode
+    private function nodeBranch(ImplementationNode $node, bool $isFailureBranch, array $nodesById, array $childEdgesByNode, array $ancestorIds): WorkbenchTreeNode
     {
         $ancestorIds[$node->id] = true;
         $children = [];
 
         foreach ($childEdgesByNode[$node->id] ?? [] as $edge) {
             if (! isset($ancestorIds[$edge->to_node_id])) {
-                $children[] = $this->nodeBranch($nodesById[$edge->to_node_id], $edge->kind === ImplementationNodeEdgeKind::OnFailure, $nodesById, $childEdgesByNode, $scenarioCountsByEndNode, $ancestorIds);
+                $children[] = $this->nodeBranch($nodesById[$edge->to_node_id], $edge->kind === ImplementationNodeEdgeKind::OnFailure, $nodesById, $childEdgesByNode, $ancestorIds);
             }
         }
-
-        $scenarioCount = $scenarioCountsByEndNode[$node->id] ?? 0;
 
         return new WorkbenchTreeNode(
             key: "implementation_node:{$node->id}",
             label: $node->title,
             icon: $isFailureBranch ? 'heroicon-m-exclamation-triangle' : 'heroicon-m-arrow-turn-down-right',
             tone: $this->tone($node),
-            badge: $scenarioCount > 0 ? "{$scenarioCount} 场景" : null,
             children: $children,
             isFailureBranch: $isFailureBranch,
-            hasNoScenario: $children === [] && $scenarioCount === 0,
         );
     }
 

@@ -82,7 +82,7 @@ class RequirementsTable
                     ->color('gray')
                     ->listWithLineBreaks(),
                 TextColumn::make('features_count')
-                    ->label('入口')
+                    ->label('功能')
                     ->counts('features')
                     ->formatStateUsing(fn (int $state): string => "{$state} 个")
                     ->tooltip(fn (Requirement $record): ?string => $record->features->isEmpty()

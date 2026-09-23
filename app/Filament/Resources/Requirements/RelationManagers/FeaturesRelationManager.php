@@ -28,7 +28,7 @@ class FeaturesRelationManager extends RelationManager
         return $schema
             ->components([
                 TextInput::make('title')
-                    ->label('入口')
+                    ->label('功能')
                     ->required()
                     ->maxLength(255),
                 CheckboxList::make('layers')
@@ -47,7 +47,7 @@ class FeaturesRelationManager extends RelationManager
                     ->label('Feature ID')
                     ->sortable(),
                 TextColumn::make('title')
-                    ->label('入口')
+                    ->label('功能')
                     ->searchable(),
                 TextColumn::make('status')
                     ->label('状态')
@@ -61,7 +61,7 @@ class FeaturesRelationManager extends RelationManager
                     ->badge()
                     ->color('gray'),
                 TextColumn::make('entry')
-                    ->label('入口')
+                    ->label('功能')
                     ->fontFamily(FontFamily::Mono)
                     ->wrap(),
             ])

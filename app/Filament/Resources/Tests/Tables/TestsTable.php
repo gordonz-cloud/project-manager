@@ -31,7 +31,7 @@ class TestsTable
             ->defaultGroup('feature')
             ->groups([
                 Group::make('feature')
-                    ->label('入口')
+                    ->label('功能')
                     ->getKeyFromRecordUsing($firstFeature)
                     ->getTitleFromRecordUsing($firstFeature)
                     ->orderQueryUsing(fn (Builder $query, string $direction): Builder => $query->orderBy(
@@ -62,7 +62,7 @@ class TestsTable
                     ->wrap()
                     ->toggleable(isToggledHiddenByDefault: true),
                 TextColumn::make('features.title')
-                    ->label('入口')
+                    ->label('功能')
                     ->badge()
                     ->color('gray')
                     ->listWithLineBreaks(),
@@ -81,7 +81,7 @@ class TestsTable
                     ->relationship('features.requirement.modules', 'name')
                     ->preload(),
                 SelectFilter::make('feature')
-                    ->label('入口')
+                    ->label('功能')
                     ->relationship('features', 'title')
                     ->searchable()
                     ->preload(),

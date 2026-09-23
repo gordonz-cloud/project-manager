@@ -23,25 +23,34 @@ class ImplementationNodeForm
 
         return $schema
             ->components([
-                Select::make('feature_id')
+                Select::make('request_reply_id')
                     ->label('入口')
+                    ->helperText('调用树节点挂在入口下')
+                    ->relationship('requestReply', 'title')
+                    ->searchable()
+                    ->preload()
+                    ->live(),
+                Select::make('feature_id')
+                    ->label('功能')
+                    ->helperText('只给非调用树节点（代码、迁移、发布、测试）用')
                     ->relationship('feature', 'title')
                     ->searchable()
                     ->preload()
-                    ->required(),
+                    ->live(),
                 Select::make('parent_id')
                     ->label('父节点')
                     ->relationship(
                         'parent',
                         'title',
                         fn (Builder $query, ?ImplementationNode $record, Get $get): Builder => $implementationNodes
-                            ->constrainToAvailableParent($query, $record, (int) $get('feature_id')),
+                            ->constrainToAvailableParent($query, $record, self::idOrNull($get('feature_id')), self::idOrNull($get('request_reply_id'))),
                     )
                     ->searchable()
                     ->preload()
                     ->rule(fn (Get $get, ?ImplementationNode $record): Closure => $implementationNodes->parentRule(
                         $record,
-                        (int) $get('feature_id'),
+                        self::idOrNull($get('feature_id')),
+                        self::idOrNull($get('request_reply_id')),
                     )),
                 Select::make('kind')
                     ->label('类型')
@@ -80,12 +89,14 @@ class ImplementationNodeForm
             ]);
     }
 
-    public static function configureForChild(Schema $schema, int $featureId): Schema
+    public static function configureForChild(Schema $schema, ImplementationNode $parent): Schema
     {
         return $schema
             ->components([
                 Hidden::make('feature_id')
-                    ->default($featureId),
+                    ->default($parent->feature_id),
+                Hidden::make('request_reply_id')
+                    ->default($parent->request_reply_id),
                 Select::make('kind')
                     ->label('类型')
                     ->options(ImplementationNodeKind::class)
@@ -119,5 +130,10 @@ class ImplementationNodeForm
                     ->label('所需证据')
                     ->columnSpanFull(),
             ]);
+    }
+
+    private static function idOrNull(mixed $id): ?int
+    {
+        return blank($id) ? null : (int) $id;
     }
 }

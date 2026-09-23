@@ -1,10 +1,11 @@
 <?php
 
+use App\Enums\ImplementationNodeKind;
 use App\Models\Feature;
 use App\Models\ImplementationNode;
 use App\Models\Module;
 use App\Models\Project;
-use App\Models\Scenario;
+use App\Models\RequestReply;
 use App\Models\UseCase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
@@ -50,29 +51,18 @@ test('flow steps become a main call chain with failure branches hanging off the 
         ->and(Schema::hasTable('flow_steps'))->toBeFalse();
 });
 
-test('a scenario can only end on a node of its own use case', function () {
-    $useCase = UseCase::factory()->create();
-    $ownNode = ImplementationNode::factory()->create([
-        'project_id' => $useCase->project_id,
-        'feature_id' => Feature::factory()->forUseCase($useCase),
-    ]);
-    $foreignNode = ImplementationNode::factory()->create(['project_id' => $useCase->project_id]);
-
-    $scenario = Scenario::factory()->create(['project_id' => $useCase->project_id, 'use_case_id' => $useCase->id, 'end_node_id' => $ownNode->id]);
-
-    expect($scenario->endNode->is($ownNode))->toBeTrue()
-        ->and(fn () => $scenario->update(['end_node_id' => $foreignNode->id]))
-        ->toThrow(LogicException::class, 'same use case');
-});
-
-test('a use case takes part in its entries modules and its call-tree nodes modules', function () {
+test('a use case takes part in its request replies modules and their call-tree nodes modules', function () {
     $useCase = UseCase::factory()->create();
     [$entryModule, $nodeModule, $unrelated] = Module::factory()->count(3)->sequence(['name' => 'A entry'], ['name' => 'B node'], ['name' => 'C other'])
         ->create(['project_id' => $useCase->project_id]);
-    $useCase->modules()->attach($entryModule);
-    $feature = Feature::factory()->forUseCase($useCase)->create(['module_id' => $entryModule->id]);
-    ImplementationNode::factory()->create(['project_id' => $useCase->project_id, 'feature_id' => $feature->id, 'module_id' => $nodeModule->id]);
+    $requestReply = RequestReply::factory()->create(['use_case_id' => $useCase->id, 'module_id' => $entryModule->id]);
+    ImplementationNode::factory()->create(['project_id' => $useCase->project_id, 'feature_id' => null, 'request_reply_id' => $requestReply->id, 'module_id' => $nodeModule->id]);
     ImplementationNode::factory()->create(['project_id' => $useCase->project_id, 'module_id' => $unrelated->id]);
 
     expect($useCase->participatingModules()->pluck('name')->all())->toBe(['A entry', 'B node']);
+});
+
+test('a new call-tree node must hang under a request reply', function () {
+    expect(fn () => ImplementationNode::factory()->create(['kind' => ImplementationNodeKind::Function]))
+        ->toThrow(LogicException::class, 'must belong to a request reply');
 });

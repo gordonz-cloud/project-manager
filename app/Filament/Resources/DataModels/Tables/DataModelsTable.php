@@ -41,7 +41,7 @@ class DataModelsTable
                     ->badge()
                     ->listWithLineBreaks(),
                 TextColumn::make('features.title')
-                    ->label('入口')
+                    ->label('功能')
                     ->badge()
                     ->color('gray')
                     ->listWithLineBreaks(),

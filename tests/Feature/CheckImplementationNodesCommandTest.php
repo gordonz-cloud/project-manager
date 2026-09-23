@@ -1,8 +1,12 @@
 <?php
 
+use App\Enums\ImplementationNodeKind;
 use App\Models\Feature;
 use App\Models\ImplementationNode;
 use App\Models\Project;
+use App\Models\RequestReply;
+use App\Models\UseCase;
+use App\Models\UseCaseGroup;
 
 function checkNodesRepoPath(): string
 {
@@ -121,26 +125,28 @@ test('checks a tsx file for a function-like definition', function () {
         ->assertSuccessful();
 });
 
-test('scopes to one feature with --feature', function () {
+test('scopes to one entry with --entry and names the entry', function () {
     $project = Project::factory()->create(['slug' => 'sg', 'repo_path' => checkNodesRepoPath()]);
-    $feature1 = Feature::factory()->create(['project_id' => $project->id, 'number' => 1]);
-    $feature2 = Feature::factory()->create(['project_id' => $project->id, 'number' => 2]);
+    $useCase = UseCase::factory()->create(['use_case_group_id' => UseCaseGroup::factory()->state(['project_id' => $project->id])]);
+    $store = RequestReply::factory()->create(['use_case_id' => $useCase->id, 'method' => 'POST', 'entry' => '/orders']);
+    $gone = RequestReply::factory()->create(['use_case_id' => $useCase->id, 'method' => null, 'entry' => 'orders:gone']);
 
-    ImplementationNode::factory()->create([
-        'project_id' => $project->id,
-        'feature_id' => $feature1->id,
-        'file' => 'app/OrderController.php',
-        'function' => 'store',
-    ]);
+    foreach ([[$store, 'app/OrderController.php'], [$gone, 'app/Gone.php']] as [$requestReply, $file]) {
+        ImplementationNode::factory()->create([
+            'project_id' => $project->id,
+            'feature_id' => null,
+            'request_reply_id' => $requestReply->id,
+            'kind' => ImplementationNodeKind::Function,
+            'file' => $file,
+            'function' => 'store',
+        ]);
+    }
 
-    ImplementationNode::factory()->create([
-        'project_id' => $project->id,
-        'feature_id' => $feature2->id,
-        'file' => 'app/Gone.php',
-        'function' => 'store',
-    ]);
-
-    $this->artisan('implementation-nodes:check', ['project-slug' => 'sg', '--feature' => '1'])
+    $this->artisan('implementation-nodes:check', ['project-slug' => 'sg', '--entry' => 'POST /orders'])
         ->expectsOutputToContain('1 行核对通过')
         ->assertSuccessful();
+
+    $this->artisan('implementation-nodes:check', ['project-slug' => 'sg', '--entry' => 'orders:gone'])
+        ->expectsOutputToContain('入口 orders:gone')
+        ->assertFailed();
 });

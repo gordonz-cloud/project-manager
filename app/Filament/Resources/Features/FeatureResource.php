@@ -22,7 +22,7 @@ use Filament\Tables\Table;
 
 class FeatureResource extends Resource
 {
-    protected static ?string $navigationLabel = 'Entries';
+    protected static ?string $navigationLabel = 'Features';
 
     protected static ?int $navigationSort = 1;
 
@@ -35,9 +35,9 @@ class FeatureResource extends Resource
         return NavigationGroup::Delivery;
     }
 
-    protected static ?string $modelLabel = '入口';
+    protected static ?string $modelLabel = '功能';
 
-    protected static ?string $pluralModelLabel = '入口';
+    protected static ?string $pluralModelLabel = '功能';
 
     public static function form(Schema $schema): Schema
     {

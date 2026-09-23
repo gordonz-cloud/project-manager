@@ -44,7 +44,7 @@ class FeaturesTable
                     ->numeric()
                     ->sortable(),
                 TextColumn::make('title')
-                    ->label('入口')
+                    ->label('功能')
                     ->searchable(),
                 TextColumn::make('status')
                     ->label('状态')

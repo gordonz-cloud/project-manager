@@ -5,23 +5,25 @@ namespace App\Services\ImplementationNodes;
 use App\Enums\ImplementationNodeEdgeKind;
 use App\Enums\ImplementationNodeKind;
 use App\Enums\ImplementationNodeState;
-use App\Models\Feature;
 use App\Models\ImplementationNode;
 use App\Models\ImplementationNodeEdge;
 use App\Models\Module;
 use App\Models\NodeRun;
 use App\Models\Project;
+use App\Models\RequestReply;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\File;
 use InvalidArgumentException;
 
 /**
- * Replaces one entry's whole call tree with the tree in a JSON file:
- * {"project": "sg", "feature": 14, "tree": [{"title", "file", "function",
+ * Replaces one request reply's whole call tree with the tree in a JSON file:
+ * {"project": "sg", "use_case"?: 12, "entry": "POST /login", "tree": [{"title", "file", "function",
  * "input", "change", "output", "module"?, "edge"?, "condition"?, "children": [...]}]}.
+ * `entry` is "METHOD path" for a route, or the bare command / job entry; `use_case` is only
+ * needed when the same entry exists in several use cases.
  * The tree is re-cut as a whole, because nodes merge and split when the granularity changes.
  */
-class ReplaceFeatureCallTree
+class ReplaceRequestReplyCallTree
 {
     /**
      * @return int nodes written
@@ -30,34 +32,44 @@ class ReplaceFeatureCallTree
     {
         $spec = File::exists($file) ? json_decode(File::get($file), true) : null;
 
-        if (! is_array($spec) || ! isset($spec['project'], $spec['feature']) || ! is_array($spec['tree'] ?? null)) {
-            throw new InvalidArgumentException("Expected {project, feature, tree[]} in {$file}");
+        if (! is_array($spec) || ! isset($spec['project'], $spec['entry']) || ! is_array($spec['tree'] ?? null)) {
+            throw new InvalidArgumentException("Expected {project, entry, tree[]} in {$file}");
         }
 
-        $feature = $this->feature((string) $spec['project'], (int) $spec['feature']);
-        $moduleIds = Module::query()->where('project_id', $feature->project_id)->pluck('id', 'name')->all();
+        $requestReply = $this->requestReply((string) $spec['project'], (string) $spec['entry'], isset($spec['use_case']) ? (int) $spec['use_case'] : null);
+        $moduleIds = Module::query()->where('project_id', $requestReply->project_id)->pluck('id', 'name')->all();
         $this->validate($spec['tree'], 'tree', $moduleIds);
 
-        return DB::transaction(function () use ($feature, $spec, $moduleIds): int {
-            $this->deleteCallTree($feature);
+        return DB::transaction(function () use ($requestReply, $spec, $moduleIds): int {
+            $this->deleteCallTree($requestReply);
 
-            return $this->insertNodes($feature, $spec['tree'], null, $moduleIds);
+            return $this->insertNodes($requestReply, $spec['tree'], null, $moduleIds);
         });
     }
 
-    private function feature(string $slug, int $number): Feature
+    private function requestReply(string $slug, string $entry, ?int $useCaseId): RequestReply
     {
         $project = Project::query()->where('slug', $slug)->first();
-        $feature = $project === null ? null : Feature::query()
-            ->where('project_id', $project->id)
-            ->where('number', $number)
-            ->first();
+        [$method, $path] = preg_match('/^(GET|POST|PUT|PATCH|DELETE)\s+(\S+)$/', trim($entry), $route) === 1
+            ? [$route[1], $route[2]]
+            : [null, trim($entry)];
 
-        if ($feature === null) {
-            throw new InvalidArgumentException("No feature {$number} in project {$slug}");
+        $matches = $project === null ? collect() : RequestReply::query()
+            ->where('project_id', $project->id)
+            ->where('method', $method)
+            ->where('entry', $path)
+            ->when($useCaseId !== null, fn ($query) => $query->where('use_case_id', $useCaseId))
+            ->get();
+
+        if ($matches->isEmpty()) {
+            throw new InvalidArgumentException("No entry \"{$entry}\" in project {$slug}");
         }
 
-        return $feature;
+        if ($matches->count() > 1) {
+            throw new InvalidArgumentException("Entry \"{$entry}\" is in use cases {$matches->pluck('use_case_id')->implode(', ')}; add \"use_case\"");
+        }
+
+        return $matches->first();
     }
 
     /**
@@ -93,15 +105,15 @@ class ReplaceFeatureCallTree
         }
     }
 
-    private function deleteCallTree(Feature $feature): void
+    private function deleteCallTree(RequestReply $requestReply): void
     {
         $nodeIds = ImplementationNode::withoutGlobalScopes()
-            ->where('feature_id', $feature->id)
+            ->where('request_reply_id', $requestReply->id)
             ->where('kind', ImplementationNodeKind::Function)
             ->pluck('id');
 
         if (NodeRun::withoutGlobalScopes()->whereIn('implementation_node_id', $nodeIds)->exists()) {
-            throw new InvalidArgumentException("Feature {$feature->number} call tree has run history; refusing to replace");
+            throw new InvalidArgumentException("Entry {$requestReply->label()} call tree has run history; refusing to replace");
         }
 
         ImplementationNodeEdge::withoutGlobalScopes()
@@ -115,14 +127,14 @@ class ReplaceFeatureCallTree
      * @param  array<mixed>  $nodes
      * @param  array<string, int>  $moduleIds
      */
-    private function insertNodes(Feature $feature, array $nodes, ?ImplementationNode $parent, array $moduleIds): int
+    private function insertNodes(RequestReply $requestReply, array $nodes, ?ImplementationNode $parent, array $moduleIds): int
     {
         $written = 0;
 
         foreach ($nodes as $spec) {
             $node = new ImplementationNode([
-                'feature_id' => $feature->id,
-                'module_id' => isset($spec['module']) ? $moduleIds[$spec['module']] : $feature->module_id,
+                'request_reply_id' => $requestReply->id,
+                'module_id' => isset($spec['module']) ? $moduleIds[$spec['module']] : $requestReply->module_id,
                 'kind' => ImplementationNodeKind::Function,
                 'title' => $spec['title'],
                 'contract' => '',
@@ -134,7 +146,7 @@ class ReplaceFeatureCallTree
                 'change' => $spec['change'] ?? null,
                 'output' => $spec['output'],
             ]);
-            $node->project_id = $feature->project_id;
+            $node->project_id = $requestReply->project_id;
             $node->save();
 
             if ($parent !== null) {
@@ -144,11 +156,11 @@ class ReplaceFeatureCallTree
                     'kind' => $spec['edge'] ?? ImplementationNodeEdgeKind::Calls->value,
                     'condition' => $spec['condition'] ?? null,
                 ]);
-                $edge->project_id = $feature->project_id;
+                $edge->project_id = $requestReply->project_id;
                 $edge->save();
             }
 
-            $written += 1 + $this->insertNodes($feature, (array) ($spec['children'] ?? []), $node, $moduleIds);
+            $written += 1 + $this->insertNodes($requestReply, (array) ($spec['children'] ?? []), $node, $moduleIds);
         }
 
         return $written;

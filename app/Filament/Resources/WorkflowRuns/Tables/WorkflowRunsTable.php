@@ -28,7 +28,7 @@ class WorkflowRunsTable
                     ->label('Use Case')
                     ->searchable(),
                 TextColumn::make('feature.title')
-                    ->label('入口')
+                    ->label('功能')
                     ->placeholder('—'),
                 TextColumn::make('status')
                     ->label('状态')

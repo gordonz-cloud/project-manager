@@ -120,6 +120,14 @@ class UseCase extends Model
     }
 
     /**
+     * @return HasMany<RequestReply, $this>
+     */
+    public function requestReplies(): HasMany
+    {
+        return $this->hasMany(RequestReply::class)->orderBy('sort_order')->orderBy('id');
+    }
+
+    /**
      * @return HasMany<WorkflowRun, $this>
      */
     public function workflowRuns(): HasMany
@@ -128,18 +136,18 @@ class UseCase extends Model
     }
 
     /**
-     * Modules this use case touches: its entries' modules plus the modules its call-tree nodes run in.
+     * Modules this use case touches: its request replies' modules plus the modules their call-tree nodes run in.
      *
      * @return Collection<int, Module>
      */
     public function participatingModules(): Collection
     {
-        $featureIds = Feature::withoutGlobalScopes()->where('use_case_id', $this->id)->select('id');
+        $requestReplies = RequestReply::withoutGlobalScopes()->where('use_case_id', $this->id);
 
         return Module::withoutGlobalScopes()
             ->where(fn (Builder $query) => $query
-                ->whereIn('id', Feature::withoutGlobalScopes()->where('use_case_id', $this->id)->whereNotNull('module_id')->select('module_id'))
-                ->orWhereIn('id', ImplementationNode::withoutGlobalScopes()->whereIn('feature_id', $featureIds)->whereNotNull('module_id')->select('module_id')))
+                ->whereIn('id', (clone $requestReplies)->whereNotNull('module_id')->select('module_id'))
+                ->orWhereIn('id', ImplementationNode::withoutGlobalScopes()->whereIn('request_reply_id', $requestReplies->select('id'))->whereNotNull('module_id')->select('module_id')))
             ->orderBy('name')
             ->get();
     }

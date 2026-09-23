@@ -20,7 +20,8 @@ use LogicException;
 /**
  * @property int $id
  * @property int $project_id
- * @property int $feature_id
+ * @property int|null $feature_id
+ * @property int|null $request_reply_id
  * @property int|null $parent_id
  * @property int|null $module_id
  * @property string|null $file
@@ -36,7 +37,7 @@ use LogicException;
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at
  */
-#[Fillable(['feature_id', 'parent_id', 'module_id', 'kind', 'title', 'contract', 'state', 'evidence_required', 'file', 'function', 'input', 'change', 'output'])]
+#[Fillable(['feature_id', 'request_reply_id', 'parent_id', 'module_id', 'kind', 'title', 'contract', 'state', 'evidence_required', 'file', 'function', 'input', 'change', 'output'])]
 class ImplementationNode extends Model
 {
     /** @use HasFactory<ImplementationNodeFactory> */
@@ -45,8 +46,12 @@ class ImplementationNode extends Model
     protected static function booted(): void
     {
         static::saving(function (self $node): void {
-            if ($node->exists && $node->isDirty('feature_id') && $node->children()->exists()) {
-                throw new LogicException('An implementation node with children cannot change feature.');
+            if (! $node->exists && $node->kind === ImplementationNodeKind::Function && $node->request_reply_id === null) {
+                throw new LogicException('A call-tree node must belong to a request reply.');
+            }
+
+            if ($node->exists && $node->isDirty('feature_id', 'request_reply_id') && $node->children()->exists()) {
+                throw new LogicException('An implementation node with children cannot change owner.');
             }
 
             if ($node->parent_id === null) {
@@ -55,8 +60,8 @@ class ImplementationNode extends Model
 
             $parent = self::withoutGlobalScopes()->find($node->parent_id);
 
-            if ($parent === null || $parent->feature_id !== $node->feature_id) {
-                throw new LogicException('An implementation node parent must belong to the same feature.');
+            if ($parent === null || $parent->feature_id !== $node->feature_id || $parent->request_reply_id !== $node->request_reply_id) {
+                throw new LogicException('An implementation node parent must belong to the same owner.');
             }
 
             if ($node->exists && self::wouldCycle($node->id, (int) $node->parent_id)) {
@@ -216,11 +221,11 @@ class ImplementationNode extends Model
     }
 
     /**
-     * @return HasMany<Scenario, $this>
+     * @return BelongsTo<RequestReply, $this>
      */
-    public function endingScenarios(): HasMany
+    public function requestReply(): BelongsTo
     {
-        return $this->hasMany(Scenario::class, 'end_node_id');
+        return $this->belongsTo(RequestReply::class);
     }
 
     /**

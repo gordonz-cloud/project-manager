@@ -41,7 +41,7 @@
             @else
                 <x-filament::icon icon="{{ $node->icon }}" class="size-3.5 shrink-0 {{ $isSelected ? '' : 'text-slate-400' }}" />
             @endif
-            <span class="min-w-0 flex-1 truncate text-xs {{ $node->isFolder ? 'text-slate-500 dark:text-slate-400' : '' }}">{{ $node->label }}</span>
+            <span @if ($node->isOptional) title="可选" @endif class="min-w-0 flex-1 truncate text-xs {{ $node->isFolder ? 'text-slate-500 dark:text-slate-400' : '' }} {{ $node->isOptional && ! $isSelected ? 'border-b border-dashed border-slate-300 text-slate-400' : '' }} {{ $node->isFailureBranch && ! $isSelected ? 'text-red-600 dark:text-red-400' : '' }}">{{ $node->label }}</span>
             @if ($node->badge !== null)
                 <span class="shrink-0 truncate text-[10px] tabular-nums opacity-60">{{ $node->badge }}</span>
             @elseif ($node->hasNoScenario)

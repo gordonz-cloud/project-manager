@@ -29,7 +29,7 @@ class WorkflowRunForm
                     ->disabled(fn (?WorkflowRun $record): bool => $record !== null
                         && ($record->nodeRuns()->exists() || $record->events()->exists())),
                 Select::make('feature_id')
-                    ->label('入口')
+                    ->label('功能')
                     ->relationship(
                         'feature',
                         'title',

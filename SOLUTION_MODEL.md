@@ -37,7 +37,8 @@ Module 只保留一份当前 ModuleSpec，用文本章节保存本模块自己�
 - `rules` / `invariants`：无论走哪条路径都必须成立的事实。
 - 决策章节：还有哪些问题没定，为什么这样定，影响哪些用例和功能。
 - `implementation_nodes`：实现这个功能需要做哪些节点，依赖什么，交付什么证据。
-- 调用树（`implementation_nodes` + `implementation_node_edges` 的 `calls` / `on_success` / `on_failure` 边）：入口（Feature）之后代码实际怎么流动，一个节点一个函数；场景用 `end_node_id` 指向树上的终点，路径 = 入口根 → 终点。
+- 入口（`request_replies`）：一次 request→response；入口之间的 `request_reply_edges`（`next` / `on_failure` / `optional`）组成 Use Case 的流程图；场景 = 流程图上的一条路径（`scenario_steps`）。
+- 调用树（`implementation_nodes` + `implementation_node_edges` 的 `calls` / `on_success` / `on_failure` 边）：一个入口内部代码怎么流动，一个节点一个函数。功能（Feature）是工作项，通过 `feature_request_reply` 记它改了哪些入口。
 
 这里最重要的是决策章节。AI 每发现一个新问题，不能直接开始修，而要先分类：
 
@@ -161,7 +162,9 @@ evidence: 产出证据，不能只写一句完成
 ### 场景、功能与实现节点
 
 - `scenarios * ── * implementation_nodes`，通过 `scenario_implementation_nodes`
-- `scenarios * ── 1 implementation_nodes`，通过可空 `scenarios.end_node_id`（场景路径的终点）
+- `scenarios 1 ── * scenario_steps * ── 1 request_replies`：场景按 `position` 依次经过的入口
+- `request_replies 1 ── * implementation_nodes`：入口拥有调用树
+- `features * ── * request_replies`，通过 `feature_request_reply`
 
 一个场景可能横跨数据库、服务、接口和页面，所以需要多个实现节点。一个实现节点也可能服务多个场景。
 
@@ -242,7 +245,12 @@ erDiagram
     IMPLEMENTATION_NODE }o--o{ IMPLEMENTATION_NODE : dependencies
     SCENARIO }o--o{ IMPLEMENTATION_NODE : scenario_implementation_nodes
     IMPLEMENTATION_NODE ||--o{ IMPLEMENTATION_NODE : calls_on_success_on_failure
-    IMPLEMENTATION_NODE ||--o{ SCENARIO : end_node
+    USE_CASE ||--o{ REQUEST_REPLY : entries
+    REQUEST_REPLY ||--o{ REQUEST_REPLY : request_reply_edges
+    REQUEST_REPLY ||--o{ IMPLEMENTATION_NODE : call_tree
+    FEATURE }o--o{ REQUEST_REPLY : feature_request_reply
+    SCENARIO ||--o{ SCENARIO_STEP : path
+    REQUEST_REPLY ||--o{ SCENARIO_STEP : visited_by
 
     SCENARIO }o--o{ TEST : scenario_tests
     IMPLEMENTATION_NODE }o--o{ TEST : implementation_node_tests
@@ -258,7 +266,7 @@ erDiagram
 ### 不能破坏的系统不变量
 
 - 一个项目下的所有关联对象必须属于同一个项目。
-- `tests` 和 `commits` 只能挂到同一项目的节点和场景；场景终点节点必须属于同一 UseCase 的入口。
+- `tests` 和 `commits` 只能挂到同一项目的节点和场景；场景步骤、流程图边两端都必须是同一 UseCase 的入口；流程图边不许自环；功能和入口必须同项目。
 - 场景没有验收测试时，所属功能不能进入最终完成。
 - 运行中的契约使用快照，之后修改计划不能改写历史运行。
 - 决策变化保留在 Spec 的历史文字中，不删除旧证据。

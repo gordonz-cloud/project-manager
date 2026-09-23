@@ -14,13 +14,12 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Carbon;
-use LogicException;
+use Illuminate\Support\Facades\DB;
 
 /**
  * @property int $id
  * @property int $project_id
  * @property int $use_case_id
- * @property int|null $end_node_id
  * @property string $name
  * @property ScenarioType $type
  * @property string $given
@@ -34,29 +33,11 @@ use LogicException;
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at
  */
-#[Fillable(['use_case_id', 'end_node_id', 'name', 'type', 'given', 'when', 'then', 'coverage_dimension', 'equivalence_class', 'boundary', 'priority', 'status'])]
+#[Fillable(['use_case_id', 'name', 'type', 'given', 'when', 'then', 'coverage_dimension', 'equivalence_class', 'boundary', 'priority', 'status'])]
 class Scenario extends Model
 {
     /** @use HasFactory<ScenarioFactory> */
     use BelongsToProject, HasFactory;
-
-    protected static function booted(): void
-    {
-        static::saving(function (self $scenario): void {
-            if ($scenario->end_node_id === null) {
-                return;
-            }
-
-            $endsInOwnUseCase = ImplementationNode::withoutGlobalScopes()
-                ->whereKey($scenario->end_node_id)
-                ->whereHas('feature', fn ($feature) => $feature->where('use_case_id', $scenario->use_case_id))
-                ->exists();
-
-            if (! $endsInOwnUseCase) {
-                throw new LogicException('A scenario end node must belong to an entry of the same use case.');
-            }
-        });
-    }
 
     /**
      * @return array<string, string>
@@ -79,11 +60,29 @@ class Scenario extends Model
     }
 
     /**
-     * @return BelongsTo<ImplementationNode, $this>
+     * The path this scenario walks through the flow graph, in order.
+     *
+     * @return HasMany<ScenarioStep, $this>
      */
-    public function endNode(): BelongsTo
+    public function steps(): HasMany
     {
-        return $this->belongsTo(ImplementationNode::class, 'end_node_id');
+        return $this->hasMany(ScenarioStep::class)->orderBy('position');
+    }
+
+    /**
+     * Rewrites the whole path: positions are renumbered from 1 in the given order.
+     *
+     * @param  list<int>  $requestReplyIds
+     */
+    public function replaceSteps(array $requestReplyIds): void
+    {
+        DB::transaction(function () use ($requestReplyIds): void {
+            $this->steps()->delete();
+
+            foreach ($requestReplyIds as $index => $requestReplyId) {
+                $this->steps()->create(['position' => $index + 1, 'request_reply_id' => $requestReplyId]);
+            }
+        });
     }
 
     /**

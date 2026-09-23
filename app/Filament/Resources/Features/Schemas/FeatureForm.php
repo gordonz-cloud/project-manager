@@ -20,7 +20,7 @@ class FeatureForm
         return $schema
             ->components([
                 TextInput::make('title')
-                    ->label('入口')
+                    ->label('功能')
                     ->required(),
                 Select::make('status')
                     ->label('状态')
@@ -33,8 +33,7 @@ class FeatureForm
                     ->label('触发方式')
                     ->options(FeatureTrigger::class),
                 TextInput::make('entry')
-                    ->label('入口（route / command / job class）')
-                    ->required(),
+                    ->label('入口'),
                 Select::make('use_case_id')
                     ->label('Use case')
                     ->relationship(
@@ -59,7 +58,7 @@ class FeatureForm
                 Hidden::make('use_case_id')
                     ->default($useCaseId),
                 TextInput::make('title')
-                    ->label('入口')
+                    ->label('功能')
                     ->required(),
                 Select::make('status')
                     ->label('状态')
@@ -72,8 +71,7 @@ class FeatureForm
                     ->label('触发方式')
                     ->options(FeatureTrigger::class),
                 TextInput::make('entry')
-                    ->label('入口（route / command / job class）')
-                    ->required(),
+                    ->label('入口'),
                 self::moduleSelect(),
             ]);
     }

@@ -40,7 +40,7 @@ test('implementation node selection enforces the feature and acyclic parent rule
         },
     );
 
-    expect($failureMessage)->toBe('父节点必须属于同一个功能。');
+    expect($failureMessage)->toBe('父节点必须属于同一个入口或功能。');
 
     $failureMessage = null;
     $selection->parentRule($root, $feature->id)(

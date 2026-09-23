@@ -28,7 +28,7 @@ class DataModelForm
                 Textarea::make('business_purpose')
                     ->label('商业目的'),
                 Select::make('features')
-                    ->label('入口')
+                    ->label('功能')
                     ->multiple()
                     ->relationship('features', 'title')
                     ->preload(),

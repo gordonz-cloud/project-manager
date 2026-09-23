@@ -145,6 +145,16 @@ class Feature extends Model
     }
 
     /**
+     * The entries this work item added or changed.
+     *
+     * @return BelongsToMany<RequestReply, $this, FeatureRequestReply>
+     */
+    public function requestReplies(): BelongsToMany
+    {
+        return $this->belongsToMany(RequestReply::class)->using(FeatureRequestReply::class);
+    }
+
+    /**
      * @return HasMany<ImplementationNode, $this>
      */
     public function implementationNodes(): HasMany

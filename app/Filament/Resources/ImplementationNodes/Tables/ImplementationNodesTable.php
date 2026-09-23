@@ -22,7 +22,7 @@ class ImplementationNodesTable
                 ->withCount(['children', 'scenarios', 'commits']))
             ->columns([
                 TextColumn::make('feature.title')
-                    ->label('入口')
+                    ->label('功能')
                     ->badge()
                     ->color('gray')
                     ->searchable(),

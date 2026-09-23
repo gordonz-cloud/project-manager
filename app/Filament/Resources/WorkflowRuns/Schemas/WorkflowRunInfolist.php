@@ -16,7 +16,7 @@ class WorkflowRunInfolist
                     ->columns(3)
                     ->schema([
                         TextEntry::make('useCase.goal')->label('Use Case')->placeholder('—'),
-                        TextEntry::make('feature.title')->label('入口')->placeholder('—'),
+                        TextEntry::make('feature.title')->label('功能')->placeholder('—'),
                         TextEntry::make('status')->label('状态')->badge(),
                         TextEntry::make('graph_version')->label('图版本')->placeholder('—'),
                         TextEntry::make('focus_node_run_id')->label('聚焦 NodeRun')->placeholder('—'),

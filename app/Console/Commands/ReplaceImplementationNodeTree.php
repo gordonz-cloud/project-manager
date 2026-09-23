@@ -2,12 +2,12 @@
 
 namespace App\Console\Commands;
 
-use App\Services\ImplementationNodes\ReplaceFeatureCallTree;
+use App\Services\ImplementationNodes\ReplaceRequestReplyCallTree;
 use Illuminate\Console\Command;
 use InvalidArgumentException;
 
 /**
- * Replaces one entry's call tree from a JSON file; see ReplaceFeatureCallTree for the format.
+ * Replaces one entry's call tree from a JSON file; see ReplaceRequestReplyCallTree for the format.
  */
 class ReplaceImplementationNodeTree extends Command
 {
@@ -15,10 +15,10 @@ class ReplaceImplementationNodeTree extends Command
 
     protected $description = "Replace one entry's whole call tree from a JSON file";
 
-    public function handle(ReplaceFeatureCallTree $replaceFeatureCallTree): int
+    public function handle(ReplaceRequestReplyCallTree $replaceCallTree): int
     {
         try {
-            $written = $replaceFeatureCallTree->handle((string) $this->argument('file'));
+            $written = $replaceCallTree->handle((string) $this->argument('file'));
         } catch (InvalidArgumentException $exception) {
             $this->error($exception->getMessage());
 

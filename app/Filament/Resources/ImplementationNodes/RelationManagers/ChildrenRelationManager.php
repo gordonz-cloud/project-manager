@@ -34,7 +34,7 @@ class ChildrenRelationManager extends RelationManager
 
     public function form(Schema $schema): Schema
     {
-        return ImplementationNodeForm::configureForChild($schema, $this->getOwnerRecord()->feature_id);
+        return ImplementationNodeForm::configureForChild($schema, $this->getOwnerRecord());
     }
 
     public function table(Table $table): Table

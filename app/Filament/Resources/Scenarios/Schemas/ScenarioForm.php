@@ -5,12 +5,14 @@ namespace App\Filament\Resources\Scenarios\Schemas;
 use App\Enums\ScenarioPriority;
 use App\Enums\ScenarioStatus;
 use App\Enums\ScenarioType;
+use App\Models\RequestReply;
+use App\Models\Scenario;
+use Filament\Forms\Components\Repeater;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
 use Filament\Schemas\Components\Utilities\Get;
 use Filament\Schemas\Schema;
-use Illuminate\Database\Eloquent\Builder;
 
 class ScenarioForm
 {
@@ -26,19 +28,27 @@ class ScenarioForm
                     ->preload()
                     ->live()
                     ->required(),
-                Select::make('end_node_id')
-                    ->label('终点节点')
-                    ->helperText('场景走的路径：入口根节点 → 这个节点。')
-                    ->relationship(
-                        'endNode',
-                        'title',
-                        fn (Builder $query, Get $get): Builder => $query->whereHas(
-                            'feature',
-                            fn (Builder $feature): Builder => $feature->where('use_case_id', $get('use_case_id')),
-                        ),
+                Repeater::make('steps')
+                    ->label('路径')
+                    ->helperText('场景按顺序经过的入口，同一入口可以出现多次。')
+                    ->relationship()
+                    ->simple(
+                        Select::make('request_reply_id')
+                            ->label('入口')
+                            ->options(fn (Get $get): array => RequestReply::query()
+                                ->where('use_case_id', $get('../../use_case_id'))
+                                ->orderBy('sort_order')
+                                ->orderBy('id')
+                                ->get()
+                                ->mapWithKeys(fn (RequestReply $requestReply): array => [$requestReply->id => "{$requestReply->label()} · {$requestReply->title}"])
+                                ->all())
+                            ->required(),
                     )
-                    ->searchable()
-                    ->preload(),
+                    ->reorderable()
+                    ->saveRelationshipsUsing(fn (Repeater $component, Scenario $record) => $record->replaceSteps(
+                        array_map(intval(...), array_column((array) $component->getState(), 'request_reply_id')),
+                    ))
+                    ->columnSpanFull(),
                 TextInput::make('name')
                     ->label('场景')
                     ->required(),

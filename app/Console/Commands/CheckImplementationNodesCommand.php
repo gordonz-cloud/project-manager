@@ -16,7 +16,7 @@ use Illuminate\Support\Facades\File;
  */
 class CheckImplementationNodesCommand extends Command
 {
-    protected $signature = 'implementation-nodes:check {project-slug} {--feature=}';
+    protected $signature = 'implementation-nodes:check {project-slug} {--entry= : only this entry, e.g. "POST /login" or a command}';
 
     protected $description = "Check a project's call-tree nodes against its repo";
 
@@ -38,11 +38,12 @@ class CheckImplementationNodesCommand extends Command
 
         $steps = ImplementationNode::where('project_id', $project->id)
             ->whereNotNull('file')
-            ->when($this->option('feature'), fn ($query, $featureNumber) => $query->whereHas(
-                'feature',
-                fn ($q) => $q->where('number', (int) $featureNumber)
+            ->when($this->option('entry'), fn ($query, string $entry) => $query->whereHas(
+                'requestReply',
+                fn ($q) => $q->whereRaw("trim(coalesce(method, '') || ' ' || entry) = ?", [trim($entry)])
             ))
-            ->with('feature')
+            ->with(['requestReply', 'feature'])
+            ->orderBy('request_reply_id')
             ->orderBy('feature_id')
             ->orderBy('id')
             ->get();
@@ -57,8 +58,8 @@ class CheckImplementationNodesCommand extends Command
             return self::SUCCESS;
         }
 
-        $stale->groupBy('feature')->each(function (Collection $rows, string $feature) {
-            $this->line("功能 {$feature}：");
+        $stale->groupBy('owner')->each(function (Collection $rows, string $owner) {
+            $this->line("{$owner}：");
             foreach ($rows as $row) {
                 $this->line("  #{$row['id']} {$row['title']} {$row['file']} {$row['function']} — {$row['reason']}");
             }
@@ -70,18 +71,20 @@ class CheckImplementationNodesCommand extends Command
     }
 
     /**
-     * @return array{feature: string, id: int, title: string, file: string, function: string, reason: string}|null
+     * @return array{owner: string, id: int, title: string, file: string, function: string, reason: string}|null
      */
     private function checkStep(ImplementationNode $step, string $repoPath): ?array
     {
         $filePath = preg_replace('/:\d+$/', '', (string) $step->file);
         $fullPath = rtrim($repoPath, '/').'/'.ltrim((string) $filePath, '/');
 
-        $feature = "{$step->feature->number} {$step->feature->title}";
+        $owner = $step->requestReply !== null
+            ? "入口 {$step->requestReply->label()}"
+            : "功能 {$step->feature?->number} {$step->feature?->title}";
 
         if (! File::exists($fullPath)) {
             return [
-                'feature' => $feature,
+                'owner' => $owner,
                 'id' => $step->id,
                 'title' => $step->title,
                 'file' => (string) $step->file,
@@ -101,7 +104,7 @@ class CheckImplementationNodesCommand extends Command
 
         if (! $found) {
             return [
-                'feature' => $feature,
+                'owner' => $owner,
                 'id' => $step->id,
                 'title' => $step->title,
                 'file' => (string) $step->file,

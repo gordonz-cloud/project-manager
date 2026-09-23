@@ -27,8 +27,9 @@ final class ImplementationNodeSelection
         Builder $query,
         ?ImplementationNode $record,
         ?int $featureId,
+        ?int $requestReplyId = null,
     ): Builder {
-        $query->forFeature($featureId);
+        $query->forFeature($featureId)->where('request_reply_id', $requestReplyId);
 
         if ($record === null) {
             return $query;
@@ -47,6 +48,7 @@ final class ImplementationNodeSelection
     {
         return $query
             ->forFeature($owner->feature_id)
+            ->where('request_reply_id', $owner->request_reply_id)
             ->whereKeyNot($owner->id)
             ->whereNotIn('id', [
                 ...ImplementationNode::descendantIds($owner->id),
@@ -60,17 +62,17 @@ final class ImplementationNodeSelection
             ->where('feature_id', $this->normalizeFeatureId($featureId));
     }
 
-    public function parentRule(?ImplementationNode $record, ?int $featureId): Closure
+    public function parentRule(?ImplementationNode $record, ?int $featureId, ?int $requestReplyId = null): Closure
     {
-        return function (string $attribute, mixed $value, Closure $fail) use ($record, $featureId): void {
+        return function (string $attribute, mixed $value, Closure $fail) use ($record, $featureId, $requestReplyId): void {
             if ($value === null) {
                 return;
             }
 
             $parent = ImplementationNode::query()->find((int) $value);
 
-            if ($parent === null || $parent->feature_id !== $featureId) {
-                $fail('父节点必须属于同一个功能。');
+            if ($parent === null || $parent->feature_id !== $featureId || $parent->request_reply_id !== $requestReplyId) {
+                $fail('父节点必须属于同一个入口或功能。');
 
                 return;
             }

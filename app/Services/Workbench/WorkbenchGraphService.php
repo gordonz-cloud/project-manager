@@ -11,6 +11,7 @@ use App\Models\Module;
 use App\Models\ModuleSpec;
 use App\Models\NodeRun;
 use App\Models\Project;
+use App\Models\RequestReply;
 use App\Models\Scenario;
 use App\Models\Test;
 use App\Models\UseCase;
@@ -38,6 +39,7 @@ class WorkbenchGraphService
         'model_field' => ModelField::class,
         'scenario' => Scenario::class,
         'feature' => Feature::class,
+        'request_reply' => RequestReply::class,
         'implementation_node' => ImplementationNode::class,
         'test' => Test::class,
         'commit' => Commit::class,
@@ -45,7 +47,7 @@ class WorkbenchGraphService
         'node_run' => NodeRun::class,
     ];
 
-    private const FEATURE_RELATIONS = ['module', 'implementationNodes.outgoingEdges', 'tests', 'commits'];
+    private const FEATURE_RELATIONS = ['module', 'requestReplies', 'implementationNodes.outgoingEdges', 'tests', 'commits'];
 
     /**
      * @return Collection<int, UseCaseGroup>
@@ -147,7 +149,10 @@ class WorkbenchGraphService
         return [
             "{$prefix}spec",
             "{$prefix}modules.spec",
-            "{$prefix}scenarios",
+            "{$prefix}scenarios.steps",
+            "{$prefix}requestReplies.module",
+            "{$prefix}requestReplies.outgoingEdges",
+            "{$prefix}requestReplies.implementationNodes.outgoingEdges",
             ...array_map(fn (string $relation): string => "{$prefix}features.{$relation}", self::FEATURE_RELATIONS),
             "{$prefix}workflowRuns" => fn ($runs) => $runs->latest('id'),
             "{$prefix}workflowRuns.nodeRuns.implementationNode",

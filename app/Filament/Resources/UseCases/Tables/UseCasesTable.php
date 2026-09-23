@@ -43,7 +43,7 @@ class UseCasesTable
                     ->label('场景')
                     ->numeric(),
                 TextColumn::make('features_count')
-                    ->label('入口')
+                    ->label('功能')
                     ->numeric(),
             ])
             ->filters([
