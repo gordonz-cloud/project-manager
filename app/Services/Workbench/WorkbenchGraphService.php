@@ -44,7 +44,7 @@ class WorkbenchGraphService
         'workflow_run' => WorkflowRun::class,
     ];
 
-    private const FEATURE_RELATIONS = ['module', 'requestReplies', 'tests', 'commits', 'flowchart'];
+    private const FEATURE_RELATIONS = ['module', 'requestReplies', 'tests', 'commits', 'flowchart', 'dataModels'];
 
     /**
      * @return Collection<int, UseCaseGroup>

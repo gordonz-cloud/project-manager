@@ -1,5 +1,6 @@
 <?php
 
+use App\Enums\DataModelStatus;
 use App\Enums\FeatureStatus;
 use App\Enums\NavigationGroup;
 use App\Enums\UseCaseStatus;
@@ -54,7 +55,7 @@ function workbenchContext(): array
     ]);
     $requestReply = RequestReply::factory()->create(['use_case_id' => $useCase->id, 'method' => 'POST', 'entry' => '/trace', 'title' => 'Trace entry', 'module_id' => $module->id]);
     $feature->requestReplies()->attach($requestReply);
-    $dataModel = DataModel::factory()->create(['project_id' => $project->id, 'name' => 'Trace data model']);
+    $dataModel = DataModel::factory()->create(['project_id' => $project->id, 'name' => 'Trace data model', 'status' => DataModelStatus::Existing]);
     $field = ModelField::factory()->create(['project_id' => $project->id, 'data_model_id' => $dataModel->id, 'name' => 'trace_field']);
     $feature->dataModels()->attach($dataModel);
     $run = WorkflowRun::factory()->forUseCase($useCase)->create(['feature_id' => $feature->id, 'status' => WorkflowRunStatus::Running]);
@@ -79,7 +80,7 @@ test('the tree starts at use case groups, then use cases, then their modules and
 
     expect($tree[0]->key)->toBe("use_case_group:{$records['group']->id}")
         ->and($useCase->key)->toBe("use_case:{$records['useCase']->id}")
-        ->and($useCase->badge)->toBe('1 Model · 1/1')
+        ->and($useCase->badge)->toBe('功能 1/1 · 1 Model')
         ->and($useCase->children[0]->key)->toBe("use_case_spec:{$records['useCaseSpec']->id}")
         ->and($folders->keys()->all())->toBe(['Use Case Spec', '模块', '功能', '执行记录'])
         ->and($folders['模块']->children[0]->key)->toBe("module:{$records['module']->id}")
@@ -189,9 +190,9 @@ test('use cases within a group order by distinct data model count, ties by name'
     $useCases = collect($tree[0]->children);
 
     expect($useCases->pluck('label')->all())->toBe(['Zero models', 'Aardvark tie', 'Trace goal', 'Two models'])
-        ->and($useCases->firstWhere('label', 'Zero models')->badge)->toStartWith('0 Model')
-        ->and($useCases->firstWhere('label', 'Aardvark tie')->badge)->toStartWith('1 Model')
-        ->and($useCases->firstWhere('label', 'Two models')->badge)->toStartWith('2 Model');
+        ->and($useCases->firstWhere('label', 'Zero models')->badge)->toEndWith('0 Model')
+        ->and($useCases->firstWhere('label', 'Aardvark tie')->badge)->toEndWith('1 Model')
+        ->and($useCases->firstWhere('label', 'Two models')->badge)->toEndWith('2 Model');
 });
 
 test('records from another project cannot be selected', function () {
@@ -307,4 +308,75 @@ test('the feature shows a grey "无流程图" leaf when it has no flowchart', fu
     expect($feature->children[0]->key)->toBe("feature:{$records['feature']->id}#no-flowchart")
         ->and($feature->children[0]->label)->toBe('无流程图')
         ->and($feature->children[0]->isFolder)->toBeTrue();
+});
+
+test('a use case is green only when all its features and their data models are finished', function () {
+    $records = workbenchContext(); // 'Trace goal': 1 Done feature, 1 Existing model → complete
+
+    $tree = Livewire::test(WorkbenchGraph::class)->instance()->tree;
+    $traceGoal = collect($tree[0]->children)->firstWhere('label', 'Trace goal');
+
+    expect($traceGoal->tone)->toBe('success');
+
+    // Add an unfinished feature to the same use case: turns amber.
+    Feature::factory()->forUseCase($records['useCase'])->create(['status' => FeatureStatus::Todo]);
+
+    $tree = Livewire::test(WorkbenchGraph::class)->instance()->tree;
+    $traceGoal = collect($tree[0]->children)->firstWhere('label', 'Trace goal');
+
+    expect($traceGoal->tone)->toBe('warning')
+        ->and($traceGoal->badge)->toBe('功能 1/2 · 1 Model');
+});
+
+test('a use case turns amber when a used data model is still 计划中, and shows how many need building', function () {
+    $records = workbenchContext();
+    $planned = DataModel::factory()->create(['project_id' => $records['project']->id, 'status' => DataModelStatus::Planned]);
+    $records['feature']->dataModels()->attach($planned);
+
+    $tree = Livewire::test(WorkbenchGraph::class)->instance()->tree;
+    $traceGoal = collect($tree[0]->children)->firstWhere('label', 'Trace goal');
+
+    expect($traceGoal->tone)->toBe('warning')
+        ->and($traceGoal->badge)->toBe('功能 1/1 · Model 1 待建 · 2 Model');
+});
+
+test('作废 features are excluded from the total and never block green', function () {
+    $records = workbenchContext();
+    Feature::factory()->forUseCase($records['useCase'])->create(['status' => FeatureStatus::Void]);
+
+    $tree = Livewire::test(WorkbenchGraph::class)->instance()->tree;
+    $traceGoal = collect($tree[0]->children)->firstWhere('label', 'Trace goal');
+
+    expect($traceGoal->tone)->toBe('success')
+        ->and($traceGoal->badge)->toBe('功能 1/1 · 1 Model');
+});
+
+test('a group rolls up the progress of every use case inside it', function () {
+    $records = workbenchContext(); // group has 'Trace goal': 功能 1/1, 1 Model, complete
+    $unfinished = UseCase::factory()->create(['use_case_group_id' => $records['group']->id, 'goal' => 'Unfinished goal']);
+    Feature::factory()->forUseCase($unfinished)->create(['status' => FeatureStatus::Todo]);
+
+    $tree = Livewire::test(WorkbenchGraph::class)->instance()->tree;
+    $group = $tree[0];
+
+    expect($group->key)->toBe("use_case_group:{$records['group']->id}")
+        ->and($group->tone)->toBe('warning')
+        ->and($group->badge)->toBe('2 Use Case · 功能 1/2');
+});
+
+test('feature and data model rows show a status pill colored by meaning', function () {
+    $records = workbenchContext();
+
+    $tree = Livewire::test(WorkbenchGraph::class)->instance()->tree;
+    $useCase = $tree[0]->children[0];
+    $folders = collect($useCase->children)->keyBy('label');
+    $feature = $folders['功能']->children[0];
+
+    expect($feature->statusBadge)->toBe('完成')
+        ->and($feature->tone)->toBe('success');
+
+    $dataModel = $folders['模块']->children[0]->children[1]->children[0];
+
+    expect($dataModel->statusBadge)->toBe('现有')
+        ->and($dataModel->tone)->toBe('success');
 });

@@ -2,8 +2,8 @@
 
 namespace App\Filament\Support;
 
+use App\Data\Workbench\WorkbenchProgress;
 use App\Data\Workbench\WorkbenchTreeNode;
-use App\Enums\FeatureStatus;
 use App\Filament\Resources\Commits\CommitResource;
 use App\Filament\Resources\DataModels\DataModelResource;
 use App\Filament\Resources\Features\FeatureResource;
@@ -69,20 +69,16 @@ class WorkbenchGraphPresenter
         $this->dataModelsByModule = $this->workbenchGraphService->dataModelsByModule($project);
 
         $groups = $this->workbenchGraphService->useCaseGroups($project)
-            ->map(fn (UseCaseGroup $group): WorkbenchTreeNode => new WorkbenchTreeNode(
-                key: "use_case_group:{$group->id}",
-                label: $group->name,
-                icon: 'heroicon-m-folder',
-                badge: (string) $group->useCases->count(),
-                children: $this->useCaseNodes($group->useCases),
+            ->map(fn (UseCaseGroup $group): WorkbenchTreeNode => $this->useCaseGroupNode(
+                "use_case_group:{$group->id}", $group->name, 'heroicon-m-folder', $group->useCases,
             ))
             ->values()
             ->all();
 
         return array_values(array_filter([
             ...$groups,
-            WorkbenchTreeNode::folder('root', 'ungrouped', '未分组 Use Case', 'heroicon-m-folder', $this->useCaseNodes($this->workbenchGraphService->ungroupedUseCases($project))),
-            WorkbenchTreeNode::folder('root', 'unassigned', '未归入 Use Case', 'heroicon-m-inbox', $this->featureNodes($this->workbenchGraphService->featuresWithoutUseCase($project))),
+            $this->useCaseGroupFolderNode('ungrouped', '未分组 Use Case', 'heroicon-m-folder', $this->workbenchGraphService->ungroupedUseCases($project)),
+            $this->featureFolderNode('root', 'unassigned', '未归入 Use Case', 'heroicon-m-inbox', $this->workbenchGraphService->featuresWithoutUseCase($project)),
         ]));
     }
 
@@ -188,6 +184,67 @@ class WorkbenchGraphPresenter
     }
 
     /**
+     * A group row (or the group-shaped 未分组 bucket): a dot for whether everything
+     * inside is finished, plus the summed feature/model progress, plus how many use
+     * cases it holds.
+     *
+     * @param  Collection<int, UseCase>  $useCases
+     */
+    private function useCaseGroupNode(string $key, string $label, string $icon, Collection $useCases): WorkbenchTreeNode
+    {
+        $progress = $this->progressForUseCases($useCases);
+
+        return new WorkbenchTreeNode(
+            key: $key,
+            label: $label,
+            icon: $icon,
+            tone: $progress->tone(),
+            badge: "{$useCases->count()} Use Case · {$progress->badge()}",
+            children: $this->useCaseNodes($useCases),
+        );
+    }
+
+    /**
+     * @param  Collection<int, UseCase>  $useCases
+     */
+    private function useCaseGroupFolderNode(string $name, string $label, string $icon, Collection $useCases): ?WorkbenchTreeNode
+    {
+        return $useCases->isEmpty() ? null : $this->useCaseGroupNode("root#{$name}", $label, $icon, $useCases);
+    }
+
+    /**
+     * @param  Collection<int, Feature>  $features
+     */
+    private function featureFolderNode(string $parentKey, string $name, string $label, string $icon, Collection $features): ?WorkbenchTreeNode
+    {
+        if ($features->isEmpty()) {
+            return null;
+        }
+
+        $progress = WorkbenchProgress::forFeatures($features);
+
+        return new WorkbenchTreeNode(
+            key: "{$parentKey}#{$name}",
+            label: $label,
+            icon: $icon,
+            tone: $progress->tone(),
+            badge: $progress->badge(),
+            children: $this->featureNodes($features),
+        );
+    }
+
+    /**
+     * @param  Collection<int, UseCase>  $useCases
+     */
+    private function progressForUseCases(Collection $useCases): WorkbenchProgress
+    {
+        return $useCases->reduce(
+            fn (WorkbenchProgress $progress, UseCase $useCase): WorkbenchProgress => $progress->merge(WorkbenchProgress::forFeatures($useCase->features)),
+            new WorkbenchProgress(0, 0),
+        );
+    }
+
+    /**
      * @param  iterable<UseCase>  $useCases
      * @return list<WorkbenchTreeNode>
      */
@@ -197,14 +254,14 @@ class WorkbenchGraphPresenter
 
         foreach ($useCases as $useCase) {
             $key = "use_case:{$useCase->id}";
-            $doneFeatures = $useCase->features->where('status', FeatureStatus::Done)->count();
+            $progress = WorkbenchProgress::forFeatures($useCase->features);
 
             $nodes[] = new WorkbenchTreeNode(
                 key: $key,
                 label: $useCase->goal,
                 icon: 'heroicon-m-rectangle-stack',
-                tone: $this->tone($useCase),
-                badge: "{$useCase->modelCount()} Model · {$doneFeatures}/{$useCase->features->count()}",
+                tone: $progress->tone(),
+                badge: "{$progress->badge()} · {$useCase->modelCount()} Model",
                 children: array_values(array_filter([
                     $useCase->spec === null ? null : $this->leaf($useCase->spec, 'Use Case Spec', 'heroicon-m-document-text'),
                     WorkbenchTreeNode::folder($key, 'modules', '模块', 'heroicon-m-cube', $this->moduleNodes($useCase->participatingModules()->load('spec'))),
@@ -241,6 +298,7 @@ class WorkbenchGraphPresenter
                             label: $model->name,
                             icon: 'heroicon-m-circle-stack',
                             tone: $this->tone($model),
+                            statusBadge: $this->statusLabel($model),
                             children: $this->leaves($model->modelFields, 'heroicon-m-bars-3'),
                         ),
                     )->all())),
@@ -285,6 +343,7 @@ class WorkbenchGraphPresenter
                 icon: 'heroicon-m-bolt',
                 tone: $this->tone($feature),
                 badge: $feature->module?->name,
+                statusBadge: $this->statusLabel($feature),
                 children: array_values(array_filter([
                     $feature->flowchart === null
                         ? new WorkbenchTreeNode(key: "{$key}#no-flowchart", label: '无流程图', icon: 'heroicon-m-share', isFolder: true)
