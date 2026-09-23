@@ -23,7 +23,6 @@ use App\Models\Scenario;
 use App\Models\Test as TestModel;
 use App\Models\UseCase;
 use App\Models\WorkflowRun;
-use LogicException;
 
 test('module spec and use case hierarchy connect the executable behavior chain', function () {
     $project = Project::factory()->create();
