@@ -51,12 +51,26 @@ test('mermaid maps shapes, renumbers ids and escapes labels', function () {
     expect($mermaid)->toBe(implode("\n", [
         'flowchart TD',
         '    n0(["Start #quot;here#quot;"])',
-        '    n1{"ok? #lt;yes#gt;"}',
+        '    n1{"A::store<br/>ok? #lt;yes#gt;"}',
         '    n2[/"read #35;1"/]',
         '    n3["step"]',
         '    n0 --> n1',
     ]))->not->toContain('app/A.php');
 });
+
+test('mermaid node text shows a two-line code ref for file and/or function, label only otherwise', function (array $node, string $expected) {
+    $mermaid = FlowchartMermaid::fromFlowchart(chartOf(['nodes' => [
+        ['id' => 'a', 'label' => '下单', 'shape' => 'step', ...$node],
+    ], 'edges' => []]));
+
+    expect($mermaid)->toBe("flowchart TD\n    n0[\"{$expected}\"]");
+})->with([
+    'class file + function' => [['file' => 'app/Models/Membership.php', 'function' => 'makePrimaryFor'], 'Membership::makePrimaryFor<br/>下单'],
+    'tsx file + component function' => [['file' => 'resources/js/pages/member/orders.tsx', 'function' => 'Orders'], 'orders::Orders<br/>下单'],
+    'file only' => [['file' => 'app/Models/Membership.php'], 'Membership<br/>下单'],
+    'function only' => [['function' => 'makePrimaryFor'], 'makePrimaryFor<br/>下单'],
+    'neither' => [[], '下单'],
+]);
 
 test('mermaid tooltips carry file::function per node id', function () {
     expect(FlowchartMermaid::tooltips(chartOf(['nodes' => [

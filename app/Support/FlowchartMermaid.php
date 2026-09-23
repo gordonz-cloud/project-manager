@@ -28,7 +28,7 @@ class FlowchartMermaid
         foreach ($flowchart->chart['nodes'] as $index => $node) {
             $mermaidIds[$node['id']] = "n{$index}";
             [$open, $close] = self::SHAPES[$node['shape']];
-            $lines[] = "    n{$index}{$open}\"".self::escape($node['label'])."\"{$close}";
+            $lines[] = "    n{$index}{$open}\"".self::nodeText($node)."\"{$close}";
         }
 
         $failureLinks = [];
@@ -67,6 +67,38 @@ class FlowchartMermaid
         }
 
         return $tooltips;
+    }
+
+    /**
+     * @param  array{label: string, file?: string|null, function?: string|null}  $node
+     */
+    private static function nodeText(array $node): string
+    {
+        $ref = self::codeRef($node);
+
+        if ($ref === null) {
+            return self::escape($node['label']);
+        }
+
+        return self::escape($ref).'<br/>'.self::escape($node['label']);
+    }
+
+    /**
+     * Short "ClassName::function" reference for a node's file/function, or null when it has neither.
+     *
+     * @param  array{file?: string|null, function?: string|null}  $node
+     */
+    private static function codeRef(array $node): ?string
+    {
+        $file = filled($node['file'] ?? null) ? pathinfo($node['file'], PATHINFO_FILENAME) : null;
+        $function = $node['function'] ?? null;
+
+        return match (true) {
+            filled($file) && filled($function) => "{$file}::{$function}",
+            filled($file) => $file,
+            filled($function) => $function,
+            default => null,
+        };
     }
 
     private static function escape(string $text): string
