@@ -110,6 +110,14 @@ test('the model accepts a chart that follows the drawing rules', function () {
         ->and(Flowchart::chartError($long))->toBeNull();
 });
 
+test('the model accepts two start nodes converging into shared logic', function () {
+    $chart = ruleChart();
+    $chart['nodes'][] = ['id' => 's2', 'label' => 'POST /member/orders', 'shape' => 'start'];
+    $chart['edges'][] = ['from' => 's2', 'to' => 'd'];
+
+    expect(Flowchart::chartError($chart))->toBeNull();
+});
+
 test('the model refuses a chart that breaks a drawing rule', function (Closure $break, string $message) {
     $chart = ruleChart();
     $break($chart);
@@ -117,12 +125,9 @@ test('the model refuses a chart that breaks a drawing rule', function (Closure $
     expect(fn () => Flowchart::factory()->create(['chart' => $chart]))
         ->toThrow(LogicException::class, $message);
 })->with([
-    'two starts' => [function (array &$c) {
-        $c['nodes'][1]['shape'] = 'start';
-    }, '必须恰好一个 start 节点，现在有 2 个'],
     'no start' => [function (array &$c) {
         $c['nodes'][0]['shape'] = 'step';
-    }, '现在有 0 个'],
+    }, '至少要有一个 start 节点'],
     'no end' => [function (array &$c) {
         $c['nodes'][2]['shape'] = 'step';
         $c['nodes'][3]['shape'] = 'step';
@@ -146,7 +151,32 @@ test('the model refuses a chart that breaks a drawing rule', function (Closure $
         $c['edges'][] = ['from' => 'ok', 'to' => 's'];
         array_splice($c['edges'], 0, 1);
     }, '从 start 走不到'],
+    'unreachable from either of two starts' => [function (array &$c) {
+        $c['nodes'][] = ['id' => 's2', 'label' => 'POST /member/orders', 'shape' => 'start'];
+        $c['nodes'][] = ['id' => 'orphan', 'label' => '孤立节点', 'shape' => 'step'];
+        $c['edges'][] = ['from' => 'orphan', 'to' => 'ok'];
+    }, '从 start 走不到'],
 ]);
+
+test('mermaid renders multiple start nodes converging into shared logic', function () {
+    $mermaid = FlowchartMermaid::fromFlowchart(chartOf(['nodes' => [
+        ['id' => 's1', 'label' => 'GET /orders', 'shape' => 'start'],
+        ['id' => 's2', 'label' => 'POST /orders', 'shape' => 'start'],
+        ['id' => 'd', 'label' => '处理', 'shape' => 'step'],
+    ], 'edges' => [
+        ['from' => 's1', 'to' => 'd'],
+        ['from' => 's2', 'to' => 'd'],
+    ]]));
+
+    expect($mermaid)->toBe(implode("\n", [
+        'flowchart TD',
+        '    n0(["GET /orders"])',
+        '    n1(["POST /orders"])',
+        '    n2["处理"]',
+        '    n0 --> n2',
+        '    n1 --> n2',
+    ]));
+});
 
 test('mermaid styles only failure edges red', function () {
     $mermaid = FlowchartMermaid::fromFlowchart(chartOf(['nodes' => [

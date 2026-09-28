@@ -104,7 +104,7 @@ class Flowchart extends Model
     }
 
     /**
-     * Why a structurally sound chart breaks the drawing rules (one start, ends, decisions own forks, short labels, all reachable).
+     * Why a structurally sound chart breaks the drawing rules (at least one start, ends, decisions own forks, short labels, all reachable from some start).
      *
      * @param  list<array{id: string, label: string, shape: string}>  $nodes
      * @param  list<array{from: string, to: string, label: string}>  $edges
@@ -117,8 +117,8 @@ class Flowchart extends Model
 
         $starts = array_values(array_filter($nodes, fn (array $node): bool => $node['shape'] === 'start'));
 
-        if (count($starts) !== 1) {
-            return '必须恰好一个 start 节点，现在有 '.count($starts).' 个';
+        if (count($starts) < 1) {
+            return '至少要有一个 start 节点';
         }
 
         $shapes = array_column($nodes, 'shape', 'id');
@@ -149,8 +149,8 @@ class Flowchart extends Model
             }
         }
 
-        $reached = [$starts[0]['id'] => true];
-        $queue = [$starts[0]['id']];
+        $reached = array_fill_keys(array_column($starts, 'id'), true);
+        $queue = array_column($starts, 'id');
 
         while ($queue !== []) {
             foreach ($outgoing[array_shift($queue)] ?? [] as $edge) {
