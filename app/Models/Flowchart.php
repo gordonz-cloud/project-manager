@@ -32,8 +32,6 @@ class Flowchart extends Model
 
     public const EDGE_KINDS = ['next', 'failure'];
 
-    public const MAX_NODES = 20;
-
     public const MAX_LABEL_LENGTH = 24;
 
     protected static function booted(): void
@@ -111,9 +109,6 @@ class Flowchart extends Model
      */
     private static function businessRuleError(array $nodes, array $edges): ?string
     {
-        if (count($nodes) > self::MAX_NODES) {
-            return '节点数 '.count($nodes).' 超过 '.self::MAX_NODES.'，拆成多个功能';
-        }
 
         $starts = array_values(array_filter($nodes, fn (array $node): bool => $node['shape'] === 'start'));
 

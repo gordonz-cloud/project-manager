@@ -141,12 +141,6 @@ test('the model refuses a chart that breaks a drawing rule', function (Closure $
     'long label' => [function (array &$c) {
         $c['nodes'][1]['label'] = str_repeat('字', 25);
     }, '节点 d 的 label 超过 24 字'],
-    'too many nodes' => [function (array &$c) {
-        foreach (range(1, 17) as $i) {
-            $c['nodes'][] = ['id' => "x{$i}", 'label' => 'X', 'shape' => 'end'];
-            $c['edges'][] = ['from' => 'd', 'to' => "x{$i}", 'label' => '是'];
-        }
-    }, '节点数 21 超过 20'],
     'unreachable node' => [function (array &$c) {
         $c['edges'][] = ['from' => 'ok', 'to' => 's'];
         array_splice($c['edges'], 0, 1);
