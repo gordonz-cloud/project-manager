@@ -104,10 +104,15 @@ function ruleChart(): array
 test('the model accepts a chart that follows the drawing rules', function () {
     $long = ruleChart();
     $long['nodes'][0]['label'] = str_repeat('入', 40);
-    $long['nodes'][2]['label'] = str_repeat('字', 24);
+    $long['nodes'][2]['label'] = str_repeat('字', 40);
+    $parallel = ruleChart();
+    $parallel['nodes'][1]['shape'] = 'step';
+    $parallel['edges'][1]['label'] = '同时';
+    $parallel['edges'][2]['label'] = '同时';
 
     expect(Flowchart::chartError(ruleChart()))->toBeNull()
-        ->and(Flowchart::chartError($long))->toBeNull();
+        ->and(Flowchart::chartError($long))->toBeNull()
+        ->and(Flowchart::chartError($parallel))->toBeNull();
 });
 
 test('the model accepts two start nodes converging into shared logic', function () {
@@ -132,15 +137,13 @@ test('the model refuses a chart that breaks a drawing rule', function (Closure $
         $c['nodes'][2]['shape'] = 'step';
         $c['nodes'][3]['shape'] = 'step';
     }, '至少要有一个 end 节点'],
-    'fan-out from a step' => [function (array &$c) {
+    'unlabelled fork from a step' => [function (array &$c) {
         $c['nodes'][1]['shape'] = 'step';
-    }, '节点 d 有多条出边'],
+        unset($c['edges'][2]['label']);
+    }, '节点 d 分叉的每条出边都要带 label'],
     'unlabelled decision edge' => [function (array &$c) {
         unset($c['edges'][2]['label']);
-    }, 'decision 节点 d 的每条出边都要带 label'],
-    'long label' => [function (array &$c) {
-        $c['nodes'][1]['label'] = str_repeat('字', 25);
-    }, '节点 d 的 label 超过 24 字'],
+    }, '节点 d 分叉的每条出边都要带 label'],
     'unreachable node' => [function (array &$c) {
         $c['edges'][] = ['from' => 'ok', 'to' => 's'];
         array_splice($c['edges'], 0, 1);

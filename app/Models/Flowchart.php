@@ -32,8 +32,6 @@ class Flowchart extends Model
 
     public const EDGE_KINDS = ['next', 'failure'];
 
-    public const MAX_LABEL_LENGTH = 24;
-
     protected static function booted(): void
     {
         static::saving(function (self $flowchart): void {
@@ -102,7 +100,7 @@ class Flowchart extends Model
     }
 
     /**
-     * Why a structurally sound chart breaks the drawing rules (at least one start, ends, decisions own forks, short labels, all reachable from some start).
+     * Why a structurally sound chart breaks the drawing rules (at least one start, ends, every fork labels its edges, all reachable from some start).
      *
      * @param  list<array{id: string, label: string, shape: string}>  $nodes
      * @param  list<array{from: string, to: string, label: string}>  $edges
@@ -122,12 +120,6 @@ class Flowchart extends Model
             return '至少要有一个 end 节点';
         }
 
-        foreach ($nodes as $node) {
-            if ($node['shape'] !== 'start' && mb_strlen($node['label']) > self::MAX_LABEL_LENGTH) {
-                return "节点 {$node['id']} 的 label 超过 ".self::MAX_LABEL_LENGTH.' 字';
-            }
-        }
-
         $outgoing = [];
 
         foreach ($edges as $edge) {
@@ -135,12 +127,10 @@ class Flowchart extends Model
         }
 
         foreach ($outgoing as $from => $fromEdges) {
-            if (count($fromEdges) > 1 && $shapes[$from] !== 'decision') {
-                return "节点 {$from} 有多条出边，分叉只能从 decision 出";
-            }
+            $forks = count($fromEdges) > 1 || $shapes[$from] === 'decision';
 
-            if ($shapes[$from] === 'decision' && ! collect($fromEdges)->every(fn (array $edge): bool => trim($edge['label']) !== '')) {
-                return "decision 节点 {$from} 的每条出边都要带 label";
+            if ($forks && ! collect($fromEdges)->every(fn (array $edge): bool => trim($edge['label']) !== '')) {
+                return "节点 {$from} 分叉的每条出边都要带 label";
             }
         }
 
