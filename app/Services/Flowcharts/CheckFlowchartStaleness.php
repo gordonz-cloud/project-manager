@@ -3,6 +3,7 @@
 namespace App\Services\Flowcharts;
 
 use App\Data\Flowcharts\FlowchartStaleCheck;
+use App\Enums\FeatureStatus;
 use App\Models\Flowchart;
 use App\Models\Project;
 use Illuminate\Support\Carbon;
@@ -33,8 +34,28 @@ class CheckFlowchartStaleness
             ->map(fn (Flowchart $flowchart): FlowchartStaleCheck => $this->checkFlowchart($flowchart, $repoPath));
     }
 
+    /**
+     * A planned feature's flowchart describes code that doesn't exist yet, so its
+     * nodes' missing files/functions are expected, not drift — skip the check.
+     */
+    private function isPlanned(Flowchart $flowchart): bool
+    {
+        $status = $flowchart->feature?->status;
+
+        return $status === FeatureStatus::Todo || $status === FeatureStatus::Uncertain;
+    }
+
     private function checkFlowchart(Flowchart $flowchart, string $repoPath): FlowchartStaleCheck
     {
+        if ($this->isPlanned($flowchart)) {
+            $flowchart->forceFill([
+                'stale_checked_at' => Carbon::now(),
+                'stale_nodes' => [],
+            ])->save();
+
+            return new FlowchartStaleCheck($flowchart, 0, []);
+        }
+
         $checked = 0;
         $staleNodes = [];
 

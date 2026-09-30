@@ -3,6 +3,7 @@
 namespace App\Console\Commands;
 
 use App\Data\Flowcharts\FlowchartStaleCheck;
+use App\Enums\FeatureStatus;
 use App\Models\Project;
 use App\Services\Flowcharts\CheckFlowchartStaleness;
 use Illuminate\Console\Command;
@@ -40,7 +41,15 @@ class CheckFlowchartsCommand extends Command
         $checked = $results->sum(fn (FlowchartStaleCheck $result): int => $result->checkedNodes);
         $stale = $results->sum(fn (FlowchartStaleCheck $result): int => count($result->staleNodes));
 
+        $plannedStatuses = [FeatureStatus::Todo, FeatureStatus::Uncertain];
+
         foreach ($results as $result) {
+            if (in_array($result->flowchart->feature->status, $plannedStatuses, true)) {
+                $this->line("功能 {$result->flowchart->feature->number} {$result->flowchart->feature->title}：计划中，跳过");
+
+                continue;
+            }
+
             foreach ($result->staleNodes as $node) {
                 $this->line("功能 {$result->flowchart->feature->number} {$result->flowchart->feature->title}：{$node['id']} {$node['label']} {$node['file']} {$node['function']} — {$node['reason']}");
             }

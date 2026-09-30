@@ -1,5 +1,6 @@
 <?php
 
+use App\Enums\FeatureStatus;
 use App\Filament\Resources\Features\Pages\EditFeature;
 use App\Models\Feature;
 use App\Models\Flowchart;
@@ -210,7 +211,7 @@ test('flowcharts:save upserts a feature flowchart and rejects a bad chart', func
 
 test('flowcharts:check verifies files and functions in the repo', function (array $node, string $expected, bool $passes) {
     $project = Project::factory()->create(['slug' => 'fc', 'repo_path' => base_path('tests/Fixtures/repo')]);
-    $feature = Feature::factory()->create(['project_id' => $project->id, 'number' => 1]);
+    $feature = Feature::factory()->create(['project_id' => $project->id, 'number' => 1, 'status' => FeatureStatus::Done]);
     Flowchart::factory()->create(['feature_id' => $feature->id, 'chart' => ['nodes' => [['id' => 'a', 'label' => 'A', 'shape' => 'start', ...$node], ['id' => 'z', 'label' => 'Z', 'shape' => 'end']], 'edges' => [['from' => 'a', 'to' => 'z']]]]);
 
     $result = $this->artisan('flowcharts:check', ['project-slug' => 'fc', '--feature' => 1])->expectsOutputToContain($expected);
@@ -225,7 +226,7 @@ test('flowcharts:check verifies files and functions in the repo', function (arra
 
 test('flowcharts:check records which nodes are stale, empty when all are found', function () {
     $project = Project::factory()->create(['slug' => 'fc', 'repo_path' => base_path('tests/Fixtures/repo')]);
-    $feature = Feature::factory()->create(['project_id' => $project->id, 'number' => 1]);
+    $feature = Feature::factory()->create(['project_id' => $project->id, 'number' => 1, 'status' => FeatureStatus::Done]);
     $flowchart = Flowchart::factory()->create(['feature_id' => $feature->id, 'chart' => [
         'nodes' => [
             ['id' => 'a', 'label' => 'A', 'shape' => 'start', 'file' => 'app/OrderController.php', 'function' => 'store'],
@@ -248,6 +249,30 @@ test('flowcharts:check records which nodes are stale, empty when all are found',
     $this->artisan('flowcharts:check', ['project-slug' => 'fc'])->assertSuccessful();
 
     expect($flowchart->fresh()->stale_nodes)->toBe([]);
+});
+
+test('flowcharts:check skips a planned feature\'s missing files, checks it once done', function () {
+    $project = Project::factory()->create(['slug' => 'fc', 'repo_path' => base_path('tests/Fixtures/repo')]);
+    $feature = Feature::factory()->create(['project_id' => $project->id, 'number' => 1, 'status' => FeatureStatus::Todo]);
+    $flowchart = Flowchart::factory()->create(['feature_id' => $feature->id, 'chart' => [
+        'nodes' => [
+            ['id' => 'a', 'label' => 'A', 'shape' => 'start', 'file' => 'app/Gone.php', 'function' => 'store'],
+            ['id' => 'z', 'label' => 'Z', 'shape' => 'end'],
+        ],
+        'edges' => [['from' => 'a', 'to' => 'z']],
+    ]]);
+
+    $this->artisan('flowcharts:check', ['project-slug' => 'fc'])
+        ->expectsOutputToContain('计划中，跳过')
+        ->assertSuccessful();
+
+    expect($flowchart->fresh()->stale_nodes)->toBe([]);
+
+    $feature->update(['status' => FeatureStatus::Done]);
+
+    $this->artisan('flowcharts:check', ['project-slug' => 'fc'])->assertFailed();
+
+    expect($flowchart->fresh()->stale_nodes)->toBe(['a']);
 });
 
 test('the migration turns a call tree into a flowchart with failure branch and pseudocode', function () {
