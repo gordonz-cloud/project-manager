@@ -45,6 +45,10 @@ class CommitsSyncCommand extends Command
 
         $this->info($result->summary());
 
+        if ($project->repo_path) {
+            $this->call('flowcharts:check', ['project-slug' => $project->slug]);
+        }
+
         return self::SUCCESS;
     }
 }

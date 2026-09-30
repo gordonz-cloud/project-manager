@@ -354,6 +354,28 @@ test('作废 features are excluded from the total and never block green', functi
         ->and($traceGoal->badge)->toBe('功能 1/1 · 1 Model');
 });
 
+test('a feature with a stale flowchart is amber, and its flowchart leaf names how many nodes', function () {
+    $records = workbenchContext(); // Done feature, otherwise complete
+
+    Flowchart::factory()->create([
+        'feature_id' => $records['feature']->id,
+        'chart' => ['nodes' => [['id' => 'a', 'label' => 'A', 'shape' => 'start'], ['id' => 'b', 'label' => 'B', 'shape' => 'end']], 'edges' => [['from' => 'a', 'to' => 'b']]],
+        'stale_checked_at' => now(),
+        'stale_nodes' => ['a'],
+    ]);
+
+    $tree = Livewire::test(WorkbenchGraph::class)->instance()->tree;
+    $folders = collect($tree[0]->children[0]->children)->keyBy('label');
+    $feature = $folders['功能']->children[0];
+    $traceGoal = collect($tree[0]->children)->firstWhere('label', 'Trace goal');
+
+    expect($feature->tone)->toBe('warning')
+        ->and($feature->children[0]->key)->toBe("flowchart:{$records['feature']->id}")
+        ->and($feature->children[0]->label)->toBe('流程图 · 1 处过时')
+        ->and($traceGoal->tone)->toBe('warning')
+        ->and($traceGoal->badge)->toBe('功能 0/1 · 1 Model');
+});
+
 test('a group rolls up the progress of every use case inside it', function () {
     $records = workbenchContext(); // group has 'Trace goal': 功能 1/1, 1 Model, complete
     $unfinished = UseCase::factory()->create(['use_case_group_id' => $records['group']->id, 'goal' => 'Unfinished goal']);

@@ -158,4 +158,9 @@ class Feature extends Model
     {
         return WorkflowRun::withoutGlobalScopes()->where('feature_id', $this->id)->exists();
     }
+
+    public function hasStaleFlowchart(): bool
+    {
+        return $this->flowchart?->isStale() ?? false;
+    }
 }

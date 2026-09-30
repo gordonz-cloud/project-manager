@@ -19,6 +19,8 @@ use LogicException;
  * @property int $feature_id
  * @property array{nodes: list<array{id: string, label: string, shape: string, file?: string, function?: string}>, edges: list<array{from: string, to: string, label?: string, kind?: string}>} $chart
  * @property string|null $pseudocode
+ * @property Carbon|null $stale_checked_at
+ * @property list<string>|null $stale_nodes node ids whose file/function is missing, as of the last `flowcharts:check`
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at
  */
@@ -162,7 +164,17 @@ class Flowchart extends Model
     {
         return [
             'chart' => 'array',
+            'stale_checked_at' => 'datetime',
+            'stale_nodes' => 'array',
         ];
+    }
+
+    /**
+     * Whether the last `flowcharts:check` found nodes whose file/function no longer exist.
+     */
+    public function isStale(): bool
+    {
+        return filled($this->stale_nodes);
     }
 
     /**

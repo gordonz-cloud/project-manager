@@ -38,7 +38,7 @@ final readonly class WorkbenchProgress
             }
 
             $total++;
-            $done += $feature->status === FeatureStatus::Done ? 1 : 0;
+            $done += $feature->status === FeatureStatus::Done && ! $feature->hasStaleFlowchart() ? 1 : 0;
 
             foreach ($feature->dataModels as $dataModel) {
                 if (in_array($dataModel->status, [DataModelStatus::Designing, DataModelStatus::Planned], true)) {

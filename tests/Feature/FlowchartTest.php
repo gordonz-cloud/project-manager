@@ -223,6 +223,33 @@ test('flowcharts:check verifies files and functions in the repo', function (arra
     'missing file' => [['file' => 'app/Gone.php', 'function' => 'store'], '文件不存在', false],
 ]);
 
+test('flowcharts:check records which nodes are stale, empty when all are found', function () {
+    $project = Project::factory()->create(['slug' => 'fc', 'repo_path' => base_path('tests/Fixtures/repo')]);
+    $feature = Feature::factory()->create(['project_id' => $project->id, 'number' => 1]);
+    $flowchart = Flowchart::factory()->create(['feature_id' => $feature->id, 'chart' => [
+        'nodes' => [
+            ['id' => 'a', 'label' => 'A', 'shape' => 'start', 'file' => 'app/OrderController.php', 'function' => 'store'],
+            ['id' => 'b', 'label' => 'B', 'shape' => 'step', 'file' => 'app/Gone.php', 'function' => 'store'],
+            ['id' => 'z', 'label' => 'Z', 'shape' => 'end'],
+        ],
+        'edges' => [['from' => 'a', 'to' => 'b'], ['from' => 'b', 'to' => 'z']],
+    ]]);
+
+    $this->artisan('flowcharts:check', ['project-slug' => 'fc'])->assertFailed();
+
+    expect($flowchart->fresh()->stale_nodes)->toBe(['b'])
+        ->and($flowchart->fresh()->stale_checked_at)->not->toBeNull();
+
+    $flowchart->update(['chart' => [
+        'nodes' => [['id' => 'a', 'label' => 'A', 'shape' => 'start', 'file' => 'app/OrderController.php', 'function' => 'store'], ['id' => 'z', 'label' => 'Z', 'shape' => 'end']],
+        'edges' => [['from' => 'a', 'to' => 'z']],
+    ]]);
+
+    $this->artisan('flowcharts:check', ['project-slug' => 'fc'])->assertSuccessful();
+
+    expect($flowchart->fresh()->stale_nodes)->toBe([]);
+});
+
 test('the migration turns a call tree into a flowchart with failure branch and pseudocode', function () {
     Schema::create('implementation_nodes', function (Blueprint $table) {
         $table->id();

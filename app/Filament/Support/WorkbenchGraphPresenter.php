@@ -349,7 +349,12 @@ class WorkbenchGraphPresenter
                 children: array_values(array_filter([
                     $feature->flowchart === null
                         ? new WorkbenchTreeNode(key: "{$key}#no-flowchart", label: '无流程图', icon: 'heroicon-m-share', isFolder: true)
-                        : new WorkbenchTreeNode(key: "flowchart:{$feature->id}", label: '流程图', icon: 'heroicon-m-share'),
+                        : new WorkbenchTreeNode(
+                            key: "flowchart:{$feature->id}",
+                            label: $feature->flowchart->isStale() ? '流程图 · '.count($feature->flowchart->stale_nodes).' 处过时' : '流程图',
+                            icon: 'heroicon-m-share',
+                            tone: $feature->flowchart->isStale() ? 'warning' : null,
+                        ),
                     WorkbenchTreeNode::folder($key, 'entries', '入口', 'heroicon-m-arrow-right-circle', array_values($feature->requestReplies->map(
                         fn (RequestReply $requestReply): WorkbenchTreeNode => $this->leaf($requestReply, ltrim(($entryNumbers[$requestReply->id] ?? '').' '.$requestReply->label()), 'heroicon-m-arrow-right-circle'),
                     )->all())),
@@ -443,7 +448,7 @@ class WorkbenchGraphPresenter
         return match (true) {
             $record instanceof Module => $this->specTone($record->spec),
             $record instanceof ModuleSpec, $record instanceof UseCaseSpec => $this->specTone($record),
-            $record instanceof Feature => $record->status === FeatureStatus::Done || $record->status === FeatureStatus::Void ? 'success' : 'warning',
+            $record instanceof Feature => $this->featureIsDone($record) ? 'success' : 'warning',
             $record instanceof DataModel, $record instanceof ModelField => $record->status === DataModelStatus::Existing || $record->status === DataModelStatus::Deprecated ? 'success' : 'warning',
             $record instanceof Test => $record->status === TestStatus::Valid ? 'success' : 'warning',
             default => null,
@@ -453,5 +458,10 @@ class WorkbenchGraphPresenter
     private function specTone(ModuleSpec|UseCaseSpec|null $spec): ?string
     {
         return $spec === null ? null : ($spec->status === 'active' ? 'success' : 'warning');
+    }
+
+    private function featureIsDone(Feature $feature): bool
+    {
+        return ($feature->status === FeatureStatus::Done && ! $feature->hasStaleFlowchart()) || $feature->status === FeatureStatus::Void;
     }
 }

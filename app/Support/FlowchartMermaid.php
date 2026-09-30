@@ -20,15 +20,28 @@ class FlowchartMermaid
 
     private const FAILURE_STYLE = 'stroke:#dc2626,color:#dc2626';
 
+    private const STALE_STYLE = 'stroke:#d97706,stroke-width:3px';
+
     public static function fromFlowchart(Flowchart $flowchart): string
     {
         $mermaidIds = [];
         $lines = ['flowchart TD'];
+        $staleIds = array_flip($flowchart->stale_nodes ?? []);
+        $staleMermaidIds = [];
 
         foreach ($flowchart->chart['nodes'] as $index => $node) {
             $mermaidIds[$node['id']] = "n{$index}";
             [$open, $close] = self::SHAPES[$node['shape']];
             $lines[] = "    n{$index}{$open}\"".self::nodeText($node)."\"{$close}";
+
+            if (isset($staleIds[$node['id']])) {
+                $staleMermaidIds[] = "n{$index}";
+            }
+        }
+
+        if ($staleMermaidIds !== []) {
+            $lines[] = '    classDef stale '.self::STALE_STYLE.';';
+            $lines[] = '    class '.implode(',', $staleMermaidIds).' stale;';
         }
 
         $failureLinks = [];
