@@ -103,7 +103,7 @@ it('derives blocked below a failed node without storing it, and rolls up subtree
         ->and($nodes[4]->state)->toBe(TestNodeState::Blocked)
         ->and($nodes[2]->state)->toBe(TestNodeState::Failed)
         ->and($child->fresh()->last_result)->toBe(TestLastResult::Passed)
-        ->and((array) $nodes[1]->rollup)->toBe(['passed' => 1, 'failed' => 1, 'blocked' => 2, 'manual' => 1, 'fakeGreen' => 1]);
+        ->and((array) $nodes[1]->rollup)->toBe(['passed' => 1, 'failed' => 1, 'blocked' => 2, 'gaps' => 4, 'fakeGreen' => 1]);
 });
 
 function testTreePage(): Project
@@ -130,13 +130,62 @@ it('renders the tree, filters to matches with their ancestor path, and lists unc
 
     Livewire::test(TestTree::class)
         ->assertOk()
-        ->assertSee('Root step')
-        ->assertSee('F1')
-        ->assertDontSee('Middle step')
+        ->assertSee('未分类')
+        ->assertDontSee('Root step')
         ->assertSeeInOrder(['没有被任何测试覆盖的功能', 'Lonely feature'])
+        ->call('toggleArea', '未分类')
+        ->assertSee('Root step')
+        ->assertDontSee('Middle step')
         ->call('setFilter', 'failed')
         ->assertSeeInOrder(['Root step', 'Middle step', 'Broken leaf'])
         ->assertDontSee('Green sibling')
+        ->call('selectNode', 1)
+        ->assertSee('F1')
         ->call('selectNode', 3)
-        ->assertSeeInOrder(['#1 Root step', '#2 Middle step', '#3 Broken leaf']);
+        ->assertSeeInOrder(['Root step', 'Middle step', 'Broken leaf']);
+});
+
+it('groups nodes by business area with rollups, breadcrumbs from other areas, and no duplicates', function () {
+    $project = Project::factory()->create();
+    $make = fn (int $number, ?Test $parent, ?string $module, TestLastResult $result = TestLastResult::Passed, ?string $location = 'tests/X.php'): Test => Test::factory()->create([
+        'project_id' => $project->id, 'number' => $number, 'parent_id' => $parent?->id, 'module' => $module,
+        'title' => "step {$number}", 'last_result' => $result, 'auto' => TestAuto::Yes, 'location' => $location,
+    ]);
+
+    $register = $make(1, null, '账户');
+    $login = $make(2, $register, '账户');
+    $openCheckout = $make(3, $login, '结账');
+    $pay = $make(4, $openCheckout, '结账');
+    $make(5, $pay, '结账', TestLastResult::Failed);
+    $make(6, $pay, '结账', TestLastResult::NotRun, null);
+    $make(7, $pay, '退货');
+    $make(8, $login, '结账');
+    $make(9, null, '');
+
+    $areas = collect(app(TestTreeService::class)->areas($project))->keyBy('name');
+    $checkout = $areas['结账'];
+
+    expect($areas->keys()->all())->toBe(['结账', '未分类', '账户', '退货'])
+        ->and((array) $checkout->rollup)->toBe(['passed' => 3, 'failed' => 1, 'blocked' => 0, 'gaps' => 1, 'fakeGreen' => 0])
+        ->and($checkout->branches)->toHaveCount(1)
+        ->and($checkout->branches[0]['breadcrumb'])->toBe(['step 1', 'step 2'])
+        ->and(array_map(fn (TestTreeNode $node): int => $node->test->number, $checkout->branches[0]['nodes']))->toBe([3, 8])
+        ->and(array_keys(flatTree($checkout->branches[0]['nodes'])))->not->toContain(7)
+        ->and($areas['退货']->branches[0]['breadcrumb'])->toBe(['step 1', 'step 2', 'step 3', 'step 4'])
+        ->and(array_keys(flatTree($areas['账户']->branches[0]['nodes'])))->toBe([1, 2]);
+});
+
+it('keeps number and expected out of rows and shows the expected field in the detail', function () {
+    $project = testTreePage();
+    $root = Test::factory()->create(['project_id' => $project->id, 'number' => 41, 'module' => '结账', 'title' => 'Pay now', 'expected' => 'Order row created', 'last_result' => TestLastResult::Failed]);
+    Test::factory()->create(['project_id' => $project->id, 'number' => 42, 'parent_id' => $root->id, 'module' => '结账', 'title' => 'Refund', 'expected' => 'Money back', 'last_result' => TestLastResult::Passed]);
+
+    Livewire::test(TestTree::class)
+        ->call('toggleArea', '结账')
+        ->call('toggleNode', $root->id)
+        ->assertSee('Refund')
+        ->assertDontSee('Money back')
+        ->assertDontSee('#42')
+        ->call('selectNode', 42)
+        ->assertSeeHtmlInOrder(['data-test-expected>Money back<', 'data-test-marker>[T42]<']);
 });

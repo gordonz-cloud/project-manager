@@ -28,9 +28,23 @@ final readonly class TestTreeNode
     public static function build(Test $test, bool $hasFailedAncestor, array $children): self
     {
         $state = self::stateOf($test, $hasFailedAncestor);
-        $rollup = array_reduce($children, fn (TestRollup $sum, self $child): TestRollup => $sum->plus($child->rollup), TestRollup::of($state));
+        $rollup = array_reduce($children, fn (TestRollup $sum, self $child): TestRollup => $sum->plus($child->rollup), TestRollup::of($state, $test->isGap()));
 
         return new self($test, $state, $children, $rollup);
+    }
+
+    /**
+     * The same node with only the descendants that stay in its own business area; state is kept.
+     */
+    public function withinArea(): self
+    {
+        $children = array_values(array_map(
+            fn (self $child): self => $child->withinArea(),
+            array_filter($this->children, fn (self $child): bool => $child->test->area() === $this->test->area()),
+        ));
+        $rollup = array_reduce($children, fn (TestRollup $sum, self $child): TestRollup => $sum->plus($child->rollup), TestRollup::of($this->state, $this->test->isGap()));
+
+        return new self($this->test, $this->state, $children, $rollup);
     }
 
     public static function stateOf(Test $test, bool $hasFailedAncestor): TestNodeState

@@ -3,7 +3,7 @@
 namespace App\Data\Tests;
 
 /**
- * How a subtree's nodes stand, each node counted once under its most telling state.
+ * How a subtree's nodes stand, each node counted once under its most telling state; gaps are counted on the side.
  */
 final readonly class TestRollup
 {
@@ -11,17 +11,17 @@ final readonly class TestRollup
         public int $passed = 0,
         public int $failed = 0,
         public int $blocked = 0,
-        public int $manual = 0,
+        public int $gaps = 0,
         public int $fakeGreen = 0,
     ) {}
 
-    public static function of(TestNodeState $state): self
+    public static function of(TestNodeState $state, bool $isGap): self
     {
         return new self(
             passed: (int) ($state === TestNodeState::Passed),
             failed: (int) ($state === TestNodeState::Failed),
             blocked: (int) ($state === TestNodeState::Blocked),
-            manual: (int) ($state === TestNodeState::Manual),
+            gaps: (int) $isGap,
             fakeGreen: (int) ($state === TestNodeState::FakeGreen),
         );
     }
@@ -32,7 +32,7 @@ final readonly class TestRollup
             $this->passed + $other->passed,
             $this->failed + $other->failed,
             $this->blocked + $other->blocked,
-            $this->manual + $other->manual,
+            $this->gaps + $other->gaps,
             $this->fakeGreen + $other->fakeGreen,
         );
     }

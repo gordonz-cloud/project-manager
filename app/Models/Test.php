@@ -91,6 +91,27 @@ class Test extends Model
     }
 
     /**
+     * Business area this node is grouped under; no module means 未分类.
+     */
+    public function area(): string
+    {
+        return filled($this->module) ? $this->module : '未分类';
+    }
+
+    public function lacksEvidence(): bool
+    {
+        return blank($this->location);
+    }
+
+    /**
+     * Meant to be automated but no test file backs it yet.
+     */
+    public function isGap(): bool
+    {
+        return $this->lacksEvidence() && in_array($this->auto, [TestAuto::Yes, TestAuto::Partial], true);
+    }
+
+    /**
      * The parent must exist in the same project and must not be this node or one of its descendants.
      */
     private function guardParent(): void

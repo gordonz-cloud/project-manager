@@ -2,6 +2,7 @@
 
 namespace App\Services\Tests;
 
+use App\Data\Tests\TestArea;
 use App\Data\Tests\TestTreeNode;
 use App\Enums\TestLastResult;
 use App\Models\Feature;
@@ -21,12 +22,21 @@ class TestTreeService
     {
         $childrenByParent = Test::withoutGlobalScopes()
             ->where('project_id', $project->id)
-            ->with('features:id,number,title')
             ->orderBy('number')
             ->get()
             ->groupBy(fn (Test $test): int => $test->parent_id ?? 0);
 
         return $this->branch($childrenByParent->all(), 0, false);
+    }
+
+    /**
+     * The tree regrouped by business area.
+     *
+     * @return list<TestArea>
+     */
+    public function areas(Project $project): array
+    {
+        return TestArea::groupAll($this->tree($project));
     }
 
     /**

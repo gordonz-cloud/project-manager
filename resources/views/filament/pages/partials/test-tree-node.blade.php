@@ -28,24 +28,15 @@
             class="flex min-h-8 min-w-0 flex-1 cursor-pointer items-center gap-2 rounded-md px-2 py-1 text-left text-sm transition {{ $isSelected ? 'bg-slate-900 text-white dark:bg-white dark:text-slate-950' : 'hover:bg-slate-50 dark:hover:bg-white/5' }}"
         >
             <span class="w-4 shrink-0 text-center {{ $dotClass }}" title="{{ $node->state->label() }}">{{ $node->state->symbol() }}</span>
-            <span class="shrink-0 font-mono text-xs opacity-60">#{{ $test->number }}</span>
-            <span class="min-w-0 shrink truncate">{{ $test->title }}</span>
-            @if (filled($test->expected))
-                <span class="min-w-0 flex-1 truncate text-xs opacity-50" title="{{ $test->expected }}">→ {{ $test->expected }}</span>
-            @else
-                <span class="flex-1"></span>
+            <span class="min-w-0 truncate">{{ $test->title }}</span>
+            @if ($test->lacksEvidence())
+                <span class="shrink-0 text-xs opacity-50">缺测试</span>
             @endif
-            @if ($test->priority)
-                <span class="shrink-0 text-xs opacity-70">{{ $test->priority->value }}</span>
-            @endif
-            @if ($test->auto && $test->auto !== \App\Enums\TestAuto::Yes)
-                <span class="shrink-0 text-xs opacity-70">{{ $test->auto->value }}</span>
-            @endif
-            @foreach ($test->features as $feature)
-                <a href="{{ $this->featureUrl($feature) }}" wire:click.stop class="shrink-0 rounded bg-slate-100 px-1 text-xs text-slate-600 hover:underline dark:bg-white/10 dark:text-slate-300" title="{{ $feature->title }}">F{{ $feature->number }}</a>
-            @endforeach
-            @if ($node->children !== [])
-                @include('filament.pages.partials.test-rollup', ['rollup' => $node->rollup])
+            @if ($node->children !== [] && ! $isOpen)
+                <span class="inline-flex shrink-0 gap-1 text-xs tabular-nums">
+                    @if ($node->rollup->failed)<span class="text-red-600 dark:text-red-400">✗{{ $node->rollup->failed }}</span>@endif
+                    @if ($node->rollup->gaps)<span class="text-slate-500">○{{ $node->rollup->gaps }}</span>@endif
+                </span>
             @endif
         </div>
     </div>

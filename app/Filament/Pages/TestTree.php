@@ -2,11 +2,13 @@
 
 namespace App\Filament\Pages;
 
+use App\Data\Tests\TestArea;
 use App\Data\Tests\TestNodeState;
 use App\Data\Tests\TestRollup;
 use App\Data\Tests\TestTreeNode;
 use App\Enums\NavigationGroup;
 use App\Enums\TestAuto;
+use App\Enums\TestLastResult;
 use App\Enums\TestPriority;
 use App\Models\Feature;
 use App\Models\Project;
@@ -25,14 +27,14 @@ use LogicException;
  * The Test Matrix as a tree: root to leaf is one test case, a failed node blocks everything below it.
  *
  * @property-read Project $project
- * @property-read list<TestTreeNode> $tree
- * @property-read list<TestTreeNode> $visibleTree
+ * @property-read list<TestArea> $areas
+ * @property-read list<TestArea> $visibleAreas
  * @property-read Test|null $selectedTest
  */
 class TestTree extends Page
 {
     /** @var array<string, string> filter key => label */
-    public const FILTERS = ['failed' => '只看失败', 'p0' => '只看 P0', 'fakeGreen' => '只看假绿', 'manual' => '只看手测'];
+    public const FILTERS = ['failed' => '只看失败', 'p0' => '只看 P0', 'fakeGreen' => '只看假绿', 'gap' => '只看缺口'];
 
     protected string $view = 'filament.pages.test-tree';
 
@@ -54,6 +56,9 @@ class TestTree extends Page
 
     /** @var array<int, bool> keyed by test id */
     public array $expanded = [];
+
+    /** @var array<string, bool> keyed by area name */
+    public array $expandedAreas = [];
 
     private ?TestTreeService $testTreeService = null;
 
@@ -83,6 +88,11 @@ class TestTree extends Page
         $this->expanded[$id] = ! ($this->expanded[$id] ?? false);
     }
 
+    public function toggleArea(string $name): void
+    {
+        $this->expandedAreas[$name] = ! ($this->expandedAreas[$name] ?? false);
+    }
+
     public function setFilter(string $filter): void
     {
         $this->filter = $this->filter === $filter || ! isset(self::FILTERS[$filter]) ? '' : $filter;
@@ -99,40 +109,40 @@ class TestTree extends Page
     }
 
     /**
-     * @return list<TestTreeNode>
+     * @return list<TestArea>
      */
     #[Computed]
-    public function tree(): array
+    public function areas(): array
     {
-        return $this->testTreeService()->tree($this->project);
+        return $this->testTreeService()->areas($this->project);
     }
 
     /**
-     * @return list<TestTreeNode>
+     * @return list<TestArea>
      */
     #[Computed]
-    public function visibleTree(): array
+    public function visibleAreas(): array
     {
         $needle = mb_strtolower(trim($this->search));
-        $tree = $this->tree;
+        $areas = $this->areas;
 
         if (isset(self::FILTERS[$this->filter])) {
-            $tree = TestTreeNode::matchingAll($tree, fn (TestTreeNode $node): bool => $this->matchesFilter($node));
+            $areas = array_filter(array_map(fn (TestArea $area): ?TestArea => $area->matching(fn (TestTreeNode $node): bool => $this->matchesFilter($node)), $areas));
         }
 
         if ($needle !== '') {
-            $tree = TestTreeNode::matchingAll($tree, fn (TestTreeNode $node): bool => str_contains(mb_strtolower(implode(' ', [
+            $areas = array_filter(array_map(fn (TestArea $area): ?TestArea => $area->matching(fn (TestTreeNode $node): bool => str_contains(mb_strtolower(implode(' ', [
                 '#'.$node->test->number, $node->test->title, $node->test->expected, $node->test->location, $node->test->test_name, $node->test->module,
-            ])), $needle));
+            ])), $needle)), $areas));
         }
 
-        return $tree;
+        return array_values($areas);
     }
 
     #[Computed]
     public function total(): TestRollup
     {
-        return TestTreeNode::total($this->tree);
+        return array_reduce($this->areas, fn (TestRollup $sum, TestArea $area): TestRollup => $sum->plus($area->rollup), new TestRollup);
     }
 
     #[Computed]
@@ -143,6 +153,17 @@ class TestTree extends Page
             ->where('number', $this->selectedNumber)
             ->with('features.flowchart')
             ->first();
+    }
+
+    /**
+     * The selected node's dot, derived like the tree does: any failed ancestor blocks it.
+     */
+    public function selectedState(): ?TestNodeState
+    {
+        $path = $this->selectedPath();
+        $test = array_pop($path);
+
+        return $test === null ? null : TestTreeNode::stateOf($test, collect($path)->contains(fn (Test $step): bool => $step->last_result === TestLastResult::Failed));
     }
 
     /**
@@ -186,7 +207,7 @@ class TestTree extends Page
             'failed' => $node->state === TestNodeState::Failed,
             'p0' => $node->test->priority === TestPriority::P0,
             'fakeGreen' => $node->test->auto === TestAuto::Wrong,
-            'manual' => $node->test->auto === TestAuto::No,
+            'gap' => $node->test->isGap(),
             default => true,
         };
     }
