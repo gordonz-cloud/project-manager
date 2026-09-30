@@ -15,12 +15,12 @@ use Filament\Facades\Filament;
 use Illuminate\Testing\PendingCommand;
 use Livewire\Livewire;
 
-function saveTests(array $spec): PendingCommand
+function saveTests(array $spec, array $options = []): PendingCommand
 {
     $file = tempnam(sys_get_temp_dir(), 'tests-save');
     file_put_contents($file, json_encode($spec));
 
-    return test()->artisan('tests:save', ['file' => $file]);
+    return test()->artisan('tests:save', ['file' => $file, ...$options]);
 }
 
 /**
@@ -47,14 +47,14 @@ it('refuses a parent that would make a cycle or lives in another project', funct
     expect(fn () => $child->update(['parent_id' => $stranger->id]))->toThrow(LogicException::class, 'same project');
 });
 
-it('upserts nodes by number, keeps untouched nodes, and syncs feature tags', function () {
+it('assigns numbers to new nodes, links them by parent_ref, updates by number, and syncs feature tags', function () {
     $project = Project::factory()->create(['slug' => 'tt']);
     $feature = Feature::factory()->create(['project_id' => $project->id, 'number' => 5]);
 
     saveTests(['project' => 'tt', 'nodes' => [
-        ['number' => 1, 'parent' => null, 'action' => 'Open cart', 'expected' => 'Cart shows', 'priority' => 'P0', 'auto' => 'yes', 'result' => '通过', 'features' => [5]],
-        ['number' => 2, 'parent' => 1, 'action' => 'Pay', 'result' => '未跑'],
-    ]])->expectsOutputToContain('2 created')->assertSuccessful();
+        ['ref' => 'cart', 'action' => 'Open cart', 'expected' => 'Cart shows', 'priority' => 'P0', 'auto' => 'yes', 'result' => '通过', 'features' => [5]],
+        ['parent_ref' => 'cart', 'action' => 'Pay', 'result' => '未跑'],
+    ]])->expectsOutputToContain('cart → #1')->expectsOutputToContain('row 1 → #2')->expectsOutputToContain('2 created')->assertSuccessful();
 
     saveTests(['project' => 'tt', 'nodes' => [['number' => 2, 'result' => '失败']]])->expectsOutputToContain('1 updated')->assertSuccessful();
 
@@ -71,6 +71,17 @@ it('upserts nodes by number, keeps untouched nodes, and syncs feature tags', fun
     expect($root->features()->count())->toBe(0);
 });
 
+it('never reuses a number across saves and prints the mapping as JSON', function () {
+    $project = Project::factory()->create(['slug' => 'tt']);
+    Test::factory()->create(['project_id' => $project->id, 'number' => 7]);
+
+    saveTests(['project' => 'tt', 'nodes' => [['ref' => 'a', 'action' => 'A']]], ['--json' => true])
+        ->expectsOutput('{"created":1,"updated":0,"assigned":{"a":8}}')->assertSuccessful();
+    saveTests(['project' => 'tt', 'nodes' => [['ref' => 'b', 'action' => 'B']]])->expectsOutputToContain('b → #9')->assertSuccessful();
+
+    expect(Test::where('project_id', $project->id)->orderBy('number')->pluck('number')->all())->toBe([7, 8, 9]);
+});
+
 it('rejects a bad tree and writes nothing', function (array $nodes, string $message) {
     Project::factory()->create(['slug' => 'tt']);
 
@@ -78,10 +89,12 @@ it('rejects a bad tree and writes nothing', function (array $nodes, string $mess
 
     expect(Test::count())->toBe(0);
 })->with([
-    'missing parent' => [[['number' => 1, 'parent' => 9, 'action' => 'a']], 'parent #9 does not exist'],
-    'cycle' => [[['number' => 1, 'parent' => 2, 'action' => 'a'], ['number' => 2, 'parent' => 1, 'action' => 'b']], 'loops'],
-    'unknown feature' => [[['number' => 1, 'action' => 'a', 'features' => [42]]], 'feature 42 does not exist'],
-    'bad enum' => [[['number' => 1, 'action' => 'a', 'result' => 'PASS']], 'result "PASS"'],
+    'unknown number' => [[['action' => 'a'], ['number' => 1, 'action' => 'b']], '#1: no such test'],
+    'unknown parent_ref' => [[['parent_ref' => 'x', 'action' => 'a']], 'parent_ref "x" matches no ref'],
+    'missing parent' => [[['parent' => 9, 'action' => 'a']], 'parent #9 does not exist'],
+    'cycle' => [[['ref' => 'a', 'parent_ref' => 'b', 'action' => 'a'], ['ref' => 'b', 'parent_ref' => 'a', 'action' => 'b']], 'loops'],
+    'unknown feature' => [[['action' => 'a', 'features' => [42]]], 'feature 42 does not exist'],
+    'bad enum' => [[['action' => 'a', 'result' => 'PASS']], 'result "PASS"'],
 ]);
 
 it('derives blocked below a failed node without storing it, and rolls up subtree counts', function () {

@@ -4,9 +4,16 @@ namespace App\Data\Tests;
 
 final readonly class TestTreeSaveResult
 {
+    public int $created;
+
+    /**
+     * @param  array<string, int>  $assigned  ref (or "row N") => number given to each new node
+     */
     public function __construct(
-        public int $created,
+        public array $assigned,
         public int $updated,
         public int $nodesWithFeaturesSynced,
-    ) {}
+    ) {
+        $this->created = count($assigned);
+    }
 }

@@ -14,9 +14,12 @@ use Illuminate\Support\Facades\DB;
 use InvalidArgumentException;
 
 /**
- * Upserts Test Matrix nodes by (project, number). Nodes left out of the payload stay as they are,
- * so a run can send back only the results it changed.
+ * Saves Test Matrix nodes. A node without "number" is new and gets the next number inside the transaction
+ * (sqlite runs IMMEDIATE transactions, so parallel saves queue instead of reusing a number); a node with
+ * "number" updates that existing node. "ref"/"parent_ref" let new nodes in one payload point at each other.
+ * Nodes left out of the payload stay as they are, so a run can send back only the results it changed.
  *
+ * @phpstan-type RawNodeInput array{number?: int, ref?: string, parent_ref?: string, parent?: int|null, module?: string|null, action?: string, expected?: string|null, priority?: string|null, platform?: string|null, test_file?: string|null, test_name?: string|null, auto?: string|null, result?: string|null, notes?: string|null, features?: list<int>}
  * @phpstan-type TestNodeInput array{number: int, parent?: int|null, module?: string|null, action?: string, expected?: string|null, priority?: string|null, platform?: string|null, test_file?: string|null, test_name?: string|null, auto?: string|null, result?: string|null, notes?: string|null, features?: list<int>}
  */
 class TestTreeSaver
@@ -26,16 +29,18 @@ class TestTreeSaver
      */
     public function save(Project $project, array $input): TestTreeSaveResult
     {
-        $nodes = $this->parsed($input);
-        $existing = Test::withoutGlobalScopes()->where('project_id', $project->id)->get()->keyBy('number');
-        $featureIds = Feature::withoutGlobalScopes()->where('project_id', $project->id)->pluck('id', 'number');
+        $rawNodes = $this->parsed($input);
 
-        $numberById = $existing->pluck('number', 'id');
-        $storedParents = $existing->map(fn (Test $test): ?int => $numberById[$test->parent_id] ?? null)->all();
+        return DB::transaction(function () use ($project, $rawNodes): TestTreeSaveResult {
+            $existing = Test::withoutGlobalScopes()->where('project_id', $project->id)->get()->keyBy('number');
+            $featureIds = Feature::withoutGlobalScopes()->where('project_id', $project->id)->pluck('id', 'number');
+            [$nodes, $assigned] = $this->numbered($rawNodes, array_values($existing->map(fn (Test $test): int => $test->number)->all()));
 
-        $this->assertValidTree($nodes, $storedParents, $featureIds->all());
+            $numberById = $existing->pluck('number', 'id');
+            $storedParents = $existing->map(fn (Test $test): ?int => $numberById[$test->parent_id] ?? null)->all();
 
-        return DB::transaction(function () use ($project, $nodes, $existing, $featureIds): TestTreeSaveResult {
+            $this->assertValidTree($nodes, $storedParents, $featureIds->all());
+
             $saved = [];
 
             // Parents are cleared first and set in a second pass, so a re-parented subtree never looks like a cycle mid-save.
@@ -68,15 +73,13 @@ class TestTreeSaver
                 }
             }
 
-            $created = count(array_filter($nodes, fn (array $node): bool => ! $existing->has($node['number'])));
-
-            return new TestTreeSaveResult($created, count($nodes) - $created, $featureSyncs);
+            return new TestTreeSaveResult($assigned, count($nodes) - count($assigned), $featureSyncs);
         });
     }
 
     /**
      * @param  array<mixed>  $input
-     * @return list<TestNodeInput>
+     * @return list<RawNodeInput>
      */
     private function parsed(array $input): array
     {
@@ -85,20 +88,82 @@ class TestTreeSaver
 
         foreach ($input as $index => $node) {
             $valid = is_array($node)
-                && is_int($node['number'] ?? null)
+                && (! isset($node['number']) || is_int($node['number']))
+                && (! isset($node['ref']) || is_string($node['ref']))
+                && (! isset($node['parent_ref']) || (is_string($node['parent_ref']) && ! isset($node['parent'])))
                 && (! isset($node['parent']) || is_int($node['parent']))
                 && (! isset($node['features']) || (is_array($node['features']) && array_is_list($node['features']) && array_filter($node['features'], 'is_int') === $node['features']))
                 && array_filter($strings, fn (string $key): bool => isset($node[$key]) && ! is_string($node[$key])) === [];
 
             if (! $valid) {
-                throw new InvalidArgumentException("Node at index {$index}: number must be an integer, parent an integer or null, features a list of integers, text fields strings.");
+                throw new InvalidArgumentException("Node at index {$index}: number must be an integer, ref/parent_ref strings (parent_ref not with parent), parent an integer or null, features a list of integers, text fields strings.");
             }
 
-            /** @var TestNodeInput $node */
+            /** @var RawNodeInput $node */
             $nodes[] = $node;
         }
 
         return $nodes;
+    }
+
+    /**
+     * Gives new nodes the next free numbers and turns parent_ref into parent; unknown numbers or refs reject the payload.
+     *
+     * @param  list<RawNodeInput>  $rawNodes
+     * @param  list<int>  $existingNumbers
+     * @return array{list<TestNodeInput>, array<string, int>} nodes, and ref (or "row N") => assigned number
+     */
+    private function numbered(array $rawNodes, array $existingNumbers): array
+    {
+        $next = ($existingNumbers === [] ? 0 : max($existingNumbers)) + 1;
+        $known = array_flip($existingNumbers);
+        $numberByRef = [];
+        $assigned = [];
+        $errors = [];
+
+        foreach ($rawNodes as $index => $node) {
+            if (isset($node['number']) && ! isset($known[$node['number']])) {
+                $errors[] = "#{$node['number']}: no such test; omit number to create a new node.";
+            }
+
+            $number = $node['number'] ?? $next++;
+
+            if (! isset($node['number'])) {
+                $assigned[$node['ref'] ?? "row {$index}"] = $number;
+            }
+
+            if (isset($node['ref'])) {
+                if (isset($numberByRef[$node['ref']])) {
+                    $errors[] = "ref \"{$node['ref']}\" is used twice.";
+                }
+
+                $numberByRef[$node['ref']] = $number;
+            }
+
+            $rawNodes[$index]['number'] = $number;
+        }
+
+        $nodes = [];
+
+        foreach ($rawNodes as $node) {
+            if (isset($node['parent_ref'])) {
+                if (! isset($numberByRef[$node['parent_ref']])) {
+                    $errors[] = "#{$node['number']}: parent_ref \"{$node['parent_ref']}\" matches no ref in this payload.";
+                }
+
+                $node['parent'] = $numberByRef[$node['parent_ref']] ?? null;
+            }
+
+            unset($node['ref'], $node['parent_ref']);
+            /** @var TestNodeInput $node */
+            $nodes[] = $node;
+        }
+
+        if ($errors !== []) {
+            throw new InvalidArgumentException(implode("\n", $errors));
+        }
+
+        return [$nodes, $assigned];
     }
 
     /**

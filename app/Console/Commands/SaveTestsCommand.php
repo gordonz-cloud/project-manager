@@ -10,13 +10,14 @@ use InvalidArgumentException;
 use LogicException;
 
 /**
- * Upserts Test Matrix nodes from a JSON file:
- * {"project": "sg", "nodes": [{"number", "parent", "module", "action", "expected", "priority", "platform",
+ * Saves Test Matrix nodes from a JSON file. Omit "number" to create (the server assigns it; use "ref"/"parent_ref"
+ * to link new nodes), give "number" to update an existing node:
+ * {"project": "sg", "nodes": [{"number"?, "ref"?, "parent"?, "parent_ref"?, "module", "action", "expected", "priority", "platform",
  * "test_file", "test_name", "auto", "result", "notes", "features": [feature numbers]}]}.
  */
 class SaveTestsCommand extends Command
 {
-    protected $signature = 'tests:save {file : JSON with project and nodes}';
+    protected $signature = 'tests:save {file : JSON with project and nodes} {--json : Print the result as JSON}';
 
     protected $description = 'Create or update Test Matrix nodes from a JSON file';
 
@@ -38,6 +39,16 @@ class SaveTestsCommand extends Command
             $this->error($exception->getMessage());
 
             return self::FAILURE;
+        }
+
+        if ($this->option('json')) {
+            $this->line((string) json_encode(['created' => $result->created, 'updated' => $result->updated, 'assigned' => $result->assigned], JSON_UNESCAPED_UNICODE));
+
+            return self::SUCCESS;
+        }
+
+        foreach ($result->assigned as $label => $number) {
+            $this->line("{$label} → #{$number}");
         }
 
         $this->info("Tests saved: {$result->created} created, {$result->updated} updated, {$result->nodesWithFeaturesSynced} feature lists synced");
