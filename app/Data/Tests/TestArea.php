@@ -5,17 +5,17 @@ namespace App\Data\Tests;
 use Closure;
 
 /**
- * One business area (tests.module) of the Test Matrix: its local roots, each under the
- * breadcrumb of prerequisite steps that live in other areas.
+ * One business area (tests.module) of the Test Matrix: the smallest subtree holding the area's nodes,
+ * with ancestors from other areas kept as muted nodes so the tree stays real.
  */
 final readonly class TestArea
 {
     /**
-     * @param  list<array{breadcrumb: list<string>, nodes: list<TestTreeNode>}>  $branches  consecutive roots sharing a breadcrumb share a branch
+     * @param  list<TestTreeNode>  $nodes
      */
     public function __construct(
         public string $name,
-        public array $branches,
+        public array $nodes,
         public TestRollup $rollup,
     ) {}
 
@@ -27,12 +27,11 @@ final readonly class TestArea
      */
     public static function groupAll(array $tree): array
     {
-        $rootsByArea = [];
-        self::collectLocalRoots($tree, null, [], $rootsByArea);
-
         $areas = [];
-        foreach ($rootsByArea as $name => $roots) {
-            $areas[] = self::fromRoots((string) $name, $roots);
+
+        foreach (array_unique(self::areaNames($tree)) as $name) {
+            $nodes = TestTreeNode::withinAreaAll($tree, $name);
+            $areas[] = new self($name, $nodes, TestTreeNode::total($nodes));
         }
 
         usort($areas, fn (self $a, self $b): int => [$a->rollup->failed === 0, $a->name] <=> [$b->rollup->failed === 0, $b->name]);
@@ -41,60 +40,21 @@ final readonly class TestArea
     }
 
     /**
-     * @param  Closure(TestTreeNode): bool  $matches
+     * @param  Closure(TestTreeNode): bool  $matches  asked only of the area's own nodes
      */
     public function matching(Closure $matches): ?self
     {
-        $branches = [];
+        $nodes = TestTreeNode::matchingAll($this->nodes, fn (TestTreeNode $node): bool => ! $node->muted && $matches($node));
 
-        foreach ($this->branches as $branch) {
-            $nodes = TestTreeNode::matchingAll($branch['nodes'], $matches);
-
-            if ($nodes !== []) {
-                $branches[] = ['breadcrumb' => $branch['breadcrumb'], 'nodes' => $nodes];
-            }
-        }
-
-        return $branches === [] ? null : new self($this->name, $branches, $this->rollup);
+        return $nodes === [] ? null : new self($this->name, $nodes, $this->rollup);
     }
 
     /**
      * @param  list<TestTreeNode>  $nodes
-     * @param  list<string>  $ancestors  titles from the tree root down to the parent
-     * @param  array<string, list<array{breadcrumb: list<string>, node: TestTreeNode}>>  $rootsByArea
+     * @return list<string>
      */
-    private static function collectLocalRoots(array $nodes, ?string $parentArea, array $ancestors, array &$rootsByArea): void
+    private static function areaNames(array $nodes): array
     {
-        foreach ($nodes as $node) {
-            $area = $node->test->area();
-
-            if ($area !== $parentArea) {
-                $rootsByArea[$area][] = ['breadcrumb' => $ancestors, 'node' => $node->withinArea()];
-            }
-
-            self::collectLocalRoots($node->children, $area, [...$ancestors, $node->test->title], $rootsByArea);
-        }
-    }
-
-    /**
-     * @param  list<array{breadcrumb: list<string>, node: TestTreeNode}>  $roots
-     */
-    private static function fromRoots(string $name, array $roots): self
-    {
-        $branches = [];
-        $rollup = new TestRollup;
-
-        foreach ($roots as $root) {
-            $rollup = $rollup->plus($root['node']->rollup);
-            $last = array_key_last($branches);
-
-            if ($last !== null && $branches[$last]['breadcrumb'] === $root['breadcrumb']) {
-                $branches[$last]['nodes'][] = $root['node'];
-            } else {
-                $branches[] = ['breadcrumb' => $root['breadcrumb'], 'nodes' => [$root['node']]];
-            }
-        }
-
-        return new self($name, $branches, $rollup);
+        return array_merge(...array_map(fn (TestTreeNode $node): array => [$node->test->area(), ...self::areaNames($node->children)], $nodes));
     }
 }

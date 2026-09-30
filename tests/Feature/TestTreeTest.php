@@ -145,7 +145,7 @@ it('renders the tree, filters to matches with their ancestor path, and lists unc
         ->assertSeeInOrder(['Root step', 'Middle step', 'Broken leaf']);
 });
 
-it('groups nodes by business area with rollups, breadcrumbs from other areas, and no duplicates', function () {
+it('groups nodes by business area as real subtrees: other-area ancestors muted once, shared chains merged, counts area-only', function () {
     $project = Project::factory()->create();
     $make = fn (int $number, ?Test $parent, ?string $module, TestLastResult $result = TestLastResult::Passed, ?string $location = 'tests/X.php'): Test => Test::factory()->create([
         'project_id' => $project->id, 'number' => $number, 'parent_id' => $parent?->id, 'module' => $module,
@@ -165,14 +165,38 @@ it('groups nodes by business area with rollups, breadcrumbs from other areas, an
     $areas = collect(app(TestTreeService::class)->areas($project))->keyBy('name');
     $checkout = $areas['结账'];
 
+    $numbers = fn (array $nodes): array => array_map(fn (TestTreeNode $node): int => $node->test->number, $nodes);
+    $muted = fn (array $nodes): array => array_keys(array_filter(flatTree($nodes), fn (TestTreeNode $node): bool => $node->muted));
+
     expect($areas->keys()->all())->toBe(['结账', '未分类', '账户', '退货'])
         ->and((array) $checkout->rollup)->toBe(['passed' => 3, 'failed' => 1, 'blocked' => 0, 'gaps' => 1, 'fakeGreen' => 0])
-        ->and($checkout->branches)->toHaveCount(1)
-        ->and($checkout->branches[0]['breadcrumb'])->toBe(['step 1', 'step 2'])
-        ->and(array_map(fn (TestTreeNode $node): int => $node->test->number, $checkout->branches[0]['nodes']))->toBe([3, 8])
-        ->and(array_keys(flatTree($checkout->branches[0]['nodes'])))->not->toContain(7)
-        ->and($areas['退货']->branches[0]['breadcrumb'])->toBe(['step 1', 'step 2', 'step 3', 'step 4'])
-        ->and(array_keys(flatTree($areas['账户']->branches[0]['nodes'])))->toBe([1, 2]);
+        ->and($numbers($checkout->nodes))->toBe([1])
+        ->and($numbers($checkout->nodes[0]->children))->toBe([2])
+        ->and($numbers($checkout->nodes[0]->children[0]->children))->toBe([3, 8])
+        ->and($muted($checkout->nodes))->toBe([1, 2])
+        ->and((array) $checkout->nodes[0]->rollup)->toBe((array) $checkout->rollup)
+        ->and(array_keys(flatTree($checkout->nodes)))->not->toContain(7)
+        ->and(array_keys(flatTree($areas['退货']->nodes)))->toBe([1, 2, 3, 4, 7])
+        ->and($muted($areas['退货']->nodes))->toBe([1, 2, 3, 4])
+        ->and((array) $areas['退货']->rollup)->toBe(['passed' => 1, 'failed' => 0, 'blocked' => 0, 'gaps' => 0, 'fakeGreen' => 0])
+        ->and(array_keys(flatTree($areas['账户']->nodes)))->toBe([1, 2])
+        ->and($muted($areas['账户']->nodes))->toBe([]);
+});
+
+it('renders other-area ancestors as muted, open, clickable rows without breadcrumb lines', function () {
+    $project = testTreePage();
+    $login = Test::factory()->create(['project_id' => $project->id, 'number' => 1, 'module' => '账户', 'title' => 'Log in']);
+    $open = Test::factory()->create(['project_id' => $project->id, 'number' => 2, 'parent_id' => $login->id, 'module' => '结账', 'title' => 'Open cart']);
+    Test::factory()->create(['project_id' => $project->id, 'number' => 3, 'parent_id' => $open->id, 'module' => '结账', 'title' => 'Pay deep']);
+
+    Livewire::test(TestTree::class)
+        ->call('toggleArea', '结账')
+        ->assertSeeHtml('data-muted')
+        ->assertSeeInOrder(['Log in', 'Open cart'])
+        ->assertDontSee('Pay deep')
+        ->assertDontSee('前置')
+        ->call('selectNode', 1)
+        ->assertSeeHtml('data-test-marker>[T1]<');
 });
 
 it('keeps number and expected out of rows and shows the expected field in the detail', function () {

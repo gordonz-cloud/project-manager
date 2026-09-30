@@ -83,9 +83,9 @@ class TestTree extends Page
         unset($this->selectedTest);
     }
 
-    public function toggleNode(int $id): void
+    public function toggleNode(int $id, bool $isOpen = false): void
     {
-        $this->expanded[$id] = ! ($this->expanded[$id] ?? false);
+        $this->expanded[$id] = ! $isOpen;
     }
 
     public function toggleArea(string $name): void

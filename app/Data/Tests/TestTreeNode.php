@@ -20,6 +20,7 @@ final readonly class TestTreeNode
         public TestNodeState $state,
         public array $children,
         public TestRollup $rollup,
+        public bool $muted = false,
     ) {}
 
     /**
@@ -34,17 +35,29 @@ final readonly class TestTreeNode
     }
 
     /**
-     * The same node with only the descendants that stay in its own business area; state is kept.
+     * The smallest subtrees holding the area's nodes; ancestors from other areas stay as muted nodes
+     * and count nothing, other-area branches with no area node below are dropped.
+     *
+     * @param  list<self>  $nodes
+     * @return list<self>
      */
-    public function withinArea(): self
+    public static function withinAreaAll(array $nodes, string $area): array
     {
-        $children = array_values(array_map(
-            fn (self $child): self => $child->withinArea(),
-            array_filter($this->children, fn (self $child): bool => $child->test->area() === $this->test->area()),
-        ));
-        $rollup = array_reduce($children, fn (TestRollup $sum, self $child): TestRollup => $sum->plus($child->rollup), TestRollup::of($this->state, $this->test->isGap()));
+        $kept = [];
 
-        return new self($this->test, $this->state, $children, $rollup);
+        foreach ($nodes as $node) {
+            $children = self::withinAreaAll($node->children, $area);
+            $muted = $node->test->area() !== $area;
+
+            if ($muted && $children === []) {
+                continue;
+            }
+
+            $own = $muted ? new TestRollup : TestRollup::of($node->state, $node->test->isGap());
+            $kept[] = new self($node->test, $node->state, $children, $own->plus(self::total($children)), $muted);
+        }
+
+        return $kept;
     }
 
     public static function stateOf(Test $test, bool $hasFailedAncestor): TestNodeState
@@ -74,7 +87,7 @@ final readonly class TestTreeNode
             $children = self::matchingAll($node->children, $matches);
 
             if ($children !== [] || $matches($node)) {
-                $kept[] = new self($node->test, $node->state, $children, $node->rollup);
+                $kept[] = new self($node->test, $node->state, $children, $node->rollup, $node->muted);
             }
         }
 

@@ -32,13 +32,8 @@
                         </button>
                         @if ($areaOpen)
                             <div class="ml-3.5 pl-1">
-                                @foreach ($area->branches as $branch)
-                                    @if ($branch['breadcrumb'] !== [])
-                                        <p class="truncate px-2 pt-1 text-xs text-slate-400" data-breadcrumb>前置：{{ collect($branch['breadcrumb'])->map(fn (string $title): string => \Illuminate\Support\Str::limit($title, 16))->implode(' → ') }}</p>
-                                    @endif
-                                    @foreach ($branch['nodes'] as $node)
-                                        @include('filament.pages.partials.test-tree-node', ['node' => $node])
-                                    @endforeach
+                                @foreach ($area->nodes as $node)
+                                    @include('filament.pages.partials.test-tree-node', ['node' => $node, 'areaKey' => md5($area->name)])
                                 @endforeach
                             </div>
                         @endif

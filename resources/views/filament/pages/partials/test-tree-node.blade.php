@@ -1,6 +1,6 @@
 @php
     $test = $node->test;
-    $isOpen = $node->children !== [] && ($this->isNarrowed() || ($this->expanded[$test->id] ?? false));
+    $isOpen = $node->children !== [] && ($this->isNarrowed() || ($this->expanded[$test->id] ?? $node->muted));
     $isSelected = $this->selectedNumber === $test->number;
     $dotClass = match ($node->state) {
         \App\Data\Tests\TestNodeState::Passed => 'text-emerald-500',
@@ -11,10 +11,10 @@
     };
 @endphp
 
-<div wire:key="test-{{ $test->id }}">
+<div wire:key="test-{{ $areaKey }}-{{ $test->id }}" @if ($node->muted) data-muted @endif>
     <div class="flex items-center">
         @if ($node->children !== [])
-            <button type="button" wire:click="toggleNode({{ $test->id }})" class="flex size-7 shrink-0 items-center justify-center rounded text-slate-400 hover:text-slate-900 dark:hover:text-white" aria-label="{{ $isOpen ? '收起' : '展开' }}">
+            <button type="button" wire:click="toggleNode({{ $test->id }}, @js($isOpen))" class="flex size-7 shrink-0 items-center justify-center rounded text-slate-400 hover:text-slate-900 dark:hover:text-white" aria-label="{{ $isOpen ? '收起' : '展开' }}">
                 <x-filament::icon icon="{{ $isOpen ? 'heroicon-m-chevron-down' : 'heroicon-m-chevron-right' }}" class="size-4" />
             </button>
         @else
@@ -25,11 +25,17 @@
             role="button"
             wire:click="selectNode({{ $test->number }})"
             data-test-number="{{ $test->number }}"
-            class="flex min-h-8 min-w-0 flex-1 cursor-pointer items-center gap-2 rounded-md px-2 py-1 text-left text-sm transition {{ $isSelected ? 'bg-slate-900 text-white dark:bg-white dark:text-slate-950' : 'hover:bg-slate-50 dark:hover:bg-white/5' }}"
+            class="flex min-h-8 min-w-0 flex-1 cursor-pointer items-center gap-2 rounded-md px-2 py-1 text-left text-sm transition {{ $isSelected ? 'bg-slate-900 text-white dark:bg-white dark:text-slate-950' : 'hover:bg-slate-50 dark:hover:bg-white/5' }} {{ $node->muted && ! $isSelected ? 'text-slate-400 dark:text-slate-500' : '' }}"
         >
-            <span class="w-4 shrink-0 text-center {{ $dotClass }}" title="{{ $node->state->label() }}">{{ $node->state->symbol() }}</span>
+            @if ($node->muted)
+                <span class="w-4 shrink-0"></span>
+            @else
+                <span class="w-4 shrink-0 text-center {{ $dotClass }}" title="{{ $node->state->label() }}">{{ $node->state->symbol() }}</span>
+            @endif
             <span class="min-w-0 truncate">{{ $test->title }}</span>
-            @if ($test->lacksEvidence())
+            @if ($node->muted)
+                <span class="ml-auto shrink-0 text-xs text-slate-400">{{ $test->area() }}</span>
+            @elseif ($test->lacksEvidence())
                 <span class="shrink-0 text-xs opacity-50">缺测试</span>
             @endif
             @if ($node->children !== [] && ! $isOpen)
@@ -44,7 +50,7 @@
     @if ($isOpen)
         <div class="ml-3.5 border-l border-slate-200 pl-1 dark:border-white/10">
             @foreach ($node->children as $child)
-                @include('filament.pages.partials.test-tree-node', ['node' => $child])
+                @include('filament.pages.partials.test-tree-node', ['node' => $child, 'areaKey' => $areaKey])
             @endforeach
         </div>
     @endif
