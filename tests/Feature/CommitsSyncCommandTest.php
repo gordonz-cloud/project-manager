@@ -25,7 +25,7 @@ function makeCommitTestRepo(): string
 
     file_put_contents($repo.'/f', 'two');
     $git(['add', 'f']);
-    $git(['commit', '-q', '-m', 'Second commit', '-m', 'Body references 功能7 somewhere']);
+    $git(['commit', '-q', '-m', 'Second commit', '-m', 'Body references Feature 7 somewhere']);
 
     file_put_contents($repo.'/f', 'three');
     $git(['add', 'f']);

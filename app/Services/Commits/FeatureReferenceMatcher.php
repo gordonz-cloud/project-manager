@@ -7,7 +7,7 @@ use Illuminate\Support\Collection;
 
 class FeatureReferenceMatcher
 {
-    private const string FEATURE_PATTERN = '/(?:feature\s*#?|功能\s*)(\d+)/iu';
+    private const string FEATURE_PATTERN = '/\bfeature\s+(\d+)\b(?!:)/i';
 
     /**
      * @param  Collection<int, Feature>  $featuresByNumber
