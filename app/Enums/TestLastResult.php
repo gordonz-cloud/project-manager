@@ -10,7 +10,6 @@ enum TestLastResult: string implements HasColor, HasLabel
     case NotRun = '未跑';
     case Passed = '通过';
     case Failed = '失败';
-    case Blocked = '阻塞';
     case Skipped = '跳过';
 
     public function getLabel(): string
@@ -24,7 +23,6 @@ enum TestLastResult: string implements HasColor, HasLabel
             self::NotRun => 'gray',
             self::Passed => 'success',
             self::Failed => 'danger',
-            self::Blocked => 'warning',
             self::Skipped => 'info',
         };
     }

@@ -43,11 +43,25 @@ class TestsTable
                     ->collapsible(),
             ])
             ->columns([
+                TextColumn::make('number')
+                    ->label('#')
+                    ->sortable(),
                 TextColumn::make('title')
-                    ->label('测试')
+                    ->label('动作')
+                    ->wrap()
                     ->searchable(),
+                TextColumn::make('expected')
+                    ->label('预期')
+                    ->wrap()
+                    ->searchable(),
+                TextColumn::make('priority')
+                    ->label('优先级')
+                    ->badge(),
+                TextColumn::make('auto')
+                    ->label('自动化')
+                    ->badge(),
                 TextColumn::make('location')
-                    ->label('测试位置')
+                    ->label('测试文件')
                     ->searchable(),
                 TextColumn::make('status')
                     ->label('状态')
