@@ -9,7 +9,7 @@ use Illuminate\Testing\PendingCommand;
 /**
  * @param  list<string>  $testcases  raw <testcase>…</testcase> XML fragments
  */
-function importJunit(string $slug, array $testcases): PendingCommand
+function importJunit(string $slug, array $testcases, array $options = []): PendingCommand
 {
     $body = implode("\n", $testcases);
     $xml = <<<XML
@@ -24,7 +24,7 @@ function importJunit(string $slug, array $testcases): PendingCommand
     $file = tempnam(sys_get_temp_dir(), 'junit');
     file_put_contents($file, $xml);
 
-    return test()->artisan('tests:results', ['slug' => $slug, 'junit' => $file]);
+    return test()->artisan('tests:results', ['slug' => $slug, 'junit' => $file, ...$options]);
 }
 
 function passingCase(string $name): string
@@ -77,6 +77,22 @@ it('does not reset a node the run did not claim', function () {
     importJunit('tt', [passingCase('unrelated')])->assertSuccessful();
 
     expect($node->fresh()->last_result)->toBe(TestLastResult::Passed);
+});
+
+it('resets the stale result of an unclaimed node on a full run, only in that project', function () {
+    $project = Project::factory()->create(['slug' => 'tt']);
+    $other = Project::factory()->create(['slug' => 'other']);
+    $claimed = Test::factory()->create(['project_id' => $project->id, 'number' => 1, 'last_result' => TestLastResult::NotRun]);
+    $unclaimed = Test::factory()->create(['project_id' => $project->id, 'number' => 2, 'last_result' => TestLastResult::Passed]);
+    $otherProject = Test::factory()->create(['project_id' => $other->id, 'number' => 2, 'last_result' => TestLastResult::Passed]);
+
+    importJunit('tt', [passingCase('a [T1]')], ['--full' => true])
+        ->expectsOutputToContain('结果重置为未跑：1')
+        ->assertSuccessful();
+
+    expect($claimed->fresh()->last_result)->toBe(TestLastResult::Passed)
+        ->and($unclaimed->fresh()->last_result)->toBe(TestLastResult::NotRun)
+        ->and($otherProject->fresh()->last_result)->toBe(TestLastResult::Passed);
 });
 
 it('reports unknown claimed numbers, unclaimed testcases, and auto nodes missing a test', function () {

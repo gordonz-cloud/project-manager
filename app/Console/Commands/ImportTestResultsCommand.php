@@ -9,11 +9,12 @@ use Illuminate\Console\Command;
 /**
  * Writes a Pest JUnit run back onto the Test Matrix tree, matching testcases to nodes by a
  * "[T<number>]" token in the test's own description (Pest's ->group() does not survive into
- * JUnit output, so groups cannot be used as the marker).
+ * JUnit output, so groups cannot be used as the marker). With --full the file is the whole suite:
+ * nodes no testcase claimed get their stale result reset to "not run".
  */
 class ImportTestResultsCommand extends Command
 {
-    protected $signature = 'tests:results {slug : Project slug} {junit : Path to a JUnit XML file}';
+    protected $signature = 'tests:results {slug : Project slug} {junit : Path to a JUnit XML file} {--full : The file is a full-suite run: reset results on nodes no test claimed}';
 
     protected $description = 'Write a Pest JUnit run back onto the Test Matrix tree ([T<number>] in the test description)';
 
@@ -35,9 +36,13 @@ class ImportTestResultsCommand extends Command
             return self::FAILURE;
         }
 
-        $result = $importer->import($project, $junit);
+        $result = $importer->import($project, $junit, (bool) $this->option('full'));
 
         $this->info("节点更新：通过 {$result->passed}，失败 {$result->failed}，跳过 {$result->skipped}");
+
+        if ($this->option('full')) {
+            $this->info("无人认领、结果重置为未跑：{$result->reset}");
+        }
 
         $this->listSection('代码有、树上没有（编号）', array_map(strval(...), $result->unknownNumbers));
         $this->listSection('没认领节点的测试', $result->unclaimedTestcases, limit: 20);

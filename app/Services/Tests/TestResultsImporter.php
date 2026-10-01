@@ -24,7 +24,10 @@ use SimpleXMLElement;
  */
 class TestResultsImporter
 {
-    public function import(Project $project, string $junitPath): TestResultsImportResult
+    /**
+     * @param  bool  $fullRun  the JUnit file is the whole suite, so a node nobody claimed has no current result
+     */
+    public function import(Project $project, string $junitPath, bool $fullRun = false): TestResultsImportResult
     {
         $testcases = $this->testcases($junitPath);
         $claims = $this->claimsByNumber($testcases);
@@ -38,8 +41,9 @@ class TestResultsImporter
         ));
 
         $missingTests = $this->missingTests($tree, array_keys($claims));
+        $reset = $fullRun ? $this->resetUnclaimed($tree, array_keys($claims)) : 0;
 
-        return new TestResultsImportResult($passed, $failed, $skipped, $unknownNumbers, $unclaimedTestcases, $missingTests);
+        return new TestResultsImportResult($passed, $failed, $skipped, $unknownNumbers, $unclaimedTestcases, $missingTests, $reset);
     }
 
     /**
@@ -90,6 +94,24 @@ class TestResultsImporter
             array_filter($results, fn (TestLastResult $result): bool => $result !== TestLastResult::Skipped) === [] => TestLastResult::Skipped,
             default => TestLastResult::Passed,
         };
+    }
+
+    /**
+     * After a full run, a result left on a node no testcase claims is stale (its test was retagged or
+     * deleted), so it goes back to "not run". A partial run proves nothing about the nodes it skipped.
+     *
+     * @param  Collection<int, Test>  $tree  keyed by number
+     * @param  list<int>  $claimedNumbers
+     */
+    private function resetUnclaimed(Collection $tree, array $claimedNumbers): int
+    {
+        $stale = $tree->reject(fn (Test $test): bool => $test->last_result === TestLastResult::NotRun || in_array($test->number, $claimedNumbers, true));
+
+        if ($stale->isNotEmpty()) {
+            Test::withoutGlobalScopes()->whereKey($stale->modelKeys())->update(['last_result' => TestLastResult::NotRun]);
+        }
+
+        return $stale->count();
     }
 
     /**
