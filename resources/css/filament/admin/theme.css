@@ -1,5 +1,6 @@
 @import '../../../../vendor/filament/filament/resources/css/theme.css';
 
 @source '../../../../app/Filament';
+@source '../../../../app/Data';
 @source '../../../../resources/views/filament';
 @source '../../../../resources/views/filament/pages/workbench-graph.blade.php';

@@ -12,7 +12,6 @@ use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\EditAction;
 use Filament\Facades\Filament;
 use Filament\Tables\Columns\TextColumn;
-use Filament\Tables\Filters\Filter;
 use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
@@ -111,9 +110,6 @@ class RequirementsTable
                 SelectFilter::make('version')
                     ->label('版本')
                     ->options(fn (): array => resolve(RequirementVersionOptions::class)->all()),
-                Filter::make('incomplete')
-                    ->label('未完成')
-                    ->query(fn (Builder $query): Builder => $query->where('status', '!=', RequirementStatus::Done)),
             ])
             ->recordActions([
                 EditAction::make()->slideOver(),

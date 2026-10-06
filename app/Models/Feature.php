@@ -69,6 +69,16 @@ class Feature extends Model
             }
         });
 
+        static::created(function (self $feature): void {
+            $feature->mirrorRequirementColumn(previous: null);
+        });
+
+        static::updated(function (self $feature): void {
+            if ($feature->wasChanged('requirement_id')) {
+                $feature->mirrorRequirementColumn(previous: $feature->getOriginal('requirement_id'));
+            }
+        });
+
         static::deleting(function (self $feature): void {
             if (WorkflowRun::withoutGlobalScopes()->where('feature_id', $feature->id)->exists()) {
                 throw new LogicException('A feature with workflow history cannot be deleted.');
@@ -94,6 +104,16 @@ class Feature extends Model
     public function requirement(): BelongsTo
     {
         return $this->belongsTo(Requirement::class);
+    }
+
+    /**
+     * Every requirement this feature serves; requirement_id is the primary one and is mirrored in here.
+     *
+     * @return BelongsToMany<Requirement, $this>
+     */
+    public function requirements(): BelongsToMany
+    {
+        return $this->belongsToMany(Requirement::class);
     }
 
     /**
@@ -162,5 +182,19 @@ class Feature extends Model
     public function hasStaleFlowchart(): bool
     {
         return $this->flowchart?->isStale() ?? false;
+    }
+
+    /**
+     * Keeps the many-to-many links in step when the single requirement column changes.
+     */
+    private function mirrorRequirementColumn(?int $previous): void
+    {
+        if ($previous !== null) {
+            $this->requirements()->detach($previous);
+        }
+
+        if ($this->requirement_id !== null) {
+            $this->requirements()->syncWithoutDetaching([$this->requirement_id]);
+        }
     }
 }

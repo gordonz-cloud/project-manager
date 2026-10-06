@@ -10,6 +10,7 @@ use App\Enums\TestStatus;
 use App\Models\Feature;
 use App\Models\Project;
 use App\Models\Test;
+use App\Support\NumberedTreePayload;
 use Illuminate\Support\Facades\DB;
 use InvalidArgumentException;
 
@@ -34,7 +35,8 @@ class TestTreeSaver
         return DB::transaction(function () use ($project, $rawNodes): TestTreeSaveResult {
             $existing = Test::withoutGlobalScopes()->where('project_id', $project->id)->get()->keyBy('number');
             $featureIds = Feature::withoutGlobalScopes()->where('project_id', $project->id)->pluck('id', 'number');
-            [$nodes, $assigned] = $this->numbered($rawNodes, array_values($existing->map(fn (Test $test): int => $test->number)->all()));
+            /** @var list<TestNodeInput> $nodes */
+            [$nodes, $assigned] = NumberedTreePayload::numbered($rawNodes, array_values($existing->map(fn (Test $test): int => $test->number)->all()), 'test');
 
             $numberById = $existing->pluck('number', 'id');
             $storedParents = $existing->map(fn (Test $test): ?int => $numberById[$test->parent_id] ?? null)->all();
@@ -107,66 +109,6 @@ class TestTreeSaver
     }
 
     /**
-     * Gives new nodes the next free numbers and turns parent_ref into parent; unknown numbers or refs reject the payload.
-     *
-     * @param  list<RawNodeInput>  $rawNodes
-     * @param  list<int>  $existingNumbers
-     * @return array{list<TestNodeInput>, array<string, int>} nodes, and ref (or "row N") => assigned number
-     */
-    private function numbered(array $rawNodes, array $existingNumbers): array
-    {
-        $next = ($existingNumbers === [] ? 0 : max($existingNumbers)) + 1;
-        $known = array_flip($existingNumbers);
-        $numberByRef = [];
-        $assigned = [];
-        $errors = [];
-
-        foreach ($rawNodes as $index => $node) {
-            if (isset($node['number']) && ! isset($known[$node['number']])) {
-                $errors[] = "#{$node['number']}: no such test; omit number to create a new node.";
-            }
-
-            $number = $node['number'] ?? $next++;
-
-            if (! isset($node['number'])) {
-                $assigned[$node['ref'] ?? "row {$index}"] = $number;
-            }
-
-            if (isset($node['ref'])) {
-                if (isset($numberByRef[$node['ref']])) {
-                    $errors[] = "ref \"{$node['ref']}\" is used twice.";
-                }
-
-                $numberByRef[$node['ref']] = $number;
-            }
-
-            $rawNodes[$index]['number'] = $number;
-        }
-
-        $nodes = [];
-
-        foreach ($rawNodes as $node) {
-            if (isset($node['parent_ref'])) {
-                if (! isset($numberByRef[$node['parent_ref']])) {
-                    $errors[] = "#{$node['number']}: parent_ref \"{$node['parent_ref']}\" matches no ref in this payload.";
-                }
-
-                $node['parent'] = $numberByRef[$node['parent_ref']] ?? null;
-            }
-
-            unset($node['ref'], $node['parent_ref']);
-            /** @var TestNodeInput $node */
-            $nodes[] = $node;
-        }
-
-        if ($errors !== []) {
-            throw new InvalidArgumentException(implode("\n", $errors));
-        }
-
-        return [$nodes, $assigned];
-    }
-
-    /**
      * @param  TestNodeInput  $node
      * @return array<string, mixed>
      */
@@ -216,28 +158,7 @@ class TestTreeSaver
             $parents[$number] = array_key_exists('parent', $node) ? $node['parent'] : ($storedParents[$number] ?? null);
         }
 
-        foreach ($parents as $number => $parent) {
-            if ($parent !== null && ! array_key_exists($parent, $parents)) {
-                $errors[] = "#{$number}: parent #{$parent} does not exist.";
-            }
-        }
-
-        foreach (array_keys($parents) as $number) {
-            $seen = [$number => true];
-            $cursor = $number;
-
-            while (isset($parents[$cursor])) {
-                $cursor = $parents[$cursor];
-
-                if (isset($seen[$cursor])) {
-                    $errors[] = "#{$number}: parent chain loops back on itself.";
-
-                    break;
-                }
-
-                $seen[$cursor] = true;
-            }
-        }
+        $errors = [...$errors, ...NumberedTreePayload::parentErrors($parents)];
 
         if ($errors !== []) {
             throw new InvalidArgumentException(implode("\n", array_unique($errors)));

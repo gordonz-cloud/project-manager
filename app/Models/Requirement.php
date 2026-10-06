@@ -2,14 +2,18 @@
 
 namespace App\Models;
 
+use App\Enums\RequirementKind;
 use App\Enums\RequirementStatus;
 use App\Models\Concerns\BelongsToProject;
+use App\Models\Concerns\HasProjectSequence;
 use Database\Factories\RequirementFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\Scope;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Collection as EloquentCollection;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Carbon;
@@ -17,23 +21,47 @@ use Illuminate\Support\Collection;
 use LogicException;
 
 /**
+ * One node of the requirement tree: a statement that should hold (title), why (rationale), where it came from (source)
+ * and who decided it. Every change of statement or decision status leaves a RequirementRevision.
+ *
  * @property int $id
  * @property int $project_id
+ * @property int|null $number
+ * @property int|null $parent_id
+ * @property RequirementKind|null $kind
  * @property string $title
+ * @property string|null $rationale
+ * @property string|null $source
+ * @property string|null $decided_by
+ * @property Carbon|null $decided_at
+ * @property int|null $supersedes_id
  * @property string|null $acceptance
  * @property RequirementStatus $status
  * @property string|null $version
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at
  */
-#[Fillable(['title', 'acceptance', 'status', 'version'])]
+#[Fillable(['number', 'parent_id', 'kind', 'title', 'rationale', 'source', 'decided_by', 'decided_at', 'supersedes_id', 'acceptance', 'status', 'version'])]
 class Requirement extends Model
 {
     /** @use HasFactory<RequirementFactory> */
-    use BelongsToProject, HasFactory;
+    use BelongsToProject, HasFactory, HasProjectSequence;
+
+    /** Why the statement or status changed; written into the revision of the next save, then cleared. */
+    public ?string $revisionReason = null;
 
     protected static function booted(): void
     {
+        static::created(function (self $requirement): void {
+            $requirement->recordRevision(isNew: true);
+        });
+
+        static::updated(function (self $requirement): void {
+            if ($requirement->wasChanged(['title', 'status'])) {
+                $requirement->recordRevision(isNew: false);
+            }
+        });
+
         static::deleting(function (self $requirement): void {
             if (WorkflowRun::withoutGlobalScopes()->where('requirement_id', $requirement->id)->exists()) {
                 throw new LogicException('A requirement with workflow history cannot be deleted.');
@@ -49,7 +77,114 @@ class Requirement extends Model
     {
         return [
             'status' => RequirementStatus::class,
+            'kind' => RequirementKind::class,
+            'decided_at' => 'date',
         ];
+    }
+
+    /**
+     * @return BelongsTo<Requirement, $this>
+     */
+    public function parent(): BelongsTo
+    {
+        return $this->belongsTo(self::class, 'parent_id');
+    }
+
+    /**
+     * @return HasMany<Requirement, $this>
+     */
+    public function children(): HasMany
+    {
+        return $this->hasMany(self::class, 'parent_id');
+    }
+
+    /**
+     * The existing rule this proposal would replace.
+     *
+     * @return BelongsTo<Requirement, $this>
+     */
+    public function supersedes(): BelongsTo
+    {
+        return $this->belongsTo(self::class, 'supersedes_id');
+    }
+
+    /**
+     * Features that make this statement hold (many-to-many; features.requirement_id is mirrored into it).
+     *
+     * @return BelongsToMany<Feature, $this>
+     */
+    public function linkedFeatures(): BelongsToMany
+    {
+        return $this->belongsToMany(Feature::class);
+    }
+
+    /**
+     * Test-tree nodes that verify this statement directly.
+     *
+     * @return BelongsToMany<Test, $this>
+     */
+    public function tests(): BelongsToMany
+    {
+        return $this->belongsToMany(Test::class);
+    }
+
+    /**
+     * @return HasMany<RequirementRevision, $this>
+     */
+    public function revisions(): HasMany
+    {
+        return $this->hasMany(RequirementRevision::class)->latest('id');
+    }
+
+    /**
+     * Newest commits of the linked features.
+     *
+     * @return EloquentCollection<int, Commit>
+     */
+    public function recentCommits(int $limit = 10): EloquentCollection
+    {
+        return Commit::withoutGlobalScopes()
+            ->whereIn('feature_id', $this->linkedFeatures()->select('features.id'))
+            ->with('feature:id,number,title')
+            ->latest('committed_at')
+            ->limit($limit)
+            ->get();
+    }
+
+    /**
+     * Root first, ending with the parent.
+     *
+     * @return list<Requirement>
+     */
+    public function ancestors(): array
+    {
+        $path = [];
+
+        for ($node = $this->parent; $node !== null; $node = $node->parent) {
+            array_unshift($path, $node);
+        }
+
+        return $path;
+    }
+
+    /**
+     * New rows and changes of statement or decision status each leave one revision.
+     */
+    private function recordRevision(bool $isNew): void
+    {
+        $oldStatus = $isNew ? null : $this->getOriginal('status');
+
+        $this->revisions()->create([
+            'old_statement' => $isNew ? null : $this->getOriginal('title'),
+            'new_statement' => $this->title,
+            'old_status' => $oldStatus instanceof RequirementStatus ? $oldStatus->value : $oldStatus,
+            'new_status' => $this->status->value,
+            'reason' => $this->revisionReason,
+            'source' => $this->source,
+            'decided_by' => $this->decided_by,
+        ]);
+
+        $this->revisionReason = null;
     }
 
     /**
@@ -149,16 +284,6 @@ class Requirement extends Model
         $memo = once(fn () => new \ArrayObject);
 
         return $memo[$project->id] ??= self::computeBuildOrder($project);
-    }
-
-    /**
-     * @param  Builder<Requirement>  $query
-     * @return Builder<Requirement>
-     */
-    #[Scope]
-    protected function incomplete(Builder $query): Builder
-    {
-        return $query->where('status', '!=', RequirementStatus::Done);
     }
 
     /**
