@@ -1,6 +1,7 @@
 <?php
 
 use App\Data\Requirements\DeliveryStatus;
+use App\Data\Requirements\RequirementDecision;
 use App\Data\Requirements\RequirementProgress;
 use App\Data\Requirements\RequirementTreeNode;
 use App\Enums\FeatureStatus;
@@ -282,15 +283,15 @@ it('lists pending nodes by goal and shows one panel where each piece appears onc
             '需要你决定', '现在', 'Free shipping over 50, because the old carrier was cheap', '现行规则：Free shipping over 50', '要改成', 'Free shipping over 80',
             '差别', 'Orders between 50 and 80 pay shipping', '风险', 'Fewer small orders',
             'A. Raise to 80', '★推荐', 'Old rule voided', '（定了以后：Free shipping over 80 from November）', 'B. Keep 50', 'C. Raise to 65',
-            '✎ 自己写', '问老板', '先不定', '来源：spec v1', '做到哪了', 'F9 · Shipping calculator', '历史',
+            '✎ 自己写', '问老板', '先不定', '背景（与上面重复，点开看）', '来源：spec v1', '做到哪了', 'F9 · Shipping calculator', '历史',
         ])
         ->html();
 
-    foreach (['需要你决定', '为什么', '做到哪了', '>历史<', 'data-panel-header'] as $section) {
+    foreach (['需要你决定', '背景（与上面重复', '做到哪了', '>历史<', 'data-panel-header'] as $section) {
         expect(substr_count($html, $section))->toBe(1, $section);
     }
 
-    expect($html)->not->toContain('protect')->not->toContain('会动到')->not->toContain('背景和出处')->not->toContain('已选 A');
+    expect($html)->not->toContain('>为什么<')->not->toContain('protect')->not->toContain('会动到')->not->toContain('背景和出处')->not->toContain('已选 A');
 
     Livewire::withQueryParams(['tab' => 'todo', 'selectedNumber' => 3])->test(RequirementTree::class)
         ->assertSeeInOrder(['Gift wrap for members', '需要你决定', '还没有这条规则', 'A. 同意', 'B. 不要', '为什么', 'see GiftWrapService::apply']);
@@ -376,4 +377,14 @@ it('warns about a title over 60 characters but saves it [T69]', function () {
         ->assertSuccessful()->run();
 
     expect(Requirement::where('project_id', $project->id)->where('title', str_repeat('长', 61))->exists())->toBeTrue();
+});
+
+it('folds a rationale that retells 现在: two shared runs of 8+ characters, or a rule number both cite [T70]', function () {
+    $decision = RequirementDecision::fromArray([...shippingDecision(), 'now' => '访客只看到价格区间，这是 Gordon 2026-10-02 定的（#151），理由是百分比能反推会员价']);
+
+    expect($decision->retells('现状（Gordon 2026-10-02）：当初理由是百分比能反推会员价'))->toBeTrue()
+        ->and($decision->retells('老板要求按 #151 改'))->toBeTrue()
+        ->and($decision->retells('老板要求按 #15 改'))->toBeFalse()
+        ->and($decision->retells('Gordon 2026-10-02 说的，与此无关'))->toBeFalse()
+        ->and($decision->retells('margin'))->toBeFalse();
 });

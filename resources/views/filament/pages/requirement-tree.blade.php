@@ -9,7 +9,7 @@
         @endforeach
     </div>
 
-    <div class="grid gap-4 xl:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
+    <div class="grid gap-4 xl:grid-cols-[minmax(0,11fr)_minmax(0,9fr)]">
         <aside class="rounded-lg border border-slate-200 bg-white dark:border-white/10 dark:bg-slate-950">
             <div class="flex flex-wrap items-center gap-2 border-b border-slate-200 p-3 dark:border-white/10">
                 @foreach (\App\Filament\Pages\RequirementTree::TABS as $key => $label)

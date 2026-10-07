@@ -8,10 +8,11 @@
     $action = fn (bool $isOn): string => $isOn ? 'font-medium text-primary-600 dark:text-primary-400' : 'text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white';
 @endphp
 
-<section class="mt-4 rounded-lg border border-amber-200 p-3 dark:border-amber-500/30" data-decide>
+<section class="@container mt-4 rounded-lg border border-amber-200 p-3 dark:border-amber-500/30" data-decide>
     <h3 class="text-xs font-medium text-amber-700 dark:text-amber-300">{{ $isBoss ? '老板的答复（确认后记成老板拍板）' : '需要你决定' }}</h3>
 
-    <div class="mt-2 grid gap-2 md:grid-cols-2">
+    {{-- Side by side only when each column still holds ~18 characters a line. --}}
+    <div class="mt-2 grid gap-2 @lg:grid-cols-2">
         <div class="rounded-md bg-slate-50 p-2 dark:bg-white/5" data-now>
             <p class="text-xs text-slate-500">现在</p>
             <p class="mt-1 whitespace-pre-wrap text-sm text-slate-800 dark:text-slate-200">{{ $decision->now }}</p>

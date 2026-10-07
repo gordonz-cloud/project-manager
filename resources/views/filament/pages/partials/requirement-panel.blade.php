@@ -4,7 +4,7 @@
     $old = $requirement->status === \App\Enums\RequirementStatus::Conflict ? $requirement->supersedes : null;
     $features = $requirement->linkedFeatures->merge($old?->linkedFeatures ?? [])->unique('id');
     $tests = $requirement->tests->merge($old?->tests ?? [])->unique('id');
-    $showsRationale = filled($requirement->rationale) && ! $this->repeatsDecision($requirement);
+    $rationaleRepeats = $this->repeatsDecision($requirement);
 @endphp
 
 <div data-panel="{{ $requirement->number }}">
@@ -36,10 +36,17 @@
         @include('filament.pages.partials.requirement-decide', ['requirement' => $requirement])
     @endif
 
-    @if ($showsRationale || filled($requirement->source))
+    @if (filled($requirement->rationale) || filled($requirement->source))
         <section class="mt-4" data-panel-why>
-            <h3 class="text-xs font-medium text-slate-500">为什么</h3>
-            @if ($showsRationale)<p class="mt-1 whitespace-pre-wrap text-sm text-slate-700 dark:text-slate-300">{{ $requirement->rationale }}</p>@endif
+            @if ($rationaleRepeats)
+                <details data-why-folded>
+                    <summary class="cursor-pointer text-xs font-medium text-slate-500">背景（与上面重复，点开看）</summary>
+                    <p class="mt-1 whitespace-pre-wrap text-sm text-slate-700 dark:text-slate-300">{{ $requirement->rationale }}</p>
+                </details>
+            @else
+                <h3 class="text-xs font-medium text-slate-500">为什么</h3>
+                @if ($requirement->rationale)<p class="mt-1 whitespace-pre-wrap text-sm text-slate-700 dark:text-slate-300">{{ $requirement->rationale }}</p>@endif
+            @endif
             @if ($requirement->source)<p class="mt-1 break-all text-xs text-slate-400">来源：{{ $requirement->source }}</p>@endif
         </section>
     @endif

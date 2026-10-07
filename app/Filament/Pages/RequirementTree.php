@@ -289,20 +289,11 @@ class RequirementTree extends Page
     }
 
     /**
-     * Whether the rationale only says again what the decision's 现在 already says, so the panel shows it once.
+     * Whether the rationale mostly repeats the 现在 of the decision shown above it, so the panel folds it away.
      */
     public function repeatsDecision(Requirement $requirement): bool
     {
-        $now = trim($requirement->decision->now ?? '');
-        $rationale = trim((string) $requirement->rationale);
-
-        if ($now === '' || ! $this->isDecidable($requirement)) {
-            return false;
-        }
-
-        similar_text($now, $rationale, $percent);
-
-        return str_contains($now, $rationale) || str_contains($rationale, $now) || $percent >= 70;
+        return $requirement->decision !== null && $this->isDecidable($requirement) && $requirement->decision->retells((string) $requirement->rationale);
     }
 
     #[Computed]

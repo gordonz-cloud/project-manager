@@ -131,6 +131,53 @@ final readonly class RequirementDecision implements Castable
         return $errors;
     }
 
+    /**
+     * Whether $text tells what 现在 already tells: one contains the other, they share at least two runs of 8+ characters,
+     * or 现在 already names a rule number (#N) that $text cites.
+     */
+    public function retells(string $text): bool
+    {
+        preg_match_all('/#\d+/', $text, $citedRules);
+
+        foreach ($citedRules[0] as $rule) {
+            if (preg_match('/'.preg_quote($rule, '/').'(?!\d)/', $this->now)) {
+                return true;
+            }
+        }
+
+        $isContained = str_contains($text, $this->now) || (mb_strlen($text) >= 8 && str_contains($this->now, $text));
+
+        return $isContained || $this->sharedRuns($text) >= 2;
+    }
+
+    /**
+     * Number of separate stretches of 现在, each 8+ characters long, that also appear in $text.
+     */
+    private function sharedRuns(string $text, int $minimum = 8): int
+    {
+        $length = mb_strlen($this->now);
+        $runs = 0;
+
+        for ($start = 0; $start + $minimum <= $length;) {
+            if (! str_contains($text, mb_substr($this->now, $start, $minimum))) {
+                $start++;
+
+                continue;
+            }
+
+            $end = $start + $minimum;
+
+            while ($end < $length && str_contains($text, mb_substr($this->now, $start, $end - $start + 1))) {
+                $end++;
+            }
+
+            $runs++;
+            $start = $end;
+        }
+
+        return $runs;
+    }
+
     public function option(string $key): ?DecisionOption
     {
         foreach ($this->options as $option) {
