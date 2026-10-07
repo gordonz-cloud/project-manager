@@ -43,7 +43,7 @@ class RequirementTreeSaver
             /** @var list<NodeInput> $nodes */
             [$nodes, $assigned] = NumberedTreePayload::numbered($rawNodes, array_values($existing->map(fn (Requirement $requirement): int => (int) $requirement->number)->all()), 'requirement');
             $nodes = $this->withDependencyRefsResolved($rawNodes, $nodes);
-            $nodes = array_map(fn (array $node): array => $this->withConflictMarked($node, $existing->get($node['number'])), $nodes);
+            $nodes = array_map(fn (array $node): array => $this->withConflictMarked($this->withGroupDecided($node, $existing->get($node['number'])), $existing->get($node['number'])), $nodes);
 
             $this->assertValid($nodes, $existing->all(), $featureIds, $testIds, $this->storedDependencies($project));
 
@@ -179,6 +179,21 @@ class RequirementTreeSaver
     }
 
     /**
+     * A new 分组 is 已定 unless told otherwise: it only files rules, there is nothing to decide.
+     *
+     * @param  NodeInput  $node
+     * @return NodeInput
+     */
+    private function withGroupDecided(array $node, ?Requirement $stored): array
+    {
+        if ($stored === null && ($node['kind'] ?? null) === RequirementKind::Group->value && ! isset($node['status'])) {
+            $node['status'] = RequirementStatus::Decided->value;
+        }
+
+        return $node;
+    }
+
+    /**
      * A proposal pointing at a rule it would replace is a conflict.
      *
      * @param  NodeInput  $node
@@ -287,6 +302,10 @@ class RequirementTreeSaver
 
         foreach ($nodes as $node) {
             $errors = [...$errors, ...$this->levelErrors($node['number'], $states), ...$this->supersedeErrors($node, $states)];
+
+            if ($states[$node['number']]['kind'] === RequirementKind::Group && ($states[$node['number']]['status']?->awaitsDecision() ?? false)) {
+                $errors[] = "#{$node['number']}: 分组只是归类，不需要拍板——不能是提议或冲突。";
+            }
 
             if (array_key_exists('depends_on', $node)) {
                 $dependencies[$node['number']] = $node['depends_on'];

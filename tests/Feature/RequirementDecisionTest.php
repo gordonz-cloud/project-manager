@@ -315,3 +315,19 @@ it('never asks to decide a 分组: no card, no count, not on the boss list, and 
         ->assertSee(['Rule for me', 'Rule for the boss'])
         ->assertDontSee('Built group');
 });
+
+it('saves a new 分组 as 已定 and refuses to make any 分组 a 提议 or 冲突 [T67]', function () {
+    [$project, , $goal] = decisionDesk();
+    Requirement::factory()->create(['project_id' => $project->id, 'number' => 2, 'parent_id' => $goal->id, 'kind' => RequirementKind::SubGoal, 'status' => RequirementStatus::Decided]);
+
+    saveDecisionNodes([['parent' => 2, 'kind' => '分组', 'title' => 'Filed rules']])->assertSuccessful()->run();
+    $group = Requirement::where('project_id', $project->id)->where('title', 'Filed rules')->sole();
+
+    expect($group->status)->toBe(RequirementStatus::Decided);
+
+    saveDecisionNodes([['parent' => 2, 'kind' => '分组', 'title' => 'Proposed group', 'status' => '提议']])->expectsOutputToContain('分组只是归类，不需要拍板')->assertFailed()->run();
+    saveDecisionNodes([['number' => $group->number, 'status' => '提议', 'reason' => 'x']])->expectsOutputToContain('分组只是归类，不需要拍板')->assertFailed()->run();
+
+    expect($group->fresh()->status)->toBe(RequirementStatus::Decided)
+        ->and(Requirement::where('project_id', $project->id)->where('title', 'Proposed group')->exists())->toBeFalse();
+});
