@@ -2,6 +2,7 @@
 
 namespace App\Data\Requirements;
 
+use App\Enums\RequirementKind;
 use App\Enums\RequirementStatus;
 use App\Models\Requirement;
 
@@ -32,7 +33,22 @@ final readonly class RequirementTreeNode
         $delivery = DeliveryStatus::combined(array_values(array_filter([$own, ...array_map(fn (self $child): DeliveryStatus => $child->delivery, $decidedChildren)])));
         $rollup = array_reduce($children, fn (RequirementRollup $sum, self $child): RequirementRollup => $sum->plus($child->rollup), RequirementRollup::of($requirement, $delivery, $children === []));
 
-        return new self($requirement, $delivery, $children, $rollup, RequirementProgress::of($requirement->status, $delivery));
+        return new self($requirement, $delivery, $children, $rollup, self::progressOf($requirement, $delivery, $decidedChildren, $rollup));
+    }
+
+    /**
+     * A 分组 shows what its rules add up to, never its own decision status: open decisions inside it while none of its
+     * rules is decided yet, otherwise how far its decided rules are built.
+     *
+     * @param  array<int, self>  $decidedChildren
+     */
+    private static function progressOf(Requirement $requirement, DeliveryStatus $delivery, array $decidedChildren, RequirementRollup $rollup): RequirementProgress
+    {
+        if ($requirement->kind !== RequirementKind::Group) {
+            return RequirementProgress::of($requirement->status, $delivery);
+        }
+
+        return $decidedChildren === [] && $rollup->pending() > 0 ? RequirementProgress::Pending : RequirementProgress::of(RequirementStatus::Decided, $delivery);
     }
 
     /**

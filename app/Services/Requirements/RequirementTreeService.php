@@ -5,11 +5,13 @@ namespace App\Services\Requirements;
 use App\Data\Requirements\RequirementChangeGroup;
 use App\Data\Requirements\RequirementProgress;
 use App\Data\Requirements\RequirementTreeNode;
+use App\Enums\RequirementKind;
 use App\Enums\RequirementStatus;
 use App\Models\Commit;
 use App\Models\Project;
 use App\Models\Requirement;
 use App\Models\RequirementRevision;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Facades\DB;
 
@@ -38,7 +40,7 @@ class RequirementTreeService
     }
 
     /**
-     * Every 提议 and 冲突 with what a decision would touch: 冲突 first (they change a rule already built), then in tree order.
+     * Every 提议 and 冲突 except 分组 (only a way of filing rules) with what a decision would touch: 冲突 first (they change a rule already built), then in tree order.
      *
      * @param  list<RequirementTreeNode>  $tree  this project's tree()
      * @return Collection<int, Requirement>
@@ -50,6 +52,7 @@ class RequirementTreeService
         return Requirement::withoutGlobalScopes()
             ->where('project_id', $project->id)
             ->whereIn('status', [RequirementStatus::Proposed, RequirementStatus::Conflict])
+            ->where(fn (Builder $query) => $query->whereNull('kind')->orWhere('kind', '!=', RequirementKind::Group))
             ->with(['linkedFeatures', 'tests', 'supersedes.linkedFeatures', 'supersedes.tests'])
             ->get()
             ->sortBy(fn (Requirement $requirement): array => [$requirement->status === RequirementStatus::Conflict ? 0 : 1, $treeOrder[$requirement->id] ?? PHP_INT_MAX])

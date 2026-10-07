@@ -2,6 +2,7 @@
 
 namespace App\Data\Requirements;
 
+use App\Enums\RequirementKind;
 use App\Enums\RequirementStatus;
 use App\Models\Requirement;
 
@@ -19,13 +20,23 @@ final readonly class RequirementRollup
         public int $conflicts = 0,
     ) {}
 
+    /**
+     * A 分组 is only a way of filing rules, so its own decision status is never counted as an open decision.
+     */
     public static function of(Requirement $requirement, DeliveryStatus $delivery, bool $isLeaf): self
     {
+        $isDecision = $requirement->kind !== RequirementKind::Group;
+
         return new self(
             delivered: $isLeaf && $requirement->status === RequirementStatus::Decided ? [$delivery->value => 1] : [],
-            proposed: (int) ($requirement->status === RequirementStatus::Proposed),
-            conflicts: (int) ($requirement->status === RequirementStatus::Conflict),
+            proposed: (int) ($isDecision && $requirement->status === RequirementStatus::Proposed),
+            conflicts: (int) ($isDecision && $requirement->status === RequirementStatus::Conflict),
         );
+    }
+
+    public function pending(): int
+    {
+        return $this->proposed + $this->conflicts;
     }
 
     public function plus(self $other): self
@@ -57,7 +68,7 @@ final readonly class RequirementRollup
     public function progressCounts(): array
     {
         return [
-            RequirementProgress::Pending->value => $this->proposed + $this->conflicts,
+            RequirementProgress::Pending->value => $this->pending(),
             RequirementProgress::Todo->value => $this->count(DeliveryStatus::NotBuilt),
             RequirementProgress::InProgress->value => $this->count(DeliveryStatus::InProgress) + $this->count(DeliveryStatus::Failed),
             RequirementProgress::Done->value => $this->count(DeliveryStatus::Built) + $this->count(DeliveryStatus::Verified),

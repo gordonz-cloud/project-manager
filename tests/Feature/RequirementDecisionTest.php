@@ -288,3 +288,30 @@ it('shows a card per pending node: now and change side by side, options with the
             '新提议', 'Gift wrap for members', '还没有这条规则', 'A. 同意', 'B. 不要', '背景和出处', 'see GiftWrapService::apply',
         ]);
 });
+
+it('never asks to decide a 分组: no card, no count, not on the boss list, and its row sums up its rules [T66]', function () {
+    [$project, , $goal] = decisionDesk();
+    $sub = Requirement::factory()->create(['project_id' => $project->id, 'number' => 2, 'parent_id' => $goal->id, 'kind' => RequirementKind::SubGoal, 'status' => RequirementStatus::Decided, 'title' => 'Shipping']);
+    $pendingGroup = Requirement::factory()->create(['project_id' => $project->id, 'number' => 3, 'parent_id' => $sub->id, 'kind' => RequirementKind::Group, 'status' => RequirementStatus::Proposed, 'decider' => RequirementDecider::Boss, 'title' => 'Pending group']);
+    $builtGroup = Requirement::factory()->create(['project_id' => $project->id, 'number' => 4, 'parent_id' => $sub->id, 'kind' => RequirementKind::Group, 'status' => RequirementStatus::Proposed, 'title' => 'Built group']);
+    decisionRule($pendingGroup, 5, RequirementStatus::Proposed, ['title' => 'Rule for me']);
+    decisionRule($pendingGroup, 6, RequirementStatus::Proposed, ['title' => 'Rule for the boss', 'decider' => RequirementDecider::Boss]);
+    decisionRule($builtGroup, 7, RequirementStatus::Decided, ['title' => 'Done rule'])->linkedFeatures()->attach(Feature::factory()->create(['project_id' => $project->id, 'status' => FeatureStatus::Done]));
+
+    $tree = app(RequirementTreeService::class)->tree($project);
+    $progress = collect(RequirementTreeNode::flattened($tree))->mapWithKeys(fn (RequirementTreeNode $node): array => [$node->requirement->number => $node->progress])->all();
+
+    expect(app(RequirementTreeService::class)->awaitingDecision($project, $tree)->pluck('number')->all())->toBe([5, 6])
+        ->and(RequirementTreeNode::total($tree)->pending())->toBe(2)
+        ->and($progress[3])->toBe(RequirementProgress::Pending)
+        ->and($progress[4])->toBe(RequirementProgress::Done)
+        ->and(app(RequirementDecisions::class)->bossQuestions($project))->toContain('共 1 条')->not->toContain('Pending group');
+
+    Livewire::withQueryParams(['selectedNumber' => 3])->test(RequirementTree::class)
+        ->assertSeeInOrder(['等我 1', '等老板 1', '待决策（2）'])
+        ->assertSeeInOrder(['Pending group', '含 2 待决策']);
+
+    Livewire::withQueryParams(['tab' => 'pending', 'waitingOn' => 'all'])->test(RequirementTree::class)
+        ->assertSee(['Rule for me', 'Rule for the boss'])
+        ->assertDontSee('Built group');
+});
