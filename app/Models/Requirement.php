@@ -324,28 +324,36 @@ class Requirement extends Model
             $requirement->id => $requirement->dependsOn->filter(fn (Requirement $d) => isset($ids[$d->id]))->count(),
         ])->all();
 
+        /** @var array<int, list<int>> $dependents requirement id => ids that depend on it */
+        $dependents = [];
+        foreach ($requirements as $requirement) {
+            foreach ($requirement->dependsOn as $dependency) {
+                if (isset($ids[$dependency->id])) {
+                    $dependents[$dependency->id][] = $requirement->id;
+                }
+            }
+        }
+
+        // Earliest module first, then lowest id: same tie-break as before, in O((n + e) log n).
+        $queue = new \SplPriorityQueue;
+        $enqueue = fn (int $id) => $queue->insert($id, [-$modulePosition[$id], -$id]);
+        foreach ($remaining as $id => $count) {
+            if ($count === 0) {
+                $enqueue($id);
+            }
+        }
+
+        $byId = $requirements->keyBy('id');
         $ordered = new Collection;
 
-        while ($ordered->count() < $requirements->count()) {
-            $ready = $requirements
-                ->reject(fn (Requirement $requirement) => $ordered->contains('id', $requirement->id))
-                ->filter(fn (Requirement $requirement) => $remaining[$requirement->id] === 0)
-                ->sortBy([
-                    fn (Requirement $a, Requirement $b) => $modulePosition[$a->id] <=> $modulePosition[$b->id],
-                    fn (Requirement $a, Requirement $b) => $a->id <=> $b->id,
-                ]);
+        // A cycle that slipped past validation simply leaves its members out.
+        while (! $queue->isEmpty()) {
+            $id = $queue->extract();
+            $ordered->push($byId[$id]);
 
-            if ($ready->isEmpty()) {
-                // A cycle slipped past validation; stop rather than loop forever.
-                break;
-            }
-
-            $next = $ready->first();
-            $ordered->push($next);
-
-            foreach ($requirements as $candidate) {
-                if ($candidate->dependsOn->contains('id', $next->id)) {
-                    $remaining[$candidate->id]--;
+            foreach ($dependents[$id] ?? [] as $dependent) {
+                if (--$remaining[$dependent] === 0) {
+                    $enqueue($dependent);
                 }
             }
         }
