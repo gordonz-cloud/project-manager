@@ -46,7 +46,7 @@ class SaveRequirementsCommand extends Command
         }
 
         if ($this->option('json')) {
-            $this->line((string) json_encode(['created' => $result->created, 'updated' => $result->updated, 'assigned' => $result->assigned, 'voided' => $result->voided], JSON_UNESCAPED_UNICODE));
+            $this->line((string) json_encode(['created' => $result->created, 'updated' => $result->updated, 'assigned' => $result->assigned, 'voided' => $result->voided, 'warnings' => $result->warnings], JSON_UNESCAPED_UNICODE));
 
             return self::SUCCESS;
         }
@@ -57,6 +57,10 @@ class SaveRequirementsCommand extends Command
 
         foreach ($result->voided as $number) {
             $this->line("#{$number} → 作废（被取代）");
+        }
+
+        foreach ($result->warnings as $warning) {
+            $this->warn($warning);
         }
 
         $this->info("Requirements saved: {$result->created} created, {$result->updated} updated");

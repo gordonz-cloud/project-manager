@@ -1,7 +1,7 @@
 <x-filament-panels::page>
     @php($requirement = $this->selectedRequirement)
 
-    <div class="flex flex-wrap items-center gap-3 text-sm" data-requirement-summary>
+    <div class="@container flex flex-wrap items-center gap-3 text-sm" data-requirement-summary>
         <span class="text-slate-500 dark:text-slate-400">全项目</span>
         @include('filament.pages.partials.requirement-rollup', ['rollup' => $this->total])
         @foreach (['me', 'boss'] as $key)
@@ -9,7 +9,7 @@
         @endforeach
     </div>
 
-    <div class="grid gap-4 {{ $this->tab === 'pending' ? '' : 'xl:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]' }}">
+    <div class="grid gap-4 xl:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
         <aside class="rounded-lg border border-slate-200 bg-white dark:border-white/10 dark:bg-slate-950">
             <div class="flex flex-wrap items-center gap-2 border-b border-slate-200 p-3 dark:border-white/10">
                 @foreach (\App\Filament\Pages\RequirementTree::TABS as $key => $label)
@@ -31,7 +31,7 @@
 
                         @if ($unfiled = $this->unfiledRoots())
                             <div class="mt-3 border-t border-slate-200 pt-2 dark:border-white/10" data-unfiled>
-                                <button type="button" wire:click="$toggle('showUnfiled')" class="flex min-h-8 w-full items-center gap-2 rounded-md px-1 py-1 text-left text-sm font-medium text-slate-500 hover:bg-slate-50 dark:text-slate-400 dark:hover:bg-white/5">
+                                <button type="button" wire:click="$toggle('showUnfiled')" class="@container flex min-h-8 w-full items-center gap-2 rounded-md px-1 py-1 text-left text-sm font-medium text-slate-500 hover:bg-slate-50 dark:text-slate-400 dark:hover:bg-white/5">
                                     <x-filament::icon icon="{{ $this->showUnfiled ? 'heroicon-m-chevron-down' : 'heroicon-m-chevron-right' }}" class="size-4 shrink-0 text-slate-400" />
                                     <span class="flex-1">未归类（{{ count($unfiled) }}，旧需求清单，还没挂到目标下）</span>
                                     @include('filament.pages.partials.requirement-rollup', ['rollup' => \App\Data\Requirements\RequirementTreeNode::total($unfiled)])
@@ -50,8 +50,7 @@
                             @foreach (\App\Filament\Pages\RequirementTree::WAITING_ON as $key => $label)
                                 <button type="button" wire:click="setWaitingOn(@js($key))" class="rounded-md border px-2 py-1 text-xs {{ $this->waitingOn === $key ? 'border-primary-600 bg-primary-600 text-white' : 'border-slate-300 text-slate-600 dark:border-white/10 dark:text-slate-300' }}">{{ $label }} {{ $this->waitingOnCount($key) }}</button>
                             @endforeach
-                            <span class="ml-auto text-sm tabular-nums text-slate-600 dark:text-slate-300" data-drafted>已选 {{ $this->draftedCount() }} / {{ $this->pendingCards->count() }}</span>
-                            <x-filament::button size="sm" wire:click="confirmBatch" wire:confirm="把已选的 {{ $this->draftedCount() }} 条一次写进需求树？" :disabled="$this->draftedCount() === 0">确认这一批</x-filament::button>
+                            <span class="ml-auto"></span>
                             <x-filament::button size="sm" color="gray" wire:click="toggleBossQuestions">给老板的问题单</x-filament::button>
                         </div>
 
@@ -65,8 +64,21 @@
                             </div>
                         @endif
 
-                        @forelse ($this->pendingCards as $item)
-                            @include('filament.pages.partials.requirement-decision-card', ['requirement' => $item])
+                        @forelse ($this->pendingByGoal as $goal => $items)
+                            <section wire:key="pending-goal-{{ md5($goal) }}">
+                                <h3 class="px-2 pb-1 text-xs font-medium text-slate-500 dark:text-slate-400">{{ $goal }}</h3>
+                                <ul class="space-y-0.5">
+                                    @foreach ($items as $item)
+                                        @php($isDrafted = $this->drafts->has($item->id))
+                                        <li wire:key="pending-{{ $item->id }}" role="button" wire:click="selectNode({{ $item->number }})" data-pending="{{ $item->number }}"
+                                            class="flex min-h-8 cursor-pointer items-center gap-2 rounded-md px-2 py-1 text-sm {{ $this->selectedNumber === $item->number ? 'bg-slate-900 text-white dark:bg-white dark:text-slate-950' : 'hover:bg-slate-50 dark:hover:bg-white/5' }}">
+                                            <span class="size-2.5 shrink-0 rounded-full border border-primary-500 {{ $isDrafted ? 'bg-primary-500' : '' }}" title="{{ $isDrafted ? '已选' : '未选' }}" data-drafted="{{ $isDrafted ? 'yes' : 'no' }}"></span>
+                                            @if ($item->status === \App\Enums\RequirementStatus::Conflict)<span class="shrink-0 rounded bg-amber-100 px-1 text-xs text-amber-800 dark:bg-amber-500/20 dark:text-amber-300">改规则</span>@endif
+                                            <span class="min-w-0 truncate">{{ $item->title }}</span>
+                                        </li>
+                                    @endforeach
+                                </ul>
+                            </section>
                         @empty
                             <p class="px-2 py-6 text-center text-xs text-slate-400">这里没有要决定的事。</p>
                         @endforelse
@@ -107,68 +119,19 @@
             </div>
         </aside>
 
-        @unless ($this->tab === 'pending')
         <section class="min-w-0 rounded-lg border border-slate-200 bg-white px-5 py-4 dark:border-white/10 dark:bg-slate-950 xl:max-h-[calc(100vh-10rem)] xl:overflow-y-auto">
             @if ($requirement)
-                @php($delivery = $this->deliveryOf($requirement))
-                @if ($this->isDecidable($requirement))
-                    <div class="mb-4" data-detail-decision>
-                        @include('filament.pages.partials.requirement-decision-card', ['requirement' => $requirement])
-                    </div>
-                @endif
-                <nav class="flex flex-wrap gap-1 text-xs text-slate-500 dark:text-slate-400" data-requirement-path>
-                    @foreach ($requirement->ancestors() as $step)
-                        @if (! $loop->first)<span>›</span>@endif
-                        <button type="button" wire:click="selectNode({{ $step->number }})" class="hover:underline">{{ \Illuminate\Support\Str::limit($step->title, 30) }}</button>
-                    @endforeach
-                </nav>
-                <h2 class="mt-2 flex items-start gap-2 text-base font-semibold text-slate-950 dark:text-white">
-                    <span>{{ $requirement->title }}</span>
-                    @include('filament.pages.partials.requirement-progress', ['requirement' => $requirement, 'progress' => $this->progressOf($requirement)])
-                </h2>
-                <dl class="mt-3 space-y-2 text-sm text-slate-700 dark:text-slate-300">
-                    <div class="flex gap-6">
-                        <div><dt class="text-xs text-slate-500">编号</dt><dd>#{{ $requirement->number }}</dd></div>
-                        <div><dt class="text-xs text-slate-500">层级</dt><dd>{{ $requirement->kind?->value ?? '未归类' }}</dd></div>
-                        <div><dt class="text-xs text-slate-500">拍板</dt><dd>{{ $requirement->status->value }}</dd></div>
-                        <div><dt class="text-xs text-slate-500">交付</dt><dd data-requirement-delivery class="{{ $delivery?->color() }}">{{ $delivery?->value ?? '—' }}</dd></div>
-                    </div>
-                    <div><dt class="text-xs text-slate-500">为什么</dt><dd class="whitespace-pre-wrap">{{ $requirement->rationale ?: '—' }}</dd></div>
-                    <div><dt class="text-xs text-slate-500">来源</dt><dd class="break-all">{{ $requirement->source ?: '—' }}</dd></div>
-                    <div><dt class="text-xs text-slate-500">谁定的 / 何时</dt><dd>{{ $requirement->decided_by ?: '—' }} · {{ $requirement->decided_at?->toDateString() ?? '—' }}</dd></div>
-                    @if ($requirement->decider)<div><dt class="text-xs text-slate-500">等谁拍板</dt><dd>{{ $requirement->decider->value }}</dd></div>@endif
-                    @if ($requirement->supersedes)
-                        <div><dt class="text-xs text-slate-500">要取代</dt><dd><button type="button" wire:click="selectNode({{ $requirement->supersedes->number }})" class="text-left hover:underline">#{{ $requirement->supersedes->number }} {{ $requirement->supersedes->title }}</button></dd></div>
-                    @endif
-                    @foreach (['依赖' => $requirement->dependsOn, '被依赖' => $requirement->dependents] as $label => $related)
-                        @if ($related->isNotEmpty())
-                            <div data-requirement-dependencies="{{ $label }}"><dt class="text-xs text-slate-500">{{ $label }}</dt>
-                                @foreach ($related->sortBy('number') as $other)
-                                    <dd><button type="button" wire:click="selectNode({{ $other->number }})" class="text-left hover:underline">#{{ $other->number }} {{ $other->title }}</button></dd>
-                                @endforeach
-                            </div>
-                        @endif
-                    @endforeach
-                </dl>
-                <div class="mt-4">
-                    <h3 class="mb-1 text-xs font-medium text-slate-500">功能与测试</h3>
-                    @include('filament.pages.partials.requirement-links', ['features' => $requirement->linkedFeatures, 'tests' => $requirement->tests])
-                </div>
-                <div class="mt-4" data-requirement-history>
-                    <h3 class="text-xs font-medium text-slate-500">历史与最近 commit</h3>
-                    @include('filament.pages.partials.requirement-history', ['revisions' => $requirement->revisions, 'commits' => $requirement->recentCommits()])
-                </div>
+                @include('filament.pages.partials.requirement-panel', ['requirement' => $requirement])
             @else
                 <div class="py-16 text-center text-sm text-slate-500 dark:text-slate-400">从左侧选择一条需求。</div>
             @endif
         </section>
-        @endunless
     </div>
 
-    @if ($this->tab === 'overview' && $this->awaitingDecision->isNotEmpty())
+    @if (in_array($this->tab, ['overview', 'pending'], true) && $this->awaitingDecision->isNotEmpty())
         <div class="sticky bottom-0 z-10 flex flex-wrap items-center gap-3 rounded-lg border border-slate-200 bg-white/95 px-4 py-2 text-sm shadow-lg backdrop-blur dark:border-white/10 dark:bg-slate-950/95" data-decision-bar>
-            <span class="tabular-nums text-slate-700 dark:text-slate-200">已选 {{ $this->drafts->count() }} / {{ $this->awaitingDecision->count() }} 待决策</span>
-            <span class="text-xs text-slate-500 dark:text-slate-400">确认的是你所有已选的（包括在待决策页里选的），没选的不动。</span>
+            <span class="tabular-nums text-slate-700 dark:text-slate-200">已选 {{ $this->drafts->count() }} / {{ $this->awaitingDecision->count() }}</span>
+            <span class="text-xs text-slate-500 dark:text-slate-400">确认你所有已选的（全貌和待决策页、任何筛选下选的），没选的不动。</span>
             <x-filament::button size="sm" class="ml-auto" wire:click="confirmAllDrafts" wire:confirm="把已选的 {{ $this->drafts->count() }} 条一次写进需求树？" :disabled="$this->drafts->isEmpty()">确认这一批</x-filament::button>
         </div>
     @endif

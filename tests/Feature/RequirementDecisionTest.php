@@ -116,7 +116,8 @@ it('shows one status per node and rolls them up as 待决策 / 待做 / 进行�
         ->and(RequirementTreeNode::total($tree)->progressCounts())->toBe(['待决策' => 1, '待做' => 1, '进行中' => 1, '完成' => 1]);
 
     Livewire::test(RequirementTree::class)
-        ->assertSeeInOrder(['1 待决策', '·', '1 待做', '·', '1 进行中', '·', '1 完成'])
+        ->assertSee('title="1 待决策 · 1 待做 · 1 进行中 · 1 完成"', false)
+        ->assertSeeHtmlInOrder(['1<span class="hidden @xl:inline"> 待决策</span>', '1<span class="hidden @xl:inline"> 完成</span>'])
         ->assertSeeInOrder(['Rule 2', '待决策 · 等老板', 'Rule 3', '待做', 'Rule 4', '进行中', 'Rule 5', '完成', 'Rule 6', '放弃']);
 });
 
@@ -132,8 +133,8 @@ it('keeps a pick as a draft that survives reopening the page and counts it [T60]
 
     expect(RequirementDecisionDraft::sole()->only(['requirement_id', 'user_id', 'choice']))->toBe(['requirement_id' => $rule->id, 'user_id' => $user->id, 'choice' => 'A']);
 
-    Livewire::withQueryParams(['tab' => 'pending'])->test(RequirementTree::class)
-        ->assertSeeInOrder(['已选 1 / 2', 'Rule 2', '已选 A', 'Free shipping over 80'])
+    Livewire::withQueryParams(['tab' => 'pending', 'selectedNumber' => 2])->test(RequirementTree::class)
+        ->assertSeeHtmlInOrder(['data-drafted="yes"', 'Rule 2', 'data-drafted="no"', 'Rule 3', 'data-picked', 'A. Raise to 80', 'B. Keep 50', '已选 1 / 2'])
         ->call('writeCustom', $rule->id, 'Free shipping over 70');
 
     expect(RequirementDecisionDraft::sole()->only(['choice', 'custom_text']))->toBe(['choice' => 'custom', 'custom_text' => 'Free shipping over 70']);
@@ -153,7 +154,6 @@ it('applies every kind of answer in one confirmed batch, with history, and clear
     $custom = decisionRule($goal, 6, RequirementStatus::Proposed);
     $forwarded = decisionRule($goal, 7, RequirementStatus::Proposed, ['decider' => RequirementDecider::Gordon]);
     $skipped = decisionRule($goal, 8, RequirementStatus::Proposed);
-    $notInBatch = decisionRule($goal, 9, RequirementStatus::Proposed, ['decider' => RequirementDecider::Boss]);
     $decisions = app(RequirementDecisions::class);
     $decisions->choose($conflict, $user, 'A');
     $decisions->choose($kept, $user, 'B');
@@ -161,11 +161,10 @@ it('applies every kind of answer in one confirmed batch, with history, and clear
     $decisions->choose($custom, $user, 'custom', 'Write it my way');
     $decisions->choose($forwarded, $user, 'ask_boss');
     $decisions->choose($skipped, $user, 'skip');
-    $decisions->choose($notInBatch, $user, 'A');
     $today = now()->toDateString();
 
     Livewire::withQueryParams(['tab' => 'pending'])->test(RequirementTree::class)
-        ->call('confirmBatch')
+        ->call('confirmAllDrafts')
         ->assertNotified('定了 4 条，转老板 1 条，先不定 1 条');
 
     expect($conflict->fresh()->only(['status', 'title', 'source', 'decided_by', 'decider']))->toBe(['status' => RequirementStatus::Decided, 'title' => 'Free shipping over 80 from November', 'source' => "spec v1；Gordon 拍板 {$today}：选 A Raise to 80", 'decided_by' => 'Gordon', 'decider' => null])
@@ -181,8 +180,7 @@ it('applies every kind of answer in one confirmed batch, with history, and clear
         ->and($custom->revisions()->first()->reason)->toBe('Gordon 自己写')
         ->and($forwarded->fresh()->only(['status', 'decider']))->toBe(['status' => RequirementStatus::Proposed, 'decider' => RequirementDecider::Boss])
         ->and($skipped->fresh()->status)->toBe(RequirementStatus::Proposed)
-        ->and($notInBatch->fresh()->status)->toBe(RequirementStatus::Proposed)
-        ->and(RequirementDecisionDraft::pluck('requirement_id')->all())->toBe([$notInBatch->id]);
+        ->and(RequirementDecisionDraft::count())->toBe(0);
 
     Livewire::withQueryParams(['tab' => 'todo'])->test(RequirementTree::class)
         ->assertSeeInOrder(['Free shipping over 80 from November', 'Write it my way'])
@@ -199,7 +197,7 @@ it('changes nothing when one answer in the batch no longer fits [T61]', function
     $broken->update(['decision' => [...shippingDecision(), 'options' => array_slice(shippingDecision()['options'], 0, 2)]]);
 
     Livewire::withQueryParams(['tab' => 'pending'])->test(RequirementTree::class)
-        ->call('confirmBatch')
+        ->call('confirmAllDrafts')
         ->assertNotified('没有确认，什么都没改');
 
     expect($accepted->fresh()->status)->toBe(RequirementStatus::Proposed)
@@ -242,11 +240,11 @@ it('records the boss answer through the same cards, credited to the boss [T63]',
     [, , $goal] = decisionDesk();
     $rule = decisionRule($goal, 2, RequirementStatus::Proposed, ['decider' => RequirementDecider::Boss, 'decision' => shippingDecision()]);
 
-    Livewire::withQueryParams(['tab' => 'pending', 'waitingOn' => 'boss'])->test(RequirementTree::class)
+    Livewire::withQueryParams(['tab' => 'pending', 'waitingOn' => 'boss', 'selectedNumber' => 2])->test(RequirementTree::class)
         ->assertSee('老板的答复')
         ->assertDontSee('问老板')
         ->call('choose', $rule->id, 'A')
-        ->call('confirmBatch');
+        ->call('confirmAllDrafts');
 
     $today = now()->toDateString();
 
@@ -269,24 +267,37 @@ it('lists decided rules not built yet in dependency order [T64]', function () {
         ->assertDontSee('Still a proposal');
 });
 
-it('shows a card per pending node: now and change side by side, options with the recommended one, and a plain fallback [T65]', function () {
+it('lists pending nodes by goal and shows one panel where each piece appears once [T65]', function () {
     [$project, , $goal] = decisionDesk();
-    $old = decisionRule($goal, 2, RequirementStatus::Decided, ['title' => 'Free shipping over 50']);
+    $old = decisionRule($goal, 2, RequirementStatus::Decided, ['title' => 'Free shipping over 50', 'decided_by' => '老板', 'decided_at' => '2026-10-05']);
     $old->linkedFeatures()->attach(Feature::factory()->create(['project_id' => $project->id, 'number' => 9, 'title' => 'Shipping calculator']));
     decisionRule($goal, 3, RequirementStatus::Proposed, ['title' => 'Gift wrap for members', 'rationale' => 'see GiftWrapService::apply']);
-    decisionRule($goal, 4, RequirementStatus::Conflict, ['supersedes_id' => $old->id, 'title' => 'Free shipping over 80', 'decision' => shippingDecision()]);
+    decisionRule($goal, 4, RequirementStatus::Conflict, ['supersedes_id' => $old->id, 'title' => 'Free shipping over 80', 'decision' => shippingDecision(), 'rationale' => 'Free shipping over 50, because the old carrier was cheap']);
     decisionRule($goal, 5, RequirementStatus::Conflict, ['supersedes_id' => $old->id, 'title' => 'Free shipping for everyone']);
 
-    Livewire::withQueryParams(['tab' => 'pending'])->test(RequirementTree::class)
+    $html = Livewire::withQueryParams(['tab' => 'pending', 'selectedNumber' => 4])->test(RequirementTree::class)
+        ->assertSeeInOrder(['Checkout', '改规则', 'Free shipping over 80', '改规则', 'Free shipping for everyone', 'Gift wrap for members'])
         ->assertSeeInOrder([
-            '已选 0 / 3',
-            '要改一条已定规则', 'Free shipping over 80', '现在', 'Free shipping over 50, because the old carrier was cheap', '现行规则：Free shipping over 50', '要改成', 'Free shipping over 80',
+            'Checkout', '#4', 'Free shipping over 80', '待决策 · 等我',
+            '需要你决定', '现在', 'Free shipping over 50, because the old carrier was cheap', '现行规则：Free shipping over 50', '要改成', 'Free shipping over 80',
             '差别', 'Orders between 50 and 80 pay shipping', '风险', 'Fewer small orders',
-            'A. Raise to 80', '★推荐', 'Old rule voided', '定了以后：Free shipping over 80 from November', 'B. Keep 50', 'C. Raise to 65',
-            '自己写…', '问老板', '先不定', '会动到：Shipping calculator', 'F9 Shipping calculator',
-            'Free shipping for everyone', '现在', 'Free shipping over 50', '要改成', 'Free shipping for everyone', 'A. 改成新说法', 'B. 保持现状',
-            '新提议', 'Gift wrap for members', '还没有这条规则', 'A. 同意', 'B. 不要', '背景和出处', 'see GiftWrapService::apply',
-        ]);
+            'A. Raise to 80', '★推荐', 'Old rule voided', '（定了以后：Free shipping over 80 from November）', 'B. Keep 50', 'C. Raise to 65',
+            '✎ 自己写', '问老板', '先不定', '来源：spec v1', '做到哪了', 'F9 · Shipping calculator', '历史',
+        ])
+        ->html();
+
+    foreach (['需要你决定', '为什么', '做到哪了', '>历史<', 'data-panel-header'] as $section) {
+        expect(substr_count($html, $section))->toBe(1, $section);
+    }
+
+    expect($html)->not->toContain('protect')->not->toContain('会动到')->not->toContain('背景和出处')->not->toContain('已选 A');
+
+    Livewire::withQueryParams(['tab' => 'todo', 'selectedNumber' => 3])->test(RequirementTree::class)
+        ->assertSeeInOrder(['Gift wrap for members', '需要你决定', '还没有这条规则', 'A. 同意', 'B. 不要', '为什么', 'see GiftWrapService::apply']);
+
+    Livewire::withQueryParams(['tab' => 'todo', 'selectedNumber' => 2])->test(RequirementTree::class)
+        ->assertSeeInOrder(['Free shipping over 50', '老板拍板 2026-10-05'])
+        ->assertDontSee('需要你决定');
 });
 
 it('never asks to decide a 分组: no card, no count, not on the boss list, and its row sums up its rules [T66]', function () {
@@ -340,19 +351,29 @@ it('decides a pending node right from the 全貌 detail and confirms every draft
     app(RequirementDecisions::class)->choose($bossRule, $user, 'A');
 
     Livewire::withQueryParams(['selectedNumber' => 2])->test(RequirementTree::class)
-        ->assertSeeInOrder(['data-detail-decision', '现在', 'Free shipping over 50, because the old carrier was cheap', '要改成', 'A. Raise to 80', '★推荐', '自己写…', '问老板', '先不定', '为什么', 'margin', '历史与最近 commit'])
-        ->assertSeeInOrder(['data-decision-bar', '已选 1 / 2 待决策', '确认这一批'])
+        ->assertSeeInOrder(['需要你决定', '现在', 'Free shipping over 50, because the old carrier was cheap', '要改成', 'A. Raise to 80', '★推荐', '✎ 自己写', '问老板', '先不定', '为什么', 'margin', '历史'])
+        ->assertSeeInOrder(['data-decision-bar', '已选 1 / 2', '确认这一批'])
         ->call('choose', $rule->id, 'A');
 
     expect(RequirementDecisionDraft::where('requirement_id', $rule->id)->value('choice'))->toBe('A');
 
     Livewire::withQueryParams(['selectedNumber' => 4])->test(RequirementTree::class)
-        ->assertDontSee('data-detail-decision', false)
-        ->assertSee('已选 2 / 2 待决策')
+        ->assertDontSee('需要你决定')
+        ->assertSee('已选 2 / 2')
         ->call('confirmAllDrafts')
         ->assertNotified('定了 2 条，转老板 0 条，先不定 0 条');
 
     expect($rule->fresh()->only(['status', 'title']))->toBe(['status' => RequirementStatus::Decided, 'title' => 'Free shipping over 80 from November'])
         ->and($bossRule->fresh()->decided_by)->toBe('老板')
         ->and(RequirementDecisionDraft::count())->toBe(0);
+});
+
+it('warns about a title over 60 characters but saves it [T69]', function () {
+    [$project] = decisionDesk();
+
+    saveDecisionNodes([['parent' => 1, 'kind' => '规则', 'title' => str_repeat('长', 61)]])
+        ->expectsOutputToContain('标题 61 字，超过 60 字；标题 ≤40 字，细节写进 decision.change。')
+        ->assertSuccessful()->run();
+
+    expect(Requirement::where('project_id', $project->id)->where('title', str_repeat('长', 61))->exists())->toBeTrue();
 });

@@ -26,6 +26,9 @@ use InvalidArgumentException;
  */
 class RequirementTreeSaver
 {
+    /** Longer titles are saved but warned about: the panel shows two lines. */
+    private const TITLE_WARNING_LENGTH = 60;
+
     private const TEXT_FIELDS = ['kind', 'title', 'rationale', 'source', 'status', 'decided_by', 'decided_at', 'decider', 'reason'];
 
     /**
@@ -93,8 +96,27 @@ class RequirementTreeSaver
                 }
             }
 
-            return new RequirementTreeSaveResult($assigned, count($nodes) - count($assigned), $voided);
+            return new RequirementTreeSaveResult($assigned, count($nodes) - count($assigned), $voided, $this->longTitleWarnings($nodes));
         });
+    }
+
+    /**
+     * @param  list<NodeInput>  $nodes
+     * @return list<string>
+     */
+    private function longTitleWarnings(array $nodes): array
+    {
+        $warnings = [];
+
+        foreach ($nodes as $node) {
+            $length = mb_strlen($node['title'] ?? '');
+
+            if ($length > self::TITLE_WARNING_LENGTH) {
+                $warnings[] = "#{$node['number']}: 标题 {$length} 字，超过 ".self::TITLE_WARNING_LENGTH.' 字；标题 ≤40 字，细节写进 decision.change。';
+            }
+        }
+
+        return $warnings;
     }
 
     /**

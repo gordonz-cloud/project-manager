@@ -2,7 +2,6 @@
 
 namespace App\Filament\Pages;
 
-use App\Data\Requirements\DeliveryStatus;
 use App\Data\Requirements\RequirementChangeGroup;
 use App\Data\Requirements\RequirementProgress;
 use App\Data\Requirements\RequirementRollup;
@@ -36,7 +35,7 @@ use LogicException;
  * @property-read list<RequirementTreeNode> $tree
  * @property-read Requirement|null $selectedRequirement
  * @property-read Collection<int, Requirement> $awaitingDecision
- * @property-read Collection<int, Requirement> $pendingCards
+ * @property-read array<string, list<Requirement>> $pendingByGoal
  * @property-read EloquentCollection<int, RequirementDecisionDraft> $drafts
  * @property-read array<int, RequirementTreeNode> $nodesById
  */
@@ -143,35 +142,19 @@ class RequirementTree extends Page
     }
 
     /**
-     * Applies the drafts on the cards in view (待决策 tab, current filter), then everything on the page is read again.
-     */
-    public function confirmBatch(): void
-    {
-        $this->applyDrafts($this->pendingCards);
-    }
-
-    /**
-     * Applies every draft of this user, wherever it was picked (全貌 detail or 待决策 tab, any filter).
+     * Applies every draft of this user, wherever it was picked (全貌 or 待决策, any filter), then reads the page again.
      */
     public function confirmAllDrafts(): void
     {
-        $this->applyDrafts($this->awaitingDecision);
-    }
-
-    /**
-     * @param  Collection<int, Requirement>  $requirements
-     */
-    private function applyDrafts(Collection $requirements): void
-    {
         try {
-            $result = $this->requirementDecisions()->confirm($this->project, $this->user(), $requirements);
+            $result = $this->requirementDecisions()->confirm($this->project, $this->user(), $this->awaitingDecision);
         } catch (InvalidArgumentException $exception) {
             Notification::make()->title('没有确认，什么都没改')->body($exception->getMessage())->danger()->send();
 
             return;
         }
 
-        unset($this->tree, $this->awaitingDecision, $this->pendingCards, $this->drafts, $this->nodesById, $this->total, $this->selectedRequirement);
+        unset($this->tree, $this->awaitingDecision, $this->pendingByGoal, $this->drafts, $this->nodesById, $this->total, $this->selectedRequirement);
         Notification::make()->title($result->summary())->success()->send();
     }
 
@@ -246,14 +229,26 @@ class RequirementTree extends Page
     }
 
     /**
-     * The cards of the 待决策 tab under the current filter; 等我 includes nodes nobody assigned yet.
+     * The 待决策 list under the current filter (等我 includes nodes nobody assigned yet), grouped by goal in tree order;
+     * within a goal 冲突 first, then tree order.
      *
-     * @return Collection<int, Requirement>
+     * @return array<string, list<Requirement>> goal title => requirements
      */
     #[Computed]
-    public function pendingCards(): Collection
+    public function pendingByGoal(): array
     {
-        return $this->awaitingDecision->filter(fn (Requirement $requirement): bool => $this->isWaitingOn($requirement, $this->waitingOn))->values();
+        $goalPosition = array_flip(array_keys($this->nodesById));
+        $groups = [];
+
+        foreach ($this->awaitingDecision->filter(fn (Requirement $requirement): bool => $this->isWaitingOn($requirement, $this->waitingOn)) as $requirement) {
+            $goal = $this->goalOf($requirement);
+            $groups[$goal->id] ??= ['goal' => $goal, 'items' => []];
+            $groups[$goal->id]['items'][] = $requirement;
+        }
+
+        uasort($groups, fn (array $a, array $b): int => ($goalPosition[$a['goal']->id] ?? PHP_INT_MAX) <=> ($goalPosition[$b['goal']->id] ?? PHP_INT_MAX));
+
+        return collect($groups)->mapWithKeys(fn (array $group): array => [$group['goal']->title => $group['items']])->all();
     }
 
     public function waitingOnCount(string $waitingOn): int
@@ -293,9 +288,21 @@ class RequirementTree extends Page
         return $this->awaitingDecision->contains('id', $requirement->id);
     }
 
-    public function draftedCount(): int
+    /**
+     * Whether the rationale only says again what the decision's 现在 already says, so the panel shows it once.
+     */
+    public function repeatsDecision(Requirement $requirement): bool
     {
-        return $this->pendingCards->filter(fn (Requirement $requirement): bool => $this->drafts->has($requirement->id))->count();
+        $now = trim($requirement->decision->now ?? '');
+        $rationale = trim((string) $requirement->rationale);
+
+        if ($now === '' || ! $this->isDecidable($requirement)) {
+            return false;
+        }
+
+        similar_text($now, $rationale, $percent);
+
+        return str_contains($now, $rationale) || str_contains($rationale, $now) || $percent >= 70;
     }
 
     #[Computed]
@@ -320,6 +327,20 @@ class RequirementTree extends Page
     public function nodesById(): array
     {
         return collect(RequirementTreeNode::flattened($this->tree))->keyBy(fn (RequirementTreeNode $node): int => $node->requirement->id)->all();
+    }
+
+    /**
+     * The root above $requirement (itself when it is one), read from the tree already in memory.
+     */
+    private function goalOf(Requirement $requirement): Requirement
+    {
+        $goal = $requirement;
+
+        while ($goal->parent_id !== null && isset($this->nodesById[$goal->parent_id])) {
+            $goal = $this->nodesById[$goal->parent_id]->requirement;
+        }
+
+        return $goal;
     }
 
     /**
@@ -360,11 +381,6 @@ class RequirementTree extends Page
             ->where('number', $this->selectedNumber)
             ->with(['revisions', 'linkedFeatures', 'tests', 'supersedes', 'dependsOn', 'dependents'])
             ->first();
-    }
-
-    public function deliveryOf(Requirement $requirement): ?DeliveryStatus
-    {
-        return $this->nodesById[$requirement->id]->delivery ?? null;
     }
 
     public function featureUrl(Feature $feature): string

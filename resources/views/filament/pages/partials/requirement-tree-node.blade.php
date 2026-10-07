@@ -19,7 +19,7 @@
             role="button"
             wire:click="selectNode({{ $requirement->number }})"
             data-requirement-number="{{ $requirement->number }}"
-            class="flex min-h-8 min-w-0 flex-1 cursor-pointer items-center gap-2 rounded-md px-2 py-1 text-left text-sm transition {{ $isSelected ? 'bg-slate-900 text-white dark:bg-white dark:text-slate-950' : 'hover:bg-slate-50 dark:hover:bg-white/5' }} {{ $isVoid && ! $isSelected ? 'text-slate-400 line-through dark:text-slate-500' : '' }}"
+            class="@container flex min-h-8 min-w-0 flex-1 cursor-pointer items-center gap-2 rounded-md px-2 py-1 text-left text-sm transition {{ $isSelected ? 'bg-slate-900 text-white dark:bg-white dark:text-slate-950' : 'hover:bg-slate-50 dark:hover:bg-white/5' }} {{ $isVoid && ! $isSelected ? 'text-slate-400 line-through dark:text-slate-500' : '' }}"
         >
             @if ($requirement->kind && $requirement->kind !== \App\Enums\RequirementKind::Rule)
                 <span class="shrink-0 text-xs opacity-60">{{ $requirement->kind->value }}</span>
