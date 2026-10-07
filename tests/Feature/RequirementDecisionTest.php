@@ -435,3 +435,23 @@ it('says what the batch will do before it is confirmed [T71]', function () {
     expect(fn () => $decisions->confirm($goal->project, $user, collect([$mine, $replied, $opinion])))->toThrow(InvalidArgumentException::class, '#4 等老板定')
         ->and($mine->fresh()->status)->toBe(RequirementStatus::Proposed);
 });
+
+it('keeps the selected node in view on every tab, opening its ancestors in the tree [T72]', function () {
+    [$project, $user, $goal] = decisionDesk();
+    $sub = Requirement::factory()->create(['project_id' => $project->id, 'number' => 2, 'parent_id' => $goal->id, 'kind' => RequirementKind::SubGoal, 'status' => RequirementStatus::Decided, 'title' => 'Shipping']);
+    $group = Requirement::factory()->create(['project_id' => $project->id, 'number' => 3, 'parent_id' => $sub->id, 'kind' => RequirementKind::Group, 'status' => RequirementStatus::Decided, 'title' => 'Thresholds']);
+    $pending = decisionRule($group, 4, RequirementStatus::Proposed, ['title' => 'Deep pending rule']);
+    $todo = decisionRule($group, 5, RequirementStatus::Decided, ['title' => 'Deep todo rule']);
+
+    $page = Livewire::withQueryParams(['tab' => 'pending', 'selectedNumber' => 4])->test(RequirementTree::class);
+
+    expect($page->html())->toMatch('/data-pending="4"\s+data-selected/');
+
+    $page->call('setTab', 'overview')
+        ->assertSet('expanded', [$group->id => true, $sub->id => true, $goal->id => true])
+        ->assertDispatched('reveal-selected');
+
+    expect(Livewire::withQueryParams(['selectedNumber' => 4])->test(RequirementTree::class)->assertSeeInOrder(['Thresholds', 'Deep pending rule'])->html())->toMatch('/data-requirement-number="4"\s+data-selected/')
+        ->and(Livewire::withQueryParams(['tab' => 'todo', 'selectedNumber' => 5])->test(RequirementTree::class)->html())->toMatch('/data-todo="5"\s+data-selected/')
+        ->and(Livewire::withQueryParams(['tab' => 'changes', 'selectedNumber' => 5])->test(RequirementTree::class)->html())->toMatch('/data-selected\s+class="rounded-md border p-3 border-primary-500/');
+});

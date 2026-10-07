@@ -93,9 +93,19 @@ class RequirementTree extends Page
         return '需求树';
     }
 
+    public function mount(): void
+    {
+        $this->revealSelected();
+    }
+
+    /**
+     * The selected node stays selected across tabs: the tab opens with it in view.
+     */
     public function setTab(string $tab): void
     {
         $this->tab = isset(self::TABS[$tab]) ? $tab : 'overview';
+        $this->revealSelected();
+        $this->dispatch('reveal-selected');
     }
 
     public function setWaitingOn(string $waitingOn): void
@@ -186,6 +196,25 @@ class RequirementTree extends Page
     {
         $this->selectedNumber = $number;
         unset($this->selectedRequirement);
+        $this->revealSelected();
+    }
+
+    /**
+     * Opens every ancestor of the selected node in the tree (and the unfiled list when it lives there), so its row exists
+     * to scroll to.
+     */
+    private function revealSelected(): void
+    {
+        $node = collect($this->nodesById)->first(fn (RequirementTreeNode $node): bool => $node->requirement->number === $this->selectedNumber);
+
+        for ($parentId = $node?->requirement->parent_id; $parentId !== null && isset($this->nodesById[$parentId]); $parentId = $this->nodesById[$parentId]->requirement->parent_id) {
+            $this->expanded[$parentId] = true;
+            $root = $this->nodesById[$parentId]->requirement;
+        }
+
+        if ($node !== null && ($root ?? $node->requirement)->kind === null) {
+            $this->showUnfiled = true;
+        }
     }
 
     public function toggleNode(int $id, bool $isOpen = false): void
