@@ -6,6 +6,7 @@ use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Str;
 
 /**
  * What one person picked for a 提议/冲突 on the 待决策 page, kept until they confirm the batch.
@@ -97,7 +98,7 @@ class RequirementDecisionDraft extends Model
     }
 
     /**
-     * One line for the confirm summary, e.g. "#638 意见 A 老板文档已批".
+     * One line for the confirm summary, e.g. "「游客价格位只显示 Market price…」 意见 A 老板文档已批"; no numbers.
      */
     public function summary(): string
     {
@@ -109,6 +110,6 @@ class RequirementDecisionDraft extends Model
             default => '定 '.$this->answerLabel(),
         };
 
-        return "#{$this->requirement->number} {$what}";
+        return '「'.Str::limit($this->requirement->title, 20, '…')."」 {$what}";
     }
 }

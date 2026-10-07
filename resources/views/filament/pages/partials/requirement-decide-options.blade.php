@@ -10,8 +10,8 @@
         <label wire:key="option-{{ $requirement->id }}-{{ $prefix }}{{ $option->key }}" class="flex cursor-pointer items-start gap-2 rounded-md border px-2 py-1.5 text-sm {{ $isPicked ? 'border-primary-500 bg-primary-50 dark:bg-primary-500/10' : 'border-slate-200 hover:bg-slate-50 dark:border-white/10 dark:hover:bg-white/5' }}" @if ($isPicked) data-picked @endif>
             <input type="radio" name="choice-{{ $requirement->id }}-{{ $prefix }}" value="{{ $option->key }}" @checked($isPicked) wire:click="choose({{ $requirement->id }}, @js($prefix.$option->key))" class="mt-1">
             <span class="min-w-0">
-                <span class="font-medium text-slate-900 dark:text-white">{{ $option->key }}. {{ $option->label }}</span>@if ($option->recommended)<span class="ml-1 whitespace-nowrap text-xs text-amber-600 dark:text-amber-400">★推荐</span>@endif
-                <span class="block text-xs text-slate-500 dark:text-slate-400">{{ $option->consequence }}@if ($option->resultTitle)（定了以后：{{ $option->resultTitle }}）@endif</span>
+                <span class="font-medium text-slate-900 dark:text-white">{{ $option->key }}. {{ $this->mentions->html($option->label) }}</span>@if ($option->recommended)<span class="ml-1 whitespace-nowrap text-xs text-amber-600 dark:text-amber-400">★推荐</span>@endif
+                <span class="block text-xs text-slate-500 dark:text-slate-400">{{ $this->mentions->html($option->consequence) }}@if ($option->resultTitle)（定了以后：{{ $this->mentions->html($option->resultTitle) }}）@endif</span>
             </span>
         </label>
     @endforeach

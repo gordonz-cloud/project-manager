@@ -207,7 +207,7 @@ it('changes nothing when one answer in the batch no longer fits [T61]', function
 
 it('takes Gordon\'s opinion on a boss question to the boss list without deciding it, then marks the list sent [T62]', function () {
     [$project, $user, $goal] = decisionDesk();
-    $question = decisionRule($goal, 2, RequirementStatus::Proposed, ['decider' => RequirementDecider::Boss, 'title' => 'Free shipping over 80', 'decision' => [...shippingDecision(), 'why_boss' => 'It changes what members pay']]);
+    $question = decisionRule($goal, 2, RequirementStatus::Proposed, ['decider' => RequirementDecider::Boss, 'title' => 'Free shipping over 80', 'decision' => [...shippingDecision(), 'why_boss' => 'It changes what members pay, like #1']]);
     $forwarded = decisionRule($goal, 3, RequirementStatus::Proposed, ['title' => 'Gift wrap for members']);
     decisionRule($goal, 4, RequirementStatus::Proposed, ['decider' => RequirementDecider::Boss, 'title' => 'No opinion yet']);
     decisionRule($goal, 5, RequirementStatus::Proposed, ['decider' => RequirementDecider::Gordon, 'title' => 'Not for the boss']);
@@ -234,8 +234,8 @@ it('takes Gordon\'s opinion on a boss question to the boss list without deciding
 
     expect($text)->toContain('共 2 条')
         ->toContain(implode("\n", [
-            '1. Free shipping over 80（编号 2）',
-            '   为什么要您定：It changes what members pay',
+            '1. Free shipping over 80',
+            '   为什么要您定：It changes what members pay, like 「Checkout」',
             '   现在：Free shipping over 50, because the old carrier was cheap',
             '   要改成：Free shipping over 80',
             '   差别：Orders between 50 and 80 pay shipping',
@@ -246,7 +246,8 @@ it('takes Gordon\'s opinion on a boss question to the boss list without deciding
             '     C. Raise to 65 —— Middle ground',
             '   Gordon 的意见：A. Raise to 80（Old rule voided）',
         ]))
-        ->toContain("2. Gift wrap for members（编号 3）\n   现在：还没有这条规则")
+        ->toContain("2. Gift wrap for members\n   现在：还没有这条规则")
+        ->not->toMatch('/#\d|编号/')
         ->toContain('   Gordon 的意见：Only for gold members')
         ->not->toContain('No opinion yet')
         ->not->toContain('Not for the boss');
@@ -297,23 +298,28 @@ it('lists pending nodes by goal and shows one panel where each piece appears onc
     $old = decisionRule($goal, 2, RequirementStatus::Decided, ['title' => 'Free shipping over 50', 'decided_by' => '老板', 'decided_at' => '2026-10-05']);
     $old->linkedFeatures()->attach(Feature::factory()->create(['project_id' => $project->id, 'number' => 9, 'title' => 'Shipping calculator']));
     decisionRule($goal, 3, RequirementStatus::Proposed, ['title' => 'Gift wrap for members', 'rationale' => 'see GiftWrapService::apply']);
-    decisionRule($goal, 4, RequirementStatus::Conflict, ['supersedes_id' => $old->id, 'title' => 'Free shipping over 80', 'decision' => shippingDecision(), 'rationale' => 'Free shipping over 50, because the old carrier was cheap']);
+    decisionRule($goal, 4, RequirementStatus::Conflict, ['supersedes_id' => $old->id, 'title' => 'Free shipping over 80', 'decision' => [...shippingDecision(), 'risk' => 'Fewer small orders than #2 promised'], 'rationale' => 'Free shipping over 50, because the old carrier was cheap']);
     decisionRule($goal, 5, RequirementStatus::Conflict, ['supersedes_id' => $old->id, 'title' => 'Free shipping for everyone']);
 
     $html = Livewire::withQueryParams(['tab' => 'pending', 'selectedNumber' => 4])->test(RequirementTree::class)
         ->assertSeeInOrder(['Checkout', '改规则', 'Free shipping over 80', '改规则', 'Free shipping for everyone', 'Gift wrap for members'])
         ->assertSeeInOrder([
-            'Checkout', '#4', 'Free shipping over 80', '待决策 · 等我',
+            'Checkout', 'Free shipping over 80', '待决策 · 等我',
             '需要你决定', '现在', 'Free shipping over 50, because the old carrier was cheap', '现行规则：Free shipping over 50', '要改成', 'Free shipping over 80',
-            '差别', 'Orders between 50 and 80 pay shipping', '风险', 'Fewer small orders',
+            '差别', 'Orders between 50 and 80 pay shipping', '风险', 'Fewer small orders than',
             'A. Raise to 80', '★推荐', 'Old rule voided', '（定了以后：Free shipping over 80 from November）', 'B. Keep 50', 'C. Raise to 65',
-            '✎ 自己写', '问老板', '先不定', '背景（与上面重复，点开看）', '来源：spec v1', '做到哪了', 'F9 · Shipping calculator', '历史',
+            '✎ 自己写', '问老板', '先不定', '背景（与上面重复，点开看）', '来源：spec v1', '做到哪了', 'Shipping calculator · ', '历史',
         ])
         ->html();
 
     foreach (['需要你决定', '背景（与上面重复', '做到哪了', '>历史<', 'data-panel-header'] as $section) {
         expect(substr_count($html, $section))->toBe(1, $section);
     }
+
+    $panel = substr($html, (int) strpos($html, 'data-panel='), (int) strpos($html, 'data-decision-bar') - (int) strpos($html, 'data-panel='));
+
+    expect($panel)->not->toMatch('/#\d|\b[FT]\d+ ·/')
+        ->toContain('<span class="underline decoration-dotted" title="Free shipping over 50">「Free shipping over 5…」</span>');
 
     expect($html)->not->toContain('>为什么<')->not->toContain('protect')->not->toContain('会动到')->not->toContain('背景和出处')->not->toContain('已选 A');
 
@@ -428,7 +434,7 @@ it('says what the batch will do before it is confirmed [T71]', function () {
 
     Livewire::test(RequirementTree::class)
         ->assertSeeInOrder(['已选 3 / 3', '这批会：定下 2 条（你拍板 1，按老板回复 1） · 加入问老板清单 1 条'])
-        ->assertSeeHtml('#2 定 A Raise to 80'.PHP_EOL.'#3 老板回复 B Keep 50'.PHP_EOL.'#4 意见 C Raise to 65');
+        ->assertSeeHtml('「Mine」 定 A Raise to 80'.PHP_EOL.'「Replied」 老板回复 B Keep 50'.PHP_EOL.'「Opinion」 意见 C Raise to 65');
 
     RequirementDecisionDraft::where('requirement_id', $opinion->id)->update(['choice' => 'A']);
 

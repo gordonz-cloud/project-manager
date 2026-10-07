@@ -10,6 +10,7 @@ use App\Models\Project;
 use App\Models\Requirement;
 use App\Models\RequirementDecisionDraft;
 use App\Models\User;
+use App\Support\RequirementMentions;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use InvalidArgumentException;
@@ -126,7 +127,7 @@ class RequirementDecisions
             $lines = [...$lines, '', ...$this->bossQuestion($index + 1, $requirement)];
         }
 
-        return implode("\n", $lines);
+        return RequirementMentions::for($project)->plain(implode("\n", $lines));
     }
 
     /**
@@ -139,7 +140,7 @@ class RequirementDecisions
         $reason = $decision->option($opinion['key'] ?? '')?->consequence;
 
         return array_values(array_filter([
-            "{$position}. {$requirement->title}（编号 {$requirement->number}）",
+            "{$position}. {$requirement->title}",
             $decision->whyBoss ? "   为什么要您定：{$decision->whyBoss}" : null,
             "   现在：{$decision->now}",
             "   要改成：{$decision->change}",

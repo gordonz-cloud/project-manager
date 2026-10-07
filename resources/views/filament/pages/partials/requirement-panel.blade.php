@@ -16,11 +16,10 @@
                     <button type="button" wire:click="selectNode({{ $step->number }})" class="hover:underline" title="{{ $step->title }}">{{ \Illuminate\Support\Str::limit($step->title, 12) }}</button>
                 @endforeach
             </nav>
-            <span class="shrink-0">#{{ $requirement->number }}</span>
         </div>
         <div x-data="{ open: false }" class="mt-2 flex items-start gap-2">
             <div class="min-w-0 flex-1">
-                <h2 x-ref="title" :class="open ? '' : 'line-clamp-2'" class="text-base font-semibold text-slate-950 dark:text-white">{{ $requirement->title }}</h2>
+                <h2 x-ref="title" :class="open ? '' : 'line-clamp-2'" class="text-base font-semibold text-slate-950 dark:text-white">{{ $this->mentions->html($requirement->title) }}</h2>
                 @if (mb_strlen($requirement->title) > 60)
                     <button type="button" x-on:click="open = ! open" x-text="open ? '收起' : '展开'" class="text-xs text-slate-500 hover:underline">展开</button>
                 @endif
@@ -41,13 +40,13 @@
             @if ($rationaleRepeats)
                 <details data-why-folded>
                     <summary class="cursor-pointer text-xs font-medium text-slate-500">背景（与上面重复，点开看）</summary>
-                    <p class="mt-1 whitespace-pre-wrap text-sm text-slate-700 dark:text-slate-300">{{ $requirement->rationale }}</p>
+                    <p class="mt-1 whitespace-pre-wrap text-sm text-slate-700 dark:text-slate-300">{{ $this->mentions->html($requirement->rationale) }}</p>
                 </details>
             @else
                 <h3 class="text-xs font-medium text-slate-500">为什么</h3>
-                @if ($requirement->rationale)<p class="mt-1 whitespace-pre-wrap text-sm text-slate-700 dark:text-slate-300">{{ $requirement->rationale }}</p>@endif
+                @if ($requirement->rationale)<p class="mt-1 whitespace-pre-wrap text-sm text-slate-700 dark:text-slate-300">{{ $this->mentions->html($requirement->rationale) }}</p>@endif
             @endif
-            @if ($requirement->source)<p class="mt-1 break-all text-xs text-slate-400">来源：{{ $requirement->source }}</p>@endif
+            @if ($requirement->source)<p class="mt-1 break-all text-xs text-slate-400">来源：{{ $this->mentions->html($requirement->source) }}</p>@endif
         </section>
     @endif
 
@@ -58,13 +57,13 @@
         @else
             <ul class="mt-1 space-y-0.5 text-sm text-slate-700 dark:text-slate-300">
                 @foreach ($features as $feature)
-                    <li><a href="{{ $this->featureUrl($feature) }}" class="hover:underline">F{{ $feature->number }} · {{ $feature->title }} · {{ $feature->status->value }}</a></li>
+                    <li><a href="{{ $this->featureUrl($feature) }}" class="hover:underline" title="F{{ $feature->number }}">{{ $feature->title }} · {{ $feature->status->value }}</a></li>
                 @endforeach
             </ul>
             @if ($tests->isNotEmpty())
                 <div class="mt-1 flex flex-wrap gap-1">
                     @foreach ($tests as $test)
-                        <a href="{{ $this->testUrl($test) }}" class="rounded bg-slate-100 px-1.5 py-0.5 text-xs text-slate-600 hover:underline dark:bg-white/10 dark:text-slate-300" title="{{ $test->title }}">T{{ $test->number }} · {{ $test->last_result->value }}</a>
+                        <a href="{{ $this->testUrl($test) }}" class="rounded bg-slate-100 px-1.5 py-0.5 text-xs text-slate-600 hover:underline dark:bg-white/10 dark:text-slate-300" title="T{{ $test->number }}">{{ \Illuminate\Support\Str::limit($test->title, 30) }} · {{ $test->last_result->value }}</a>
                     @endforeach
                 </div>
             @endif
@@ -78,7 +77,7 @@
                     <div data-requirement-dependencies="{{ $label }}">
                         <h3 class="text-xs font-medium text-slate-500">{{ $label }}</h3>
                         @foreach ($related->sortBy('number') as $other)
-                            <button type="button" wire:click="selectNode({{ $other->number }})" class="block text-left hover:underline">#{{ $other->number }} {{ $other->title }}</button>
+                            <button type="button" wire:click="selectNode({{ $other->number }})" class="block text-left hover:underline">{{ $other->title }}</button>
                         @endforeach
                     </div>
                 @endif

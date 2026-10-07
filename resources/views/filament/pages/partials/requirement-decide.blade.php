@@ -14,22 +14,22 @@
     <div class="mt-2 grid gap-2 @lg:grid-cols-2">
         <div class="rounded-md bg-slate-50 p-2 dark:bg-white/5" data-now>
             <p class="text-xs text-slate-500">现在</p>
-            <p class="mt-1 whitespace-pre-wrap text-sm text-slate-800 dark:text-slate-200">{{ $decision->now }}</p>
-            @if ($old && $decision->now !== $old->title)<p class="mt-1 text-xs text-slate-500">现行规则：{{ $old->title }}</p>@endif
+            <p class="mt-1 whitespace-pre-wrap text-sm text-slate-800 dark:text-slate-200">{{ $this->mentions->html($decision->now) }}</p>
+            @if ($old && $decision->now !== $old->title)<p class="mt-1 text-xs text-slate-500">现行规则：{{ $this->mentions->html($old->title) }}</p>@endif
         </div>
         <div class="rounded-md bg-amber-50 p-2 dark:bg-amber-500/10" data-change>
             <p class="text-xs text-amber-700 dark:text-amber-300">要改成</p>
-            <p class="mt-1 whitespace-pre-wrap text-sm text-slate-800 dark:text-slate-200">{{ $decision->change }}</p>
+            <p class="mt-1 whitespace-pre-wrap text-sm text-slate-800 dark:text-slate-200">{{ $this->mentions->html($decision->change) }}</p>
         </div>
     </div>
 
-    @if ($decision->difference)<p class="mt-2 text-sm text-slate-700 dark:text-slate-300"><span class="mr-2 text-xs text-slate-500">差别</span>{{ $decision->difference }}</p>@endif
-    @if ($decision->risk)<p class="mt-1 text-sm text-slate-700 dark:text-slate-300"><span class="mr-2 text-xs text-slate-500">风险</span>{{ $decision->risk }}</p>@endif
+    @if ($decision->difference)<p class="mt-2 text-sm text-slate-700 dark:text-slate-300"><span class="mr-2 text-xs text-slate-500">差别</span>{{ $this->mentions->html($decision->difference) }}</p>@endif
+    @if ($decision->risk)<p class="mt-1 text-sm text-slate-700 dark:text-slate-300"><span class="mr-2 text-xs text-slate-500">风险</span>{{ $this->mentions->html($decision->risk) }}</p>@endif
 
     @if ($isBoss)
-        @if ($decision->whyBoss)<p class="mt-1 text-sm text-slate-700 dark:text-slate-300"><span class="mr-2 text-xs text-slate-500">为什么要老板定</span>{{ $decision->whyBoss }}</p>@endif
+        @if ($decision->whyBoss)<p class="mt-1 text-sm text-slate-700 dark:text-slate-300"><span class="mr-2 text-xs text-slate-500">为什么要老板定</span>{{ $this->mentions->html($decision->whyBoss) }}</p>@endif
         @if ($opinion = $requirement->decision_opinion)
-            <p class="mt-2 text-xs text-slate-600 dark:text-slate-300" data-opinion>你的意见：{{ $opinion['key'] === 'custom' ? $opinion['label'] : "{$opinion['key']}. {$opinion['label']}" }}（{{ $requirement->sent_to_boss_at ? '已发老板 '.$requirement->sent_to_boss_at->toDateString() : '待发老板' }}）</p>
+            <p class="mt-2 text-xs text-slate-600 dark:text-slate-300" data-opinion>你的意见：{{ $this->mentions->html($opinion['key'] === 'custom' ? $opinion['label'] : "{$opinion['key']}. {$opinion['label']}") }}（{{ $requirement->sent_to_boss_at ? '已发老板 '.$requirement->sent_to_boss_at->toDateString() : '待发老板' }}）</p>
         @endif
         <h4 class="mt-3 mb-1.5 text-xs text-slate-500">你的意见（会带进问老板清单）</h4>
         @include('filament.pages.partials.requirement-decide-options', ['prefix' => \App\Models\RequirementDecisionDraft::OPINION, 'placeholder' => '你的意见，会带进问老板清单'])

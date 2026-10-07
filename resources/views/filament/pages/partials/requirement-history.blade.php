@@ -6,10 +6,10 @@
                 <span class="font-medium">{{ $revision->old_status ?? '新建' }} → {{ $revision->new_status }}</span>
             @endif
             @if ($revision->changedStatement())
-                <span>改写：<span class="line-through opacity-60">{{ $revision->old_statement }}</span> → {{ $revision->new_statement }}</span>
+                <span>改写：<span class="line-through opacity-60">{{ $this->mentions->html($revision->old_statement) }}</span> → {{ $this->mentions->html($revision->new_statement) }}</span>
             @endif
-            @if ($revision->reason)<span>· {{ $revision->reason }}</span>@endif
-            @if ($revision->source || $revision->decided_by)<span class="text-slate-400">· {{ collect([$revision->decided_by, $revision->source])->filter()->implode('，') }}</span>@endif
+            @if ($revision->reason)<span>· {{ $this->mentions->html($revision->reason) }}</span>@endif
+            @if ($revision->source || $revision->decided_by)<span class="text-slate-400">· {{ $this->mentions->html(collect([$revision->decided_by, $revision->source])->filter()->implode('，')) }}</span>@endif
         </li>
     @endforeach
     @foreach ($commits as $commit)
@@ -17,7 +17,7 @@
             <span class="text-slate-400">{{ $commit->committed_at->toDateString() }}</span>
             {{ substr($commit->hash, 0, 7) }}
             <span class="font-sans">{{ \Illuminate\Support\Str::limit($commit->subject, 80) }}</span>
-            @if ($commit->feature)<span class="font-sans text-slate-400">· F{{ $commit->feature->number }}</span>@endif
+            @if ($commit->feature)<span class="font-sans text-slate-400" title="F{{ $commit->feature->number }}">· {{ $commit->feature->title }}</span>@endif
         </li>
     @endforeach
     @if ($revisions->isEmpty() && $commits->isEmpty())

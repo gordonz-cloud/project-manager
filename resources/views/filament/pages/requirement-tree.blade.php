@@ -110,7 +110,7 @@
                         @forelse ($this->recentChanges as $group)
                             <article wire:key="change-{{ $group->requirement->id }}" @if ($this->selectedNumber === $group->requirement->number) data-selected @endif class="rounded-md border p-3 {{ $this->selectedNumber === $group->requirement->number ? 'border-primary-500 bg-primary-50 dark:bg-primary-500/10' : 'border-slate-200 dark:border-white/10' }}">
                                 <button type="button" wire:click="selectNode({{ $group->requirement->number }})" class="flex w-full items-center gap-2 text-left text-sm font-medium text-slate-950 hover:underline dark:text-white">
-                                    <span class="min-w-0 truncate">#{{ $group->requirement->number }} {{ $group->requirement->title }}</span>
+                                    <span class="min-w-0 truncate">{{ $group->requirement->title }}</span>
                                     @include('filament.pages.partials.requirement-progress', ['requirement' => $group->requirement, 'progress' => $this->progressOf($group->requirement)])
                                     <span class="ml-auto shrink-0 text-xs font-normal text-slate-400">{{ $group->latestAt()?->diffForHumans() }}</span>
                                 </button>
@@ -138,7 +138,7 @@
             @php($preview = $this->batchPreview)
             <span class="tabular-nums text-slate-700 dark:text-slate-200">已选 {{ $this->drafts->count() }} / {{ $this->awaitingDecision->count() }}</span>
             <span class="text-xs text-slate-500 dark:text-slate-400" data-batch-preview>{{ $this->drafts->isEmpty() ? '确认你所有已选的（全貌和待决策页、任何筛选下选的），没选的不动。' : '这批会：'.$preview->summary() }}</span>
-            <x-filament::button size="sm" class="ml-auto" wire:click="confirmAllDrafts" wire:confirm="{{ implode(PHP_EOL, ['这批会：'.$preview->summary(), '', ...$preview->examples, $this->drafts->count() > count($preview->examples) ? '…' : '']) }}" :disabled="$this->drafts->isEmpty()">确认这一批</x-filament::button>
+            <x-filament::button size="sm" class="ml-auto" wire:click="confirmAllDrafts" wire:confirm="{{ $this->mentions->plain(implode(PHP_EOL, ['这批会：'.$preview->summary(), '', ...$preview->examples, $this->drafts->count() > count($preview->examples) ? '…' : ''])) }}" :disabled="$this->drafts->isEmpty()">确认这一批</x-filament::button>
         </div>
     @endif
 </x-filament-panels::page>

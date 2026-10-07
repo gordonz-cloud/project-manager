@@ -11,7 +11,7 @@ use Illuminate\Support\Collection;
 final readonly class DecisionBatchResult
 {
     /**
-     * @param  list<string>  $examples  a few drafts in words, e.g. "#638 意见 A 老板文档已批"
+     * @param  list<string>  $examples  a few drafts in words, e.g. "「游客价格位只显示…」 意见 A 老板文档已批"
      */
     public function __construct(
         public int $decidedByMe = 0,

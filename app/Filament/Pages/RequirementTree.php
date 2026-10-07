@@ -16,6 +16,7 @@ use App\Models\Test;
 use App\Models\User;
 use App\Services\Requirements\RequirementDecisions;
 use App\Services\Requirements\RequirementTreeService;
+use App\Support\RequirementMentions;
 use BackedEnum;
 use Filament\Facades\Filament;
 use Filament\Notifications\Notification;
@@ -176,6 +177,15 @@ class RequirementTree extends Page
         $sent = $this->requirementDecisions()->markSentToBoss($this->project);
         unset($this->awaitingDecision, $this->pendingByGoal, $this->bossQuestions, $this->selectedRequirement);
         Notification::make()->title("已标记 {$sent} 条发给老板")->success()->send();
+    }
+
+    /**
+     * Turns "#N" in text shown on the page into that rule's title.
+     */
+    #[Computed]
+    public function mentions(): RequirementMentions
+    {
+        return new RequirementMentions(collect($this->nodesById)->mapWithKeys(fn (RequirementTreeNode $node): array => [(int) $node->requirement->number => $node->requirement->title])->all());
     }
 
     /**
