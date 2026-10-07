@@ -21,12 +21,11 @@
             data-requirement-number="{{ $requirement->number }}"
             class="flex min-h-8 min-w-0 flex-1 cursor-pointer items-center gap-2 rounded-md px-2 py-1 text-left text-sm transition {{ $isSelected ? 'bg-slate-900 text-white dark:bg-white dark:text-slate-950' : 'hover:bg-slate-50 dark:hover:bg-white/5' }} {{ $isVoid && ! $isSelected ? 'text-slate-400 line-through dark:text-slate-500' : '' }}"
         >
-            <span class="w-4 shrink-0 text-center {{ $node->delivery->color() }}" title="{{ $node->delivery->value }}">●</span>
             @if ($requirement->kind && $requirement->kind !== \App\Enums\RequirementKind::Rule)
                 <span class="shrink-0 text-xs opacity-60">{{ $requirement->kind->value }}</span>
             @endif
             <span class="min-w-0 truncate {{ $requirement->kind === \App\Enums\RequirementKind::Goal ? 'font-medium' : '' }}">{{ $requirement->title }}</span>
-            @include('filament.pages.partials.requirement-status', ['requirement' => $requirement])
+            @include('filament.pages.partials.requirement-progress', ['requirement' => $requirement, 'progress' => $node->progress])
             @if ($node->children !== [])
                 <span class="ml-auto">@include('filament.pages.partials.requirement-rollup', ['rollup' => $node->rollup])</span>
             @endif

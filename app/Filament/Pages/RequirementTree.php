@@ -4,21 +4,27 @@ namespace App\Filament\Pages;
 
 use App\Data\Requirements\DeliveryStatus;
 use App\Data\Requirements\RequirementChangeGroup;
+use App\Data\Requirements\RequirementProgress;
 use App\Data\Requirements\RequirementRollup;
 use App\Data\Requirements\RequirementTreeNode;
 use App\Enums\NavigationGroup;
 use App\Enums\RequirementDecider;
-use App\Enums\RequirementStatus;
 use App\Models\Feature;
 use App\Models\Project;
 use App\Models\Requirement;
+use App\Models\RequirementDecisionDraft;
 use App\Models\Test;
+use App\Models\User;
+use App\Services\Requirements\RequirementDecisions;
 use App\Services\Requirements\RequirementTreeService;
 use BackedEnum;
 use Filament\Facades\Filament;
+use Filament\Notifications\Notification;
 use Filament\Pages\Page;
 use Filament\Support\Icons\Heroicon;
-use Illuminate\Database\Eloquent\Collection;
+use Illuminate\Database\Eloquent\Collection as EloquentCollection;
+use Illuminate\Support\Collection;
+use InvalidArgumentException;
 use Livewire\Attributes\Computed;
 use Livewire\Attributes\Url;
 use LogicException;
@@ -30,12 +36,17 @@ use LogicException;
  * @property-read list<RequirementTreeNode> $tree
  * @property-read Requirement|null $selectedRequirement
  * @property-read Collection<int, Requirement> $awaitingDecision
- * @property-read array<string, Collection<int, Requirement>> $pendingByDecider
+ * @property-read Collection<int, Requirement> $pendingCards
+ * @property-read EloquentCollection<int, RequirementDecisionDraft> $drafts
+ * @property-read array<int, RequirementTreeNode> $nodesById
  */
 class RequirementTree extends Page
 {
     /** @var array<string, string> tab key => label */
-    public const TABS = ['overview' => '全貌', 'pending' => '待拍板', 'changes' => '最近变化'];
+    public const TABS = ['overview' => '全貌', 'pending' => '待决策', 'todo' => '待做', 'changes' => '最近变化'];
+
+    /** @var array<string, string> 待决策 filter key => label */
+    public const WAITING_ON = ['me' => '等我', 'boss' => '等老板', 'all' => '全部'];
 
     protected string $view = 'filament.pages.requirement-tree';
 
@@ -58,11 +69,19 @@ class RequirementTree extends Page
 
     public bool $showUnfiled = false;
 
+    #[Url]
+    public string $waitingOn = 'me';
+
+    public bool $showBossQuestions = false;
+
     private ?RequirementTreeService $requirementTreeService = null;
 
-    public function boot(RequirementTreeService $requirementTreeService): void
+    private ?RequirementDecisions $requirementDecisions = null;
+
+    public function boot(RequirementTreeService $requirementTreeService, RequirementDecisions $requirementDecisions): void
     {
         $this->requirementTreeService = $requirementTreeService;
+        $this->requirementDecisions = $requirementDecisions;
     }
 
     public static function getNavigationGroup(): NavigationGroup
@@ -78,6 +97,71 @@ class RequirementTree extends Page
     public function setTab(string $tab): void
     {
         $this->tab = isset(self::TABS[$tab]) ? $tab : 'overview';
+    }
+
+    public function setWaitingOn(string $waitingOn): void
+    {
+        $this->waitingOn = isset(self::WAITING_ON[$waitingOn]) ? $waitingOn : 'me';
+    }
+
+    public function choose(int $requirementId, string $choice, ?string $customText = null): void
+    {
+        $requirement = $this->awaitingDecision->firstWhere('id', $requirementId);
+
+        if ($requirement === null) {
+            return;
+        }
+
+        try {
+            $this->requirementDecisions()->choose($requirement, $this->user(), $choice, $customText);
+        } catch (InvalidArgumentException $exception) {
+            Notification::make()->title($exception->getMessage())->danger()->send();
+        }
+
+        unset($this->drafts);
+    }
+
+    /**
+     * The 自己写 box: text drafts a custom answer, emptying it drops a custom draft.
+     */
+    public function writeCustom(int $requirementId, string $text): void
+    {
+        if (trim($text) !== '') {
+            $this->choose($requirementId, RequirementDecisionDraft::CUSTOM, $text);
+        } elseif ($this->drafts->get($requirementId)?->choice === RequirementDecisionDraft::CUSTOM) {
+            $this->clearChoice($requirementId);
+        }
+    }
+
+    public function clearChoice(int $requirementId): void
+    {
+        if ($requirement = $this->awaitingDecision->firstWhere('id', $requirementId)) {
+            $this->requirementDecisions()->clear($requirement, $this->user());
+        }
+
+        unset($this->drafts);
+    }
+
+    /**
+     * Applies the drafts on the cards in view, then everything on the page is read again.
+     */
+    public function confirmBatch(): void
+    {
+        try {
+            $result = $this->requirementDecisions()->confirm($this->project, $this->user(), $this->pendingCards);
+        } catch (InvalidArgumentException $exception) {
+            Notification::make()->title('没有确认，什么都没改')->body($exception->getMessage())->danger()->send();
+
+            return;
+        }
+
+        unset($this->tree, $this->awaitingDecision, $this->pendingCards, $this->drafts, $this->nodesById, $this->total, $this->selectedRequirement);
+        Notification::make()->title($result->summary())->success()->send();
+    }
+
+    public function toggleBossQuestions(): void
+    {
+        $this->showBossQuestions = ! $this->showBossQuestions;
     }
 
     public function selectNode(int $number): void
@@ -142,39 +226,97 @@ class RequirementTree extends Page
     #[Computed]
     public function awaitingDecision(): Collection
     {
-        return $this->requirementTreeService()->awaitingDecision($this->project);
+        return $this->requirementTreeService()->awaitingDecision($this->project, $this->tree);
     }
 
     /**
-     * Pending decisions per decider (Gordon, 老板, then 未指定 only if any); 冲突 first, open questions (待定) next, then 提议.
+     * The cards of the 待决策 tab under the current filter; 等我 includes nodes nobody assigned yet.
      *
-     * @return array<string, Collection<int, Requirement>> section label => requirements
+     * @return Collection<int, Requirement>
      */
     #[Computed]
-    public function pendingByDecider(): array
+    public function pendingCards(): Collection
     {
-        $sorted = $this->awaitingDecision->sortBy([
-            fn (Requirement $a, Requirement $b): int => $this->pendingRank($a) <=> $this->pendingRank($b),
-            fn (Requirement $a, Requirement $b): int => $a->number <=> $b->number,
-        ]);
-        $sections = [];
-
-        foreach (RequirementDecider::cases() as $decider) {
-            $sections[$decider === RequirementDecider::Boss ? '等老板拍板' : "等 {$decider->value} 拍板"] = $sorted->filter(fn (Requirement $requirement): bool => $requirement->decider === $decider)->values();
-        }
-
-        $unassigned = $sorted->whereNull('decider')->values();
-
-        return $unassigned->isEmpty() ? $sections : [...$sections, '未指定' => $unassigned];
+        return $this->awaitingDecision->filter(fn (Requirement $requirement): bool => $this->isWaitingOn($requirement, $this->waitingOn))->values();
     }
 
-    private function pendingRank(Requirement $requirement): int
+    public function waitingOnCount(string $waitingOn): int
     {
-        return match (true) {
-            $requirement->status === RequirementStatus::Conflict => 0,
-            str_starts_with($requirement->title, '待定') => 1,
-            default => 2,
+        return $this->awaitingDecision->filter(fn (Requirement $requirement): bool => $this->isWaitingOn($requirement, $waitingOn))->count();
+    }
+
+    private function isWaitingOn(Requirement $requirement, string $waitingOn): bool
+    {
+        return match ($waitingOn) {
+            'boss' => $requirement->decider === RequirementDecider::Boss,
+            'all' => true,
+            default => $requirement->decider !== RequirementDecider::Boss,
         };
+    }
+
+    /**
+     * This user's picks, keyed by requirement id.
+     *
+     * @return EloquentCollection<int, RequirementDecisionDraft>
+     */
+    #[Computed]
+    public function drafts(): EloquentCollection
+    {
+        return RequirementDecisionDraft::query()
+            ->where('user_id', $this->user()->id)
+            ->whereIn('requirement_id', $this->awaitingDecision->pluck('id'))
+            ->get()
+            ->keyBy('requirement_id');
+    }
+
+    public function draftedCount(): int
+    {
+        return $this->pendingCards->filter(fn (Requirement $requirement): bool => $this->drafts->has($requirement->id))->count();
+    }
+
+    #[Computed]
+    public function bossQuestions(): string
+    {
+        return $this->requirementDecisions()->bossQuestions($this->project);
+    }
+
+    /**
+     * @return list<RequirementTreeNode>
+     */
+    #[Computed]
+    public function todo(): array
+    {
+        return $this->requirementTreeService()->todo($this->tree);
+    }
+
+    /**
+     * @return array<int, RequirementTreeNode>
+     */
+    #[Computed]
+    public function nodesById(): array
+    {
+        return collect(RequirementTreeNode::flattened($this->tree))->keyBy(fn (RequirementTreeNode $node): int => $node->requirement->id)->all();
+    }
+
+    /**
+     * Titles from the root down to the parent, read from the tree already in memory.
+     *
+     * @return list<string>
+     */
+    public function pathOf(Requirement $requirement): array
+    {
+        $path = [];
+
+        for ($id = $requirement->parent_id; $id !== null && isset($this->nodesById[$id]); $id = $this->nodesById[$id]->requirement->parent_id) {
+            array_unshift($path, $this->nodesById[$id]->requirement->title);
+        }
+
+        return $path;
+    }
+
+    public function progressOf(Requirement $requirement): ?RequirementProgress
+    {
+        return $this->nodesById[$requirement->id]->progress ?? null;
     }
 
     /**
@@ -198,7 +340,7 @@ class RequirementTree extends Page
 
     public function deliveryOf(Requirement $requirement): ?DeliveryStatus
     {
-        return $this->findNode($this->tree, $requirement->id)?->delivery;
+        return $this->nodesById[$requirement->id]->delivery ?? null;
     }
 
     public function featureUrl(Feature $feature): string
@@ -211,26 +353,22 @@ class RequirementTree extends Page
         return TestTree::getUrl(['selectedNumber' => $test->number]);
     }
 
-    /**
-     * @param  list<RequirementTreeNode>  $nodes
-     */
-    private function findNode(array $nodes, int $id): ?RequirementTreeNode
-    {
-        foreach ($nodes as $node) {
-            if ($node->requirement->id === $id) {
-                return $node;
-            }
-
-            if ($found = $this->findNode($node->children, $id)) {
-                return $found;
-            }
-        }
-
-        return null;
-    }
-
     private function requirementTreeService(): RequirementTreeService
     {
         return $this->requirementTreeService ?? throw new LogicException('Requirement tree service has not been booted.');
+    }
+
+    private function requirementDecisions(): RequirementDecisions
+    {
+        return $this->requirementDecisions ?? throw new LogicException('Requirement decisions have not been booted.');
+    }
+
+    private function user(): User
+    {
+        $user = auth()->user();
+
+        abort_unless($user instanceof User, 403);
+
+        return $user;
     }
 }

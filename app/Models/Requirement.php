@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Data\Requirements\RequirementDecision;
 use App\Enums\RequirementDecider;
 use App\Enums\RequirementKind;
 use App\Enums\RequirementStatus;
@@ -41,10 +42,11 @@ use LogicException;
  * @property RequirementDecider|null $decider
  * @property string|null $version
  * @property int|null $position
+ * @property RequirementDecision|null $decision
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at
  */
-#[Fillable(['number', 'parent_id', 'kind', 'title', 'rationale', 'source', 'decided_by', 'decided_at', 'supersedes_id', 'acceptance', 'status', 'decider', 'version', 'position'])]
+#[Fillable(['number', 'parent_id', 'kind', 'title', 'rationale', 'source', 'decided_by', 'decided_at', 'supersedes_id', 'acceptance', 'status', 'decider', 'version', 'position', 'decision'])]
 class Requirement extends Model
 {
     /** @use HasFactory<RequirementFactory> */
@@ -89,6 +91,7 @@ class Requirement extends Model
             'kind' => RequirementKind::class,
             'decider' => RequirementDecider::class,
             'decided_at' => 'date',
+            'decision' => RequirementDecision::class,
         ];
     }
 
@@ -136,6 +139,14 @@ class Requirement extends Model
     public function tests(): BelongsToMany
     {
         return $this->belongsToMany(Test::class);
+    }
+
+    /**
+     * What Gordon is asked: the written decision, or the plain two-way choice when none was written.
+     */
+    public function decisionOrFallback(): RequirementDecision
+    {
+        return $this->decision ?? RequirementDecision::fallbackFor($this);
     }
 
     /**
@@ -311,12 +322,12 @@ class Requirement extends Model
      */
     private static function computeBuildOrder(Project $project): Collection
     {
-        $position = Module::inBuildOrder($project)->pluck('id')->flip(); // module id => build position
+        $position = array_flip(Module::inBuildOrder($project)->pluck('id')->all()); // module id => build position
 
         $requirements = static::query()->where('project_id', $project->id)->with(['modules', 'dependsOn:id'])->get();
         $ids = $requirements->pluck('id')->flip();
         $modulePosition = $requirements->mapWithKeys(fn (Requirement $requirement) => [
-            $requirement->id => $requirement->modules->max(fn (Module $m) => $position[$m->id] ?? -1) ?? -1,
+            $requirement->id => $requirement->modules->max(fn (Module $m): int => $position[$m->id] ?? -1) ?? -1,
         ])->all();
 
         /** @var array<int, int> $remaining number of un-placed dependencies per requirement id */

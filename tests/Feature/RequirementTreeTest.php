@@ -259,7 +259,7 @@ it('shows the overview tree with rollups and the unfiled legacy list [T44]', fun
 
     Livewire::test(RequirementTree::class)
         ->assertOk()
-        ->assertSeeInOrder(['Members buy by tier', '⚠ 1 冲突', 'Tier rule', '未归类（1'])
+        ->assertSeeInOrder(['Members buy by tier', '1 待决策', 'Tier rule', '待决策 · 等我', '未归类（1'])
         ->assertDontSee('Old flat requirement')
         ->toggle('showUnfiled')
         ->assertSee('Old flat requirement');
@@ -275,8 +275,8 @@ it('lists what waits on a decision with the rule it would replace and what it to
     Requirement::factory()->create(['project_id' => $project->id, 'number' => 4, 'parent_id' => $goal->id, 'kind' => RequirementKind::Rule, 'status' => RequirementStatus::Decided, 'title' => 'Settled rule']);
 
     Livewire::withQueryParams(['tab' => 'pending'])->test(RequirementTree::class)
-        ->assertSeeInOrder(['待拍板', '（1）'])
-        ->assertSeeInOrder(['Checkout goal', '现行规则 #2', 'Free shipping over 50', 'Free shipping over 80', 'boss doc v2', '为什么：margin', '会影响', 'F9 Shipping calculator'])
+        ->assertSeeInOrder(['待决策', '（1）'])
+        ->assertSeeInOrder(['Checkout goal', 'Free shipping over 80', '现在', 'Free shipping over 50', '要改成', 'Free shipping over 80', 'A. 改成新说法', 'B. 保持现状', '会动到', 'F9 Shipping calculator', 'margin', '出处：boss doc v2'])
         ->assertDontSee('Settled rule');
 });
 
@@ -304,7 +304,7 @@ it('shows a selected requirement with why, source, history, features, tests and 
         ->assertSeeInOrder(['Members buy by tier', '已验证', 'protect channel price', 'S5 spec v1.0', 'Gordon · 2026-10-02', 'F4 Tier gate · 完成', 'T12 · 通过', '新建 → 已定', 'Add tier gate']);
 });
 
-it('groups pending decisions by who must decide [T51]', function () {
+it('filters pending decisions by who must decide, conflicts first [T51]', function () {
     $project = requirementTreePage();
     $goal = Requirement::factory()->create(['project_id' => $project->id, 'number' => 1, 'kind' => RequirementKind::Goal, 'status' => RequirementStatus::Decided, 'title' => 'G']);
     $pending = fn (int $number, string $title, RequirementStatus $status = RequirementStatus::Proposed, ?RequirementDecider $decider = null) => Requirement::factory()->create([
@@ -318,8 +318,17 @@ it('groups pending decisions by who must decide [T51]', function () {
     $pending(6, 'Nobody yet');
 
     Livewire::withQueryParams(['tab' => 'pending'])->test(RequirementTree::class)
-        ->assertSeeInOrder(['等 Gordon 拍板 1', '等老板拍板 3'])
-        ->assertSeeInOrder(['等 Gordon 拍板 (1)', 'Gordon proposal', '等老板拍板 (3)', 'Boss conflict', '待定：boss question', 'Boss proposal', '未指定 (1)', 'Nobody yet']);
+        ->assertSeeInOrder(['等我 2', '等老板 3'])
+        ->assertSeeInOrder(['Gordon proposal', 'Nobody yet'])
+        ->assertDontSee('Boss proposal');
+
+    // After a call() the haystack is the JSON response with Chinese escaped, so each filter is opened fresh.
+    Livewire::withQueryParams(['tab' => 'pending', 'waitingOn' => 'boss'])->test(RequirementTree::class)
+        ->assertSeeInOrder(['Boss conflict', 'Boss proposal', '待定：boss question'])
+        ->assertDontSee('Gordon proposal');
+
+    Livewire::withQueryParams(['tab' => 'pending', 'waitingOn' => 'all'])->test(RequirementTree::class)
+        ->assertSeeInOrder(['Boss conflict', 'Boss proposal', '待定：boss question', 'Gordon proposal', 'Nobody yet']);
 });
 
 it('puts groups under sub-goals and rules under groups [T52]', function (array $nodes, ?string $message) {

@@ -3,6 +3,7 @@
 namespace App\Services\Requirements;
 
 use App\Data\Requirements\RequirementChangeGroup;
+use App\Data\Requirements\RequirementProgress;
 use App\Data\Requirements\RequirementTreeNode;
 use App\Enums\RequirementStatus;
 use App\Models\Commit;
@@ -37,18 +38,37 @@ class RequirementTreeService
     }
 
     /**
-     * Every 提议 and 冲突, oldest first, with what a decision would touch.
+     * Every 提议 and 冲突 with what a decision would touch: 冲突 first (they change a rule already built), then in tree order.
      *
+     * @param  list<RequirementTreeNode>  $tree  this project's tree()
      * @return Collection<int, Requirement>
      */
-    public function awaitingDecision(Project $project): Collection
+    public function awaitingDecision(Project $project, array $tree): Collection
     {
+        $treeOrder = array_flip(array_map(fn (RequirementTreeNode $node): int => $node->requirement->id, RequirementTreeNode::flattened($tree)));
+
         return Requirement::withoutGlobalScopes()
             ->where('project_id', $project->id)
             ->whereIn('status', [RequirementStatus::Proposed, RequirementStatus::Conflict])
             ->with(['linkedFeatures', 'tests', 'supersedes.linkedFeatures', 'supersedes.tests'])
-            ->orderBy('number')
-            ->get();
+            ->get()
+            ->sortBy(fn (Requirement $requirement): array => [$requirement->status === RequirementStatus::Conflict ? 0 : 1, $treeOrder[$requirement->id] ?? PHP_INT_MAX])
+            ->values();
+    }
+
+    /**
+     * Decided rules that are not built yet, in the order to build them: the tree's order, where every level puts what
+     * is depended on first. 进行中 ones stay in the list so nobody starts the next before finishing them.
+     *
+     * @param  list<RequirementTreeNode>  $tree
+     * @return list<RequirementTreeNode>
+     */
+    public function todo(array $tree): array
+    {
+        return array_values(array_filter(
+            RequirementTreeNode::flattened($tree),
+            fn (RequirementTreeNode $node): bool => $node->children === [] && in_array($node->progress, [RequirementProgress::Todo, RequirementProgress::InProgress], true),
+        ));
     }
 
     /**

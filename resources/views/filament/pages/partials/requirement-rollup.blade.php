@@ -1,7 +1,7 @@
-@php($percent = $rollup->verifiedPercent())
-<span class="inline-flex shrink-0 gap-1.5 text-xs tabular-nums">
-    @if ($percent !== null)<span class="text-emerald-600 dark:text-emerald-400" title="已定规则里已验证的比例（{{ $rollup->count(\App\Data\Requirements\DeliveryStatus::Verified) }}/{{ $rollup->decided() }}）">{{ $percent }}% 已验证</span>@endif
+<span class="inline-flex shrink-0 gap-1.5 text-xs tabular-nums text-slate-500 dark:text-slate-400" data-rollup>
+    @foreach (array_filter($rollup->progressCounts()) as $label => $count)
+        @if (! $loop->first)<span>·</span>@endif
+        <span>{{ $count }} {{ $label }}</span>
+    @endforeach
     @if ($failed = $rollup->count(\App\Data\Requirements\DeliveryStatus::Failed))<span class="text-red-600 dark:text-red-400">✗ {{ $failed }} 验证失败</span>@endif
-    @if ($rollup->conflicts)<span class="text-amber-600 dark:text-amber-400">⚠ {{ $rollup->conflicts }} 冲突</span>@endif
-    @if ($rollup->proposed)<span class="text-sky-600 dark:text-sky-400">{{ $rollup->proposed }} 提议</span>@endif
 </span>

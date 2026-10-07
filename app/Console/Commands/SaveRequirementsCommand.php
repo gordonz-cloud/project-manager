@@ -14,7 +14,9 @@ use LogicException;
  * to link new nodes), give "number" to update an existing node:
  * {"project": "sg", "nodes": [{"number"?, "ref"?, "parent"?, "parent_ref"?, "kind", "title", "rationale", "source", "status",
  * "decided_by", "decided_at", "supersedes"?, "decider"? (Gordon|老板, only on 提议/冲突), "reason"?, "features": [feature numbers], "tests": [test numbers],
- * "depends_on"?: [requirement numbers it needs to hold], "depends_on_refs"?: [refs in this payload], "position"?: order among siblings}]}.
+ * "depends_on"?: [requirement numbers it needs to hold], "depends_on_refs"?: [refs in this payload], "position"?: order among siblings,
+ * "decision"?: {now, change, difference?, risk?, impact?, options: [{key, label, outcome: accept|reject|keep_current|custom, consequence, result_title?, recommended?}]}
+ * (what Gordon is asked on the 待决策 page; see RequirementDecision)}]}.
  * Passing depends_on or depends_on_refs replaces the node's dependencies; omitting both leaves them alone.
  */
 class SaveRequirementsCommand extends Command

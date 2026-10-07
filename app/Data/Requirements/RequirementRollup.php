@@ -49,6 +49,21 @@ final readonly class RequirementRollup
         return array_sum($this->delivered);
     }
 
+    /**
+     * Counts per RequirementProgress (放弃 left out): open decisions, then decided leaves by how far they are built.
+     *
+     * @return array<string, int> RequirementProgress value => count
+     */
+    public function progressCounts(): array
+    {
+        return [
+            RequirementProgress::Pending->value => $this->proposed + $this->conflicts,
+            RequirementProgress::Todo->value => $this->count(DeliveryStatus::NotBuilt),
+            RequirementProgress::InProgress->value => $this->count(DeliveryStatus::InProgress) + $this->count(DeliveryStatus::Failed),
+            RequirementProgress::Done->value => $this->count(DeliveryStatus::Built) + $this->count(DeliveryStatus::Verified),
+        ];
+    }
+
     public function verifiedPercent(): ?int
     {
         return $this->decided() === 0 ? null : (int) round(100 * $this->count(DeliveryStatus::Verified) / $this->decided());

@@ -19,6 +19,7 @@ final readonly class RequirementTreeNode
         public DeliveryStatus $delivery,
         public array $children,
         public RequirementRollup $rollup,
+        public RequirementProgress $progress,
     ) {}
 
     /**
@@ -31,7 +32,18 @@ final readonly class RequirementTreeNode
         $delivery = DeliveryStatus::combined(array_values(array_filter([$own, ...array_map(fn (self $child): DeliveryStatus => $child->delivery, $decidedChildren)])));
         $rollup = array_reduce($children, fn (RequirementRollup $sum, self $child): RequirementRollup => $sum->plus($child->rollup), RequirementRollup::of($requirement, $delivery, $children === []));
 
-        return new self($requirement, $delivery, $children, $rollup);
+        return new self($requirement, $delivery, $children, $rollup, RequirementProgress::of($requirement->status, $delivery));
+    }
+
+    /**
+     * Every node, depth first in display order.
+     *
+     * @param  list<self>  $nodes
+     * @return list<self>
+     */
+    public static function flattened(array $nodes): array
+    {
+        return array_merge(...array_map(fn (self $node): array => [$node, ...self::flattened($node->children)], $nodes));
     }
 
     /**
