@@ -439,3 +439,23 @@ it('shows groups in the tree, dependencies in the detail and groups in the pendi
     Livewire::withQueryParams(['tab' => 'pending'])->test(RequirementTree::class)
         ->assertSeeInOrder(['Members buy by tier', '›', 'Direct visibility', '›', 'Cart rules', 'Tier is known at login']);
 });
+
+it('puts void nodes after the live ones of their level and leaves them out of the dependency order [T57]', function () {
+    $project = Project::factory()->create();
+    $node = fn (int $number, RequirementStatus $status = RequirementStatus::Decided): Requirement => Requirement::factory()->create([
+        'project_id' => $project->id, 'number' => $number, 'kind' => RequirementKind::Goal, 'status' => $status,
+    ]);
+    $oldA = $node(1, RequirementStatus::Void);
+    $oldB = $node(2, RequirementStatus::Void);
+    $goal = $node(3);
+    $later = $node(4);
+    $node(5, RequirementStatus::Proposed);
+
+    $goal->dependsOn()->attach($oldB); // a void prerequisite does not hold a live node back
+    $oldA->dependsOn()->attach($later);
+    $later->dependsOn()->attach($goal);
+
+    $numbers = array_map(fn (RequirementTreeNode $node): int => $node->requirement->number, app(RequirementTreeService::class)->tree($project));
+
+    expect($numbers)->toBe([3, 4, 5, 1, 2]);
+});

@@ -2,6 +2,7 @@
 
 namespace App\Services\Requirements;
 
+use App\Enums\RequirementStatus;
 use App\Models\Requirement;
 use Illuminate\Support\Collection;
 
@@ -10,6 +11,7 @@ use Illuminate\Support\Collection;
  * sort, ties broken by position, then number. A dependency between nodes that are not siblings is lifted to the pair
  * of their ancestors that are (a rule in group X depending on a rule in group Y puts X after Y). requirements:save only
  * guards direct dependencies against loops, so a lifted edge that would close a loop among siblings is skipped.
+ * 作废 nodes sit after the live ones of their level and take no part in the dependency order.
  */
 final class RequirementSiblingOrder
 {
@@ -34,7 +36,9 @@ final class RequirementSiblingOrder
         $ordered = [];
 
         foreach ($requirements->groupBy(fn (Requirement $requirement): int => $requirement->parent_id ?? 0) as $parentId => $siblings) {
-            $ordered[$parentId] = self::sorted($siblings, $edgesByParent[$parentId] ?? []);
+            [$void, $live] = $siblings->keyBy('id')->partition(fn (Requirement $requirement): bool => $requirement->status === RequirementStatus::Void);
+            $liveEdges = array_filter($edgesByParent[$parentId] ?? [], fn (array $edge): bool => $live->has($edge['first']) && $live->has($edge['then']));
+            $ordered[$parentId] = [...self::sorted($live, array_values($liveEdges)), ...self::sorted($void, [])];
         }
 
         return $ordered;
