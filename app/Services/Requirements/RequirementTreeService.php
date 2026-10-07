@@ -29,7 +29,7 @@ class RequirementTreeService
     {
         $requirements = Requirement::withoutGlobalScopes()
             ->where('project_id', $project->id)
-            ->with(['linkedFeatures:id,status', 'tests:id,last_result'])
+            ->with(['linkedFeatures:id,status', 'tests:id,last_result', 'supersededBy:id,number,title,supersedes_id,decided_at'])
             ->get();
         $dependencies = DB::table('requirement_dependencies')
             ->whereIn('requirement_id', Requirement::withoutGlobalScopes()->where('project_id', $project->id)->select('id'))

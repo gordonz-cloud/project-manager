@@ -47,6 +47,10 @@ final readonly class RequirementTreeNode
     {
         $status = $requirement->kind === RequirementKind::Group ? RequirementStatus::Decided : $requirement->status;
 
+        if ($requirement->status === RequirementStatus::Void && $requirement->supersededBy !== null) {
+            return RequirementProgress::Superseded;
+        }
+
         if ($children === [] || $requirement->status === RequirementStatus::Void) {
             return RequirementProgress::of($requirement->status, $delivery);
         }

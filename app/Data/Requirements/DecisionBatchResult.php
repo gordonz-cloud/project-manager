@@ -49,6 +49,7 @@ final readonly class DecisionBatchResult
             "加入问老板清单 {$this->opinions} 条",
             $this->forwarded ? "转老板 {$this->forwarded} 条" : null,
             $this->skipped ? "先不定 {$this->skipped} 条" : null,
+            $this->decided() ? '定下的规则将从待做开始（原来挂的功能和测试记为受影响）' : null,
         ]));
     }
 }

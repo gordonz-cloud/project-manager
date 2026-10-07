@@ -18,6 +18,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 use LogicException;
@@ -132,6 +133,16 @@ class Requirement extends Model
     public function supersedes(): BelongsTo
     {
         return $this->belongsTo(self::class, 'supersedes_id');
+    }
+
+    /**
+     * The decided rule that replaced this one (it is 作废 because of it).
+     *
+     * @return HasOne<Requirement, $this>
+     */
+    public function supersededBy(): HasOne
+    {
+        return $this->hasOne(self::class, 'supersedes_id')->where('status', RequirementStatus::Decided);
     }
 
     /**

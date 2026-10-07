@@ -6,13 +6,16 @@ use App\Data\Requirements\DecisionBatchResult;
 use App\Data\Requirements\DecisionOption;
 use App\Enums\RequirementDecider;
 use App\Enums\RequirementStatus;
+use App\Models\Feature;
 use App\Models\Project;
 use App\Models\Requirement;
 use App\Models\RequirementDecisionDraft;
+use App\Models\Test;
 use App\Models\User;
 use App\Support\RequirementMentions;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 use InvalidArgumentException;
 
 /**
@@ -173,7 +176,7 @@ class RequirementDecisions
         return RequirementDecisionDraft::query()
             ->where('user_id', $user->id)
             ->whereIn('requirement_id', $requirements->pluck('id'))
-            ->with('requirement.supersedes')
+            ->with(['requirement.supersedes', 'requirement.linkedFeatures', 'requirement.tests'])
             ->get();
     }
 
@@ -202,15 +205,19 @@ class RequirementDecisions
             return ['number' => $requirement->number, 'decider' => RequirementDecider::Boss->value];
         }
 
-        $decider = $draft->isBossReply() ? RequirementDecider::Boss : RequirementDecider::Gordon;
-        $today = now()->toDateString();
-        $signature = $decider === RequirementDecider::Boss ? "老板拍板 {$today}（经 Gordon 转）" : "Gordon 拍板 {$today}";
         $key = (string) $draft->optionKey();
+        $option = $key === RequirementDecisionDraft::CUSTOM ? null : ($requirement->decisionOrFallback()->option($key) ?? throw new InvalidArgumentException("#{$requirement->number} 没有选项 {$key}，重新选一次。"));
+        $decider = $draft->isBossReply() ? RequirementDecider::Boss : ($option->recordAs ?? RequirementDecider::Gordon);
+        $decidedAt = $option->recordDate ?? now()->toDateString();
+        $signature = match (true) {
+            $draft->isBossReply() => "老板拍板 {$decidedAt}（经 Gordon 转）",
+            $decider === RequirementDecider::Boss => "老板拍板 {$decidedAt}（文档已批）",
+            default => "{$decider->value} 拍板 {$decidedAt}",
+        };
 
-        if ($key === RequirementDecisionDraft::CUSTOM) {
+        if ($option === null) {
             [$status, $title, $picked, $reason] = [RequirementStatus::Decided, $draft->custom_text, '自己写', "{$decider->value} 自己写"];
         } else {
-            $option = $requirement->decisionOrFallback()->option($key) ?? throw new InvalidArgumentException("#{$requirement->number} 没有选项 {$key}，重新选一次。");
             $status = $option->outcome->resultingStatus();
             $title = $status === RequirementStatus::Decided ? $option->resultTitle : null;
             [$picked, $reason] = ["选 {$option->key} {$option->label}", "{$option->label}：{$option->consequence}"];
@@ -222,8 +229,32 @@ class RequirementDecisions
             'title' => $title,
             'source' => implode('；', array_filter([$requirement->source, "{$signature}：{$picked}"])),
             'decided_by' => $decider->value,
-            'decided_at' => $today,
+            'decided_at' => $decidedAt,
             'reason' => $reason,
+            ...($status === RequirementStatus::Decided ? $this->startedFromScratch($requirement) : []),
         ], fn (mixed $value): bool => $value !== null);
+    }
+
+    /**
+     * A newly decided rule is not built yet, whatever it was linked to while it was only a proposal (often the old
+     * behaviour's feature and tests): those links move into decision.impact as 受影响, so it starts as 待做.
+     *
+     * @return array{decision: array<string, mixed>, features: list<int>, tests: list<int>}|array{}
+     */
+    private function startedFromScratch(Requirement $requirement): array
+    {
+        $affected = [
+            ...$requirement->linkedFeatures->map(fn (Feature $feature): string => "功能「{$feature->title}」（{$feature->status->value}）"),
+            ...$requirement->tests->map(fn (Test $test): string => '测试「'.Str::limit($test->title, 30, '…')."」（{$test->last_result->value}）"),
+        ];
+
+        if ($affected === []) {
+            return [];
+        }
+
+        $decision = $requirement->decisionOrFallback()->toArray();
+        $decision['impact'] = implode('；', array_filter([$decision['impact'] ?? null, '受影响（定下前挂着的）：'.implode('、', $affected)]));
+
+        return ['decision' => $decision, 'features' => [], 'tests' => []];
     }
 }

@@ -3,6 +3,7 @@
 namespace App\Data\Requirements;
 
 use App\Enums\DecisionOutcome;
+use App\Enums\RequirementDecider;
 use App\Enums\RequirementStatus;
 use App\Models\Requirement;
 use App\Models\RequirementDecisionDraft;
@@ -72,6 +73,8 @@ final readonly class RequirementDecision implements Castable
                 consequence: $option['consequence'],
                 resultTitle: $option['result_title'] ?? null,
                 recommended: $option['recommended'] ?? false,
+                recordAs: isset($option['record_as']) ? RequirementDecider::from($option['record_as']) : null,
+                recordDate: $option['record_date'] ?? null,
             ), $data['options'])),
             difference: $data['difference'] ?? null,
             risk: $data['risk'] ?? null,
@@ -259,7 +262,15 @@ final readonly class RequirementDecision implements Castable
             $errors[] = "{$at}.recommended must be true or false.";
         }
 
-        return array_merge($errors, array_map(fn (string $key): string => "{$at} has unknown key \"{$key}\".", array_values(array_diff(array_keys($option), ['key', 'label', 'outcome', 'consequence', 'result_title', 'recommended']))));
+        if (isset($option['record_as']) && (! is_string($option['record_as']) || RequirementDecider::tryFrom($option['record_as']) === null)) {
+            $errors[] = "{$at}.record_as must be one of ".implode('/', array_column(RequirementDecider::cases(), 'value')).'.';
+        }
+
+        if (isset($option['record_date']) && (! is_string($option['record_date']) || ! preg_match('/^\d{4}-\d{2}-\d{2}$/', $option['record_date']))) {
+            $errors[] = "{$at}.record_date must be YYYY-MM-DD.";
+        }
+
+        return array_merge($errors, array_map(fn (string $key): string => "{$at} has unknown key \"{$key}\".", array_values(array_diff(array_keys($option), ['key', 'label', 'outcome', 'consequence', 'result_title', 'recommended', 'record_as', 'record_date']))));
     }
 
     /**

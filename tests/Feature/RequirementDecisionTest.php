@@ -9,11 +9,13 @@ use App\Enums\FeatureStatus;
 use App\Enums\RequirementDecider;
 use App\Enums\RequirementKind;
 use App\Enums\RequirementStatus;
+use App\Enums\TestLastResult;
 use App\Filament\Pages\RequirementTree;
 use App\Models\Feature;
 use App\Models\Project;
 use App\Models\Requirement;
 use App\Models\RequirementDecisionDraft;
+use App\Models\Test;
 use App\Models\User;
 use App\Services\Requirements\RequirementDecisions;
 use App\Services\Requirements\RequirementTreeService;
@@ -167,7 +169,7 @@ it('applies every kind of answer in one confirmed batch, with history, and clear
 
     Livewire::withQueryParams(['tab' => 'pending'])->test(RequirementTree::class)
         ->call('confirmAllDrafts')
-        ->assertNotified('定下 4 条（你拍板 4，按老板回复 0） · 加入问老板清单 0 条 · 转老板 1 条 · 先不定 1 条');
+        ->assertNotified('定下 4 条（你拍板 4，按老板回复 0） · 加入问老板清单 0 条 · 转老板 1 条 · 先不定 1 条 · 定下的规则将从待做开始（原来挂的功能和测试记为受影响）');
 
     expect($conflict->fresh()->only(['status', 'title', 'source', 'decided_by', 'decider']))->toBe(['status' => RequirementStatus::Decided, 'title' => 'Free shipping over 80 from November', 'source' => "spec v1；Gordon 拍板 {$today}：选 A Raise to 80", 'decided_by' => 'Gordon', 'decider' => null])
         ->and($conflict->fresh()->decided_at->toDateString())->toBe($today)
@@ -393,7 +395,7 @@ it('decides a pending node right from the 全貌 detail and confirms every draft
         ->assertDontSee('需要你决定')
         ->assertSee('已选 2 / 2')
         ->call('confirmAllDrafts')
-        ->assertNotified('定下 2 条（你拍板 1，按老板回复 1） · 加入问老板清单 0 条');
+        ->assertNotified('定下 2 条（你拍板 1，按老板回复 1） · 加入问老板清单 0 条 · 定下的规则将从待做开始（原来挂的功能和测试记为受影响）');
 
     expect($rule->fresh()->only(['status', 'title']))->toBe(['status' => RequirementStatus::Decided, 'title' => 'Free shipping over 80 from November'])
         ->and($bossRule->fresh()->decided_by)->toBe('老板')
@@ -488,4 +490,45 @@ it('shows a sub-goal with a built rule and an open one as in progress, not done 
 
     expect($progress[2])->toBe(RequirementProgress::InProgress)
         ->and($progress[1])->toBe(RequirementProgress::InProgress);
+});
+
+it('starts a newly decided rule from 待做, records a document-approved pick as the boss, and shows the old rule as superseded [T74]', function () {
+    [$project, $user, $goal] = decisionDesk();
+    $old = decisionRule($goal, 2, RequirementStatus::Decided, ['title' => 'Visitors see a price range']);
+    $oldFeature = Feature::factory()->create(['project_id' => $project->id, 'title' => 'Hide member prices', 'status' => FeatureStatus::Done]);
+    $conflict = decisionRule($goal, 3, RequirementStatus::Conflict, ['supersedes_id' => $old->id, 'title' => 'Visitors see the market price', 'decision' => [
+        ...shippingDecision(),
+        'options' => [
+            ['key' => 'A', 'label' => '老板文档已批，按文档定（记老板拍板）', 'outcome' => 'accept', 'consequence' => 'Old rule voided', 'record_as' => '老板', 'record_date' => '2026-10-06'],
+            ['key' => 'B', 'label' => 'Keep the range', 'outcome' => 'keep_current', 'consequence' => 'Nothing changes'],
+        ],
+    ]]);
+    $conflict->linkedFeatures()->attach($oldFeature);
+    $conflict->tests()->attach(Test::factory()->create(['project_id' => $project->id, 'title' => 'Visitor sees no member price', 'last_result' => TestLastResult::Passed]));
+    decisionRule($goal, 4, RequirementStatus::Void, ['title' => 'Dropped idea']);
+    app(RequirementDecisions::class)->choose($conflict, $user, 'A');
+
+    expect(app(RequirementDecisions::class)->preview($user, collect([$conflict]))->summary())->toContain('定下的规则将从待做开始');
+
+    app(RequirementDecisions::class)->confirm($project, $user, collect([$conflict]));
+    $decided = $conflict->fresh();
+
+    expect($decided->only(['status', 'decided_by', 'source']))->toBe(['status' => RequirementStatus::Decided, 'decided_by' => '老板', 'source' => 'spec v1；老板拍板 2026-10-06（文档已批）：选 A 老板文档已批，按文档定（记老板拍板）'])
+        ->and($decided->decided_at->toDateString())->toBe('2026-10-06')
+        ->and($decided->linkedFeatures()->count())->toBe(0)
+        ->and($decided->tests()->count())->toBe(0)
+        ->and($decided->decision->impact)->toBe('Shipping calculator；受影响（定下前挂着的）：功能「Hide member prices」（完成）、测试「Visitor sees no member price」（通过）');
+
+    $progress = collect(RequirementTreeNode::flattened(app(RequirementTreeService::class)->tree($project)))
+        ->mapWithKeys(fn (RequirementTreeNode $node): array => [$node->requirement->number => $node->progress])->all();
+
+    expect($progress[2])->toBe(RequirementProgress::Superseded)
+        ->and($progress[3])->toBe(RequirementProgress::Todo)
+        ->and($progress[4])->toBe(RequirementProgress::Dropped);
+
+    Livewire::withQueryParams(['selectedNumber' => 2])->test(RequirementTree::class)
+        ->assertSeeInOrder(['Visitors see a price range', '已被取代', '被', '「Visitors see the market price」', '取代（2026-10-06）']);
+
+    saveDecisionNodes([['number' => 4, 'decision' => [...shippingDecision(), 'options' => [[...shippingDecision()['options'][0], 'record_as' => '老王'], shippingDecision()['options'][1]]]]])
+        ->expectsOutputToContain('record_as must be one of Gordon/老板')->assertFailed()->run();
 });

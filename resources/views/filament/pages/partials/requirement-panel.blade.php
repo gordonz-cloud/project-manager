@@ -26,6 +26,9 @@
             </div>
             @include('filament.pages.partials.requirement-progress', ['requirement' => $requirement, 'progress' => $this->progressOf($requirement)])
         </div>
+        @if ($replacement = $requirement->status === \App\Enums\RequirementStatus::Void ? $requirement->supersededBy : null)
+            <p class="mt-1 text-xs text-slate-500" data-superseded-by>被<button type="button" wire:click="selectNode({{ $replacement->number }})" class="mx-0.5 text-primary-600 hover:underline dark:text-primary-400">「{{ \Illuminate\Support\Str::limit($replacement->title, 30, '…') }}」</button>取代（{{ $replacement->decided_at?->toDateString() }}）</p>
+        @endif
         @if ($requirement->status === \App\Enums\RequirementStatus::Decided)
             <p class="mt-1 text-xs text-slate-500" data-decided>{{ $requirement->decided_by ? trim(($requirement->decided_by === '老板' ? '老板拍板 ' : "{$requirement->decided_by} 拍板 ").$requirement->decided_at?->toDateString()) : '现状（代码）' }}</p>
         @endif
