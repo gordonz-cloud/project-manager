@@ -3,6 +3,7 @@
 use App\Data\Requirements\DeliveryStatus;
 use App\Data\Requirements\RequirementDecision;
 use App\Data\Requirements\RequirementProgress;
+use App\Data\Requirements\RequirementRollup;
 use App\Data\Requirements\RequirementTreeNode;
 use App\Enums\FeatureStatus;
 use App\Enums\RequirementDecider;
@@ -460,4 +461,31 @@ it('keeps the selected node in view on every tab, opening its ancestors in the t
     expect(Livewire::withQueryParams(['selectedNumber' => 4])->test(RequirementTree::class)->assertSeeInOrder(['Thresholds', 'Deep pending rule'])->html())->toMatch('/data-requirement-number="4"\s+data-selected/')
         ->and(Livewire::withQueryParams(['tab' => 'todo', 'selectedNumber' => 5])->test(RequirementTree::class)->html())->toMatch('/data-todo="5"\s+data-selected/')
         ->and(Livewire::withQueryParams(['tab' => 'changes', 'selectedNumber' => 5])->test(RequirementTree::class)->html())->toMatch('/data-selected\s+class="rounded-md border p-3 border-primary-500/');
+});
+
+it('sums a parent up from everything under it, open decisions included [T73]', function (array $delivered, int $pending, ?RequirementProgress $expected) {
+    expect((new RequirementRollup($delivered, $pending))->progress())->toBe($expected);
+})->with([
+    'all built' => [['已验证' => 2, '已实现' => 1], 0, RequirementProgress::Done],
+    'built and a decision still open' => [['已验证' => 3], 1, RequirementProgress::InProgress],
+    'built and not built' => [['已验证' => 1, '未实现' => 1], 0, RequirementProgress::InProgress],
+    'nothing built, all ready' => [['未实现' => 2], 0, RequirementProgress::Todo],
+    'all open decisions' => [[], 2, RequirementProgress::Pending],
+    'ready and open, nothing built' => [['未实现' => 1], 1, RequirementProgress::Pending],
+    'failed, nothing built' => [['验证失败' => 1, '未实现' => 1], 0, RequirementProgress::InProgress],
+    'nothing counted' => [[], 0, null],
+]);
+
+it('shows a sub-goal with a built rule and an open one as in progress, not done [T73]', function () {
+    [$project, , $goal] = decisionDesk();
+    $sub = Requirement::factory()->create(['project_id' => $project->id, 'number' => 2, 'parent_id' => $goal->id, 'kind' => RequirementKind::SubGoal, 'status' => RequirementStatus::Decided, 'title' => 'Members only']);
+    decisionRule($sub, 3, RequirementStatus::Decided)->linkedFeatures()->attach(Feature::factory()->create(['project_id' => $project->id, 'status' => FeatureStatus::Done]));
+    decisionRule($sub, 4, RequirementStatus::Proposed);
+    decisionRule($sub, 5, RequirementStatus::Void);
+
+    $progress = collect(RequirementTreeNode::flattened(app(RequirementTreeService::class)->tree($project)))
+        ->mapWithKeys(fn (RequirementTreeNode $node): array => [$node->requirement->number => $node->progress])->all();
+
+    expect($progress[2])->toBe(RequirementProgress::InProgress)
+        ->and($progress[1])->toBe(RequirementProgress::InProgress);
 });

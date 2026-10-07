@@ -75,6 +75,26 @@ final readonly class RequirementRollup
         ];
     }
 
+    /**
+     * One status for a whole subtree: all built → 完成; some built, some not → 进行中; nothing built → 进行中 if any is
+     * being built (or failed), 待做 if all are ready to build, otherwise 待决策. Null when the subtree counts nothing.
+     */
+    public function progress(): ?RequirementProgress
+    {
+        $done = $this->count(DeliveryStatus::Built) + $this->count(DeliveryStatus::Verified);
+        $building = $this->count(DeliveryStatus::InProgress) + $this->count(DeliveryStatus::Failed);
+        $todo = $this->count(DeliveryStatus::NotBuilt);
+        $total = $done + $building + $todo + $this->pending();
+
+        return match (true) {
+            $total === 0 => null,
+            $done === $total => RequirementProgress::Done,
+            $done > 0, $building > 0 => RequirementProgress::InProgress,
+            $todo === $total => RequirementProgress::Todo,
+            default => RequirementProgress::Pending,
+        };
+    }
+
     public function verifiedPercent(): ?int
     {
         return $this->decided() === 0 ? null : (int) round(100 * $this->count(DeliveryStatus::Verified) / $this->decided());

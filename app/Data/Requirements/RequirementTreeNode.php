@@ -33,22 +33,25 @@ final readonly class RequirementTreeNode
         $delivery = DeliveryStatus::combined(array_values(array_filter([$own, ...array_map(fn (self $child): DeliveryStatus => $child->delivery, $decidedChildren)])));
         $rollup = array_reduce($children, fn (RequirementRollup $sum, self $child): RequirementRollup => $sum->plus($child->rollup), RequirementRollup::of($requirement, $delivery, $children === []));
 
-        return new self($requirement, $delivery, $children, $rollup, self::progressOf($requirement, $delivery, $decidedChildren, $rollup));
+        return new self($requirement, $delivery, $children, $rollup, self::progressOf($requirement, $delivery, $children, $rollup));
     }
 
     /**
-     * A 分组 shows what its rules add up to, never its own decision status: open decisions inside it while none of its
-     * rules is decided yet, otherwise how far its decided rules are built.
+     * A leaf shows its own status. A parent shows what everything under it adds up to (RequirementRollup::progress,
+     * open decisions included), so a 完成 never hides a rule still waiting on a decision; a 分组's own decision status
+     * never counts.
      *
-     * @param  array<int, self>  $decidedChildren
+     * @param  list<self>  $children
      */
-    private static function progressOf(Requirement $requirement, DeliveryStatus $delivery, array $decidedChildren, RequirementRollup $rollup): RequirementProgress
+    private static function progressOf(Requirement $requirement, DeliveryStatus $delivery, array $children, RequirementRollup $rollup): RequirementProgress
     {
-        if ($requirement->kind !== RequirementKind::Group) {
+        $status = $requirement->kind === RequirementKind::Group ? RequirementStatus::Decided : $requirement->status;
+
+        if ($children === [] || $requirement->status === RequirementStatus::Void) {
             return RequirementProgress::of($requirement->status, $delivery);
         }
 
-        return $decidedChildren === [] && $rollup->pending() > 0 ? RequirementProgress::Pending : RequirementProgress::of(RequirementStatus::Decided, $delivery);
+        return $rollup->progress() ?? RequirementProgress::of($status, $delivery);
     }
 
     /**
