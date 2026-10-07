@@ -276,7 +276,7 @@ it('lists what waits on a decision with the rule it would replace and what it to
 
     Livewire::withQueryParams(['tab' => 'pending', 'selectedNumber' => 3])->test(RequirementTree::class)
         ->assertSeeInOrder(['待决策', '（1）'])
-        ->assertSeeInOrder(['Checkout goal', 'Free shipping over 80', 'Free shipping over 80', '需要你决定', '现在', 'Free shipping over 50', '要改成', 'Free shipping over 80', 'A. 改成新说法', 'B. 保持现状', '为什么', 'margin', '来源：boss doc v2', '做到哪了', 'Shipping calculator · '])
+        ->assertSeeInOrder(['Checkout goal', 'Free shipping over 80', 'Free shipping over 80', '为什么', 'margin', '来源：boss doc v2', '需要你决定', '现在', 'Free shipping over 50', '要改成', 'Free shipping over 80', 'A. 改成新说法', 'B. 保持现状', '做到哪了', 'Shipping calculator · '])
         ->assertDontSee('Settled rule');
 });
 
@@ -301,7 +301,7 @@ it('shows a selected requirement with why, source, history, features, tests and 
     Commit::factory()->create(['project_id' => $project->id, 'feature_id' => $feature->id, 'subject' => 'Add tier gate']);
 
     Livewire::withQueryParams(['selectedNumber' => 1])->test(RequirementTree::class)
-        ->assertSeeInOrder(['Members buy by tier', '完成', 'Gordon 拍板 2026-10-02', '为什么', 'protect channel price', '来源：S5 spec v1.0', '做到哪了', 'Tier gate · 完成', '· 通过', '历史', '新建 → 已定', 'Add tier gate']);
+        ->assertSeeInOrder(['Members buy by tier', '完成', 'Gordon 拍板 2026-10-02', '来龙去脉', '2026-10-02', '你拍板', '现在生效', 'Members buy by tier', '当时写的理由', 'protect channel price', '来源：S5 spec v1.0', '做到哪了', 'Tier gate · 完成', '· 通过', '历史', '新建 → 已定', 'Add tier gate']);
 });
 
 it('filters pending decisions by stage: mine, to send to the boss, waiting for the boss, conflicts first [T51]', function () {

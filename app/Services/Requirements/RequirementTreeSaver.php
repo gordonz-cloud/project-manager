@@ -3,6 +3,7 @@
 namespace App\Services\Requirements;
 
 use App\Data\Requirements\RequirementDecision;
+use App\Data\Requirements\RequirementTimeline;
 use App\Data\Requirements\RequirementTreeSaveResult;
 use App\Enums\RequirementDecider;
 use App\Enums\RequirementKind;
@@ -21,7 +22,7 @@ use InvalidArgumentException;
  * levels must nest (目标 → 子目标 → 分组 → 规则), dependencies (prerequisites) must not loop, a proposal that supersedes a 已定 rule is a 冲突, changing a 已定 rule
  * needs a reason, and deciding a 冲突 voids the rule it replaces. Revisions are written by Requirement itself.
  *
- * @phpstan-type NodeInput array{number: int, parent?: int|null, supersedes?: int|null, kind?: string, title?: string, rationale?: string|null, source?: string|null, status?: string, decided_by?: string|null, decided_at?: string|null, decider?: string|null, reason?: string|null, features?: list<int>, tests?: list<int>, depends_on?: list<int>, depends_on_refs?: list<string>, position?: int|null, decision?: array<string, mixed>|null}
+ * @phpstan-type NodeInput array{number: int, parent?: int|null, supersedes?: int|null, kind?: string, title?: string, rationale?: string|null, source?: string|null, status?: string, decided_by?: string|null, decided_at?: string|null, decider?: string|null, reason?: string|null, features?: list<int>, tests?: list<int>, depends_on?: list<int>, depends_on_refs?: list<string>, position?: int|null, decision?: array<string, mixed>|null, timeline?: list<array<string, mixed>>|null}
  * @phpstan-type NodeState array{kind: RequirementKind|null, status: RequirementStatus|null, parent: int|null, supersedes: int|null}
  */
 class RequirementTreeSaver
@@ -254,10 +255,11 @@ class RequirementTreeSaver
                 && is_array($node['depends_on_refs'] ?? []) && array_is_list($node['depends_on_refs'] ?? []) && array_filter($node['depends_on_refs'] ?? [], 'is_string') === ($node['depends_on_refs'] ?? [])
                 && (! isset($node['position']) || is_int($node['position']))
                 && (! isset($node['decision']) || is_array($node['decision']))
+                && (! isset($node['timeline']) || is_array($node['timeline']))
                 && array_filter(self::TEXT_FIELDS, fn (string $key): bool => isset($node[$key]) && ! is_string($node[$key])) === [];
 
             if (! $valid) {
-                throw new InvalidArgumentException("Node at index {$index}: number/parent/supersedes/position must be integers, decision an object, ref/parent_ref strings (parent_ref not with parent), features/tests/depends_on lists of integers, depends_on_refs a list of strings, text fields strings.");
+                throw new InvalidArgumentException("Node at index {$index}: number/parent/supersedes/position must be integers, decision an object, timeline a list, ref/parent_ref strings (parent_ref not with parent), features/tests/depends_on lists of integers, depends_on_refs a list of strings, text fields strings.");
             }
 
             /** @var array{number?: int, ref?: string, parent_ref?: string, parent?: int|null} $node */
@@ -280,7 +282,7 @@ class RequirementTreeSaver
     {
         $columns = [];
 
-        foreach (['kind', 'title', 'rationale', 'source', 'status', 'decided_by', 'decided_at', 'decider', 'position', 'decision'] as $key) {
+        foreach (['kind', 'title', 'rationale', 'source', 'status', 'decided_by', 'decided_at', 'decider', 'position', 'decision', 'timeline'] as $key) {
             if (array_key_exists($key, $node)) {
                 $columns[$key] = $node[$key] === '' ? null : $node[$key];
             }
@@ -376,6 +378,10 @@ class RequirementTreeSaver
             } elseif (! $status->awaitsDecision()) {
                 $errors[] = "#{$number}: decider only applies to a 提议 or 冲突, this node is {$status->value}.";
             }
+        }
+
+        if (isset($node['timeline'])) {
+            $errors = [...$errors, ...array_map(fn (string $error): string => "#{$number}: {$error}", RequirementTimeline::errors($node['timeline']))];
         }
 
         if (isset($node['decision'])) {

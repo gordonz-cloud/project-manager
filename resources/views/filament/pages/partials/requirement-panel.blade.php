@@ -5,6 +5,7 @@
     $features = $requirement->linkedFeatures->merge($old?->linkedFeatures ?? [])->unique('id');
     $tests = $requirement->tests->merge($old?->tests ?? [])->unique('id');
     $rationaleRepeats = $this->repeatsDecision($requirement);
+    $timeline = $this->timelineOf($requirement);
 @endphp
 
 <div data-panel="{{ $requirement->number }}">
@@ -34,10 +35,9 @@
         @endif
     </header>
 
-    @if ($this->isDecidable($requirement))
-        @include('filament.pages.partials.requirement-decide', ['requirement' => $requirement])
-    @endif
-
+    @if (! $timeline->isEmpty())
+        @include('filament.pages.partials.requirement-timeline', ['timeline' => $timeline, 'requirement' => $requirement])
+    @else
     @if (filled($requirement->rationale) || filled($requirement->source))
         <section class="mt-4" data-panel-why>
             @if ($rationaleRepeats)
@@ -51,6 +51,11 @@
             @endif
             @if ($requirement->source)<p class="mt-1 break-all text-xs text-slate-400">来源：{{ $this->mentions->html($requirement->source) }}</p>@endif
         </section>
+    @endif
+    @endif
+
+    @if ($this->isDecidable($requirement))
+        @include('filament.pages.partials.requirement-decide', ['requirement' => $requirement])
     @endif
 
     <section class="mt-4" data-panel-progress>

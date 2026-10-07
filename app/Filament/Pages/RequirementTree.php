@@ -6,6 +6,7 @@ use App\Data\Requirements\DecisionBatchResult;
 use App\Data\Requirements\RequirementChangeGroup;
 use App\Data\Requirements\RequirementProgress;
 use App\Data\Requirements\RequirementRollup;
+use App\Data\Requirements\RequirementTimeline;
 use App\Data\Requirements\RequirementTreeNode;
 use App\Enums\NavigationGroup;
 use App\Models\Feature;
@@ -15,6 +16,7 @@ use App\Models\RequirementDecisionDraft;
 use App\Models\Test;
 use App\Models\User;
 use App\Services\Requirements\RequirementDecisions;
+use App\Services\Requirements\RequirementTimelines;
 use App\Services\Requirements\RequirementTreeService;
 use App\Support\RequirementMentions;
 use BackedEnum;
@@ -177,6 +179,11 @@ class RequirementTree extends Page
         $sent = $this->requirementDecisions()->markSentToBoss($this->project);
         unset($this->awaitingDecision, $this->pendingByGoal, $this->bossQuestions, $this->selectedRequirement);
         Notification::make()->title("已标记 {$sent} 条发给老板")->success()->send();
+    }
+
+    public function timelineOf(Requirement $requirement): RequirementTimeline
+    {
+        return app(RequirementTimelines::class)->for($requirement);
     }
 
     /**

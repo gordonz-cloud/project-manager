@@ -5,6 +5,7 @@ use App\Data\Requirements\RequirementDecision;
 use App\Data\Requirements\RequirementProgress;
 use App\Data\Requirements\RequirementRollup;
 use App\Data\Requirements\RequirementTreeNode;
+use App\Data\Requirements\TimelineEntry;
 use App\Enums\FeatureStatus;
 use App\Enums\RequirementDecider;
 use App\Enums\RequirementKind;
@@ -18,6 +19,7 @@ use App\Models\RequirementDecisionDraft;
 use App\Models\Test;
 use App\Models\User;
 use App\Services\Requirements\RequirementDecisions;
+use App\Services\Requirements\RequirementTimelines;
 use App\Services\Requirements\RequirementTreeService;
 use Filament\Facades\Filament;
 use Illuminate\Testing\PendingCommand;
@@ -308,14 +310,15 @@ it('lists pending nodes by goal and shows one panel where each piece appears onc
         ->assertSeeInOrder(['Checkout', '改规则', 'Free shipping over 80', '改规则', 'Free shipping for everyone', 'Gift wrap for members'])
         ->assertSeeInOrder([
             'Checkout', 'Free shipping over 80', '待决策 · 等我',
+            '来龙去脉', '2026-10-05', '老板拍板', '现在生效', 'Free shipping over 50', '来源：spec v1',
             '需要你决定', '现在', 'Free shipping over 50, because the old carrier was cheap', '现行规则：Free shipping over 50', '要改成', 'Free shipping over 80',
             '差别', 'Orders between 50 and 80 pay shipping', '风险', 'Fewer small orders than',
             'A. Raise to 80', '★推荐', 'Old rule voided', '（定了以后：Free shipping over 80 from November）', 'B. Keep 50', 'C. Raise to 65',
-            '✎ 自己写', '问老板', '先不定', '背景（与上面重复，点开看）', '来源：spec v1', '做到哪了', 'Shipping calculator · ', '历史',
+            '✎ 自己写', '问老板', '先不定', '做到哪了', 'Shipping calculator · ', '历史',
         ])
         ->html();
 
-    foreach (['需要你决定', '背景（与上面重复', '做到哪了', '>历史<', 'data-panel-header'] as $section) {
+    foreach (['来龙去脉', '需要你决定', '做到哪了', '>历史<', 'data-panel-header'] as $section) {
         expect(substr_count($html, $section))->toBe(1, $section);
     }
 
@@ -327,7 +330,7 @@ it('lists pending nodes by goal and shows one panel where each piece appears onc
     expect($html)->not->toContain('>为什么<')->not->toContain('protect')->not->toContain('会动到')->not->toContain('背景和出处')->not->toContain('已选 A');
 
     Livewire::withQueryParams(['tab' => 'todo', 'selectedNumber' => 3])->test(RequirementTree::class)
-        ->assertSeeInOrder(['Gift wrap for members', '需要你决定', '还没有这条规则', 'A. 同意', 'B. 不要', '为什么', 'see GiftWrapService::apply']);
+        ->assertSeeInOrder(['Gift wrap for members', '为什么', 'see GiftWrapService::apply', '需要你决定', '还没有这条规则', 'A. 同意', 'B. 不要']);
 
     Livewire::withQueryParams(['tab' => 'todo', 'selectedNumber' => 2])->test(RequirementTree::class)
         ->assertSeeInOrder(['Free shipping over 50', '老板拍板 2026-10-05'])
@@ -385,7 +388,7 @@ it('decides a pending node right from the 全貌 detail and confirms every draft
     app(RequirementDecisions::class)->choose($bossRule, $user, 'boss:A');
 
     Livewire::withQueryParams(['selectedNumber' => 2])->test(RequirementTree::class)
-        ->assertSeeInOrder(['需要你决定', '现在', 'Free shipping over 50, because the old carrier was cheap', '要改成', 'A. Raise to 80', '★推荐', '✎ 自己写', '问老板', '先不定', '为什么', 'margin', '历史'])
+        ->assertSeeInOrder(['为什么', 'margin', '需要你决定', '现在', 'Free shipping over 50, because the old carrier was cheap', '要改成', 'A. Raise to 80', '★推荐', '✎ 自己写', '问老板', '先不定', '历史'])
         ->assertSeeInOrder(['data-decision-bar', '已选 1 / 2', '确认这一批'])
         ->call('choose', $rule->id, 'A');
 
@@ -531,4 +534,78 @@ it('starts a newly decided rule from 待做, records a document-approved pick as
 
     saveDecisionNodes([['number' => 4, 'decision' => [...shippingDecision(), 'options' => [[...shippingDecision()['options'][0], 'record_as' => '老王'], shippingDecision()['options'][1]]]]])
         ->expectsOutputToContain('record_as must be one of Gordon/老板')->assertFailed()->run();
+});
+
+it('stores a written timeline and rejects one of the wrong shape [T75]', function (array $timeline, ?string $message) {
+    [$project] = decisionDesk();
+
+    $command = saveDecisionNodes([['parent' => 1, 'kind' => '规则', 'title' => 'Timeline rule', 'timeline' => $timeline]]);
+
+    if ($message === null) {
+        $command->assertSuccessful()->run();
+
+        expect(Requirement::where('project_id', $project->id)->where('title', 'Timeline rule')->sole()->timeline)->toBe($timeline);
+
+        return;
+    }
+
+    $command->expectsOutputToContain($message)->assertFailed()->run();
+})->with([
+    'a full timeline' => [[['date' => '2026-10-06', 'who' => '老板文档', 'where' => '首页文档', 'said' => 'Show the market price', 'current' => true], ['who' => '代码现状', 'said' => 'Shows a range', 'conflict_with' => '老板文档']], null],
+    'not a list' => [['who' => '其他'], 'timeline must be a list'],
+    'unknown who' => [[['date' => '2026-10-06', 'who' => '小王', 'said' => 'x']], 'who must be one of'],
+    'no date outside the code' => [[['who' => '老板拍板', 'said' => 'x']], 'date is required (only 代码现状'],
+    'bad date' => [[['date' => '10/06', 'who' => '其他', 'said' => 'x']], 'date must be YYYY-MM-DD'],
+    'nothing said' => [[['date' => '2026-10-06', 'who' => '其他', 'said' => '']], 'said is required'],
+    'two current' => [[['date' => '2026-10-06', 'who' => '其他', 'said' => 'a', 'current' => true], ['date' => '2026-10-07', 'who' => '其他', 'said' => 'b', 'current' => true]], 'at most one entry current'],
+    'unknown key' => [[['date' => '2026-10-06', 'who' => '其他', 'said' => 'a', 'colour' => 'red']], 'unknown key "colour"'],
+]);
+
+it('pieces a timeline together from the replaced rule, dated sources and rewrites when none is written [T75]', function () {
+    [$project, , $goal] = decisionDesk();
+    $older = decisionRule($goal, 2, RequirementStatus::Void, ['title' => 'Show nothing to visitors', 'decided_by' => 'Gordon', 'decided_at' => '2026-09-01']);
+    $old = decisionRule($goal, 3, RequirementStatus::Decided, ['title' => 'Visitors see a price range', 'decided_by' => 'Gordon', 'decided_at' => '2026-10-02', 'supersedes_id' => null]);
+    $old->forceFill(['supersedes_id' => $older->id])->saveQuietly();
+    $conflict = decisionRule($goal, 4, RequirementStatus::Conflict, ['supersedes_id' => $old->id, 'title' => 'Visitors see the market price',
+        'source' => '老板文档 docs/product/S3-home/spec.md v1.1 §2.1（Haorui，2026-10-06）；老板拍板 2026-10-07（经 Gordon 转）：选 A Show it']);
+
+    $entries = app(RequirementTimelines::class)->for($conflict->fresh())->entries;
+
+    expect(array_map(fn (TimelineEntry $entry): array => [$entry->date, $entry->who, $entry->said, $entry->current], $entries))->toBe([
+        ['2026-10-07', '老板拍板', '选 A Show it', false],
+        ['2026-10-06', '老板文档', 'Visitors see the market price', false],
+        ['2026-10-02', 'Gordon 拍板', 'Visitors see a price range', true],
+        ['2026-09-01', '已被取代的旧规则', 'Show nothing to visitors', false],
+    ]);
+
+    $old->update(['title' => 'Visitors see a rounded price range', 'decided_by' => 'Gordon']);
+    $oldEntries = app(RequirementTimelines::class)->for($old->fresh('revisions'))->entries;
+
+    expect($oldEntries[0]->current)->toBeTrue()
+        ->and($oldEntries[0]->said)->toBe('Visitors see a rounded price range')
+        ->and(collect($oldEntries)->pluck('said')->all())->not->toContain('Visitors see the market price');
+});
+
+it('shows the timeline above the decision, newest first, with conflicts and code that disagrees flagged [T75]', function () {
+    [, , $goal] = decisionDesk();
+    $other = decisionRule($goal, 2, RequirementStatus::Decided, ['title' => 'Other rule']);
+    decisionRule($goal, 3, RequirementStatus::Proposed, ['title' => 'Stock left on cards', 'rationale' => 'old reason', 'timeline' => [
+        ['date' => '2026-09-02', 'who' => 'Gordon 拍板', 'said' => 'Hide stock from visitors', 'current' => true],
+        ['date' => '2026-10-06', 'who' => '老板文档', 'where' => '首页文档', 'said' => 'Show stock left to everyone', 'conflict_with' => 'the rule from #2'],
+        ['who' => '代码现状', 'said' => 'Shows stock to members only', 'conflict_with' => '老板文档'],
+    ]]);
+
+    $html = Livewire::withQueryParams(['selectedNumber' => 3])->test(RequirementTree::class)
+        ->assertSeeInOrder([
+            '来龙去脉',
+            '2026-10-06', '老板文档', '首页文档', 'Show stock left to everyone', '⚠ 和「the rule from', '「Other rule」', '」冲突',
+            '2026-09-02', '你拍板', '现在生效', 'Hide stock from visitors',
+            '现在', '代码现状', 'Shows stock to members only',
+            '⚠ 代码和现行说法不一致', '当时写的理由', 'old reason',
+            '需要你决定', '做到哪了', '历史',
+        ])
+        ->html();
+
+    expect(substr_count($html, '⚠ 和'))->toBe(1)
+        ->and($html)->not->toContain('>为什么<');
 });

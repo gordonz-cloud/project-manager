@@ -46,10 +46,11 @@ use LogicException;
  * @property RequirementDecision|null $decision
  * @property array{key: string, label: string, by: string, at: string}|null $decision_opinion Gordon's opinion on a question for 老板
  * @property Carbon|null $sent_to_boss_at when the question went to 老板
+ * @property list<array<string, mixed>>|null $timeline everything said about it over time (see RequirementTimeline)
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at
  */
-#[Fillable(['number', 'parent_id', 'kind', 'title', 'rationale', 'source', 'decided_by', 'decided_at', 'supersedes_id', 'acceptance', 'status', 'decider', 'version', 'position', 'decision', 'decision_opinion', 'sent_to_boss_at'])]
+#[Fillable(['number', 'parent_id', 'kind', 'title', 'rationale', 'source', 'decided_by', 'decided_at', 'supersedes_id', 'acceptance', 'status', 'decider', 'version', 'position', 'decision', 'decision_opinion', 'sent_to_boss_at', 'timeline'])]
 class Requirement extends Model
 {
     /** @use HasFactory<RequirementFactory> */
@@ -106,6 +107,7 @@ class Requirement extends Model
             'decision' => RequirementDecision::class,
             'decision_opinion' => 'array',
             'sent_to_boss_at' => 'datetime',
+            'timeline' => 'array',
         ];
     }
 
