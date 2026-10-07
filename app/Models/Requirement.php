@@ -40,10 +40,11 @@ use LogicException;
  * @property RequirementStatus $status
  * @property RequirementDecider|null $decider
  * @property string|null $version
+ * @property int|null $position
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at
  */
-#[Fillable(['number', 'parent_id', 'kind', 'title', 'rationale', 'source', 'decided_by', 'decided_at', 'supersedes_id', 'acceptance', 'status', 'decider', 'version'])]
+#[Fillable(['number', 'parent_id', 'kind', 'title', 'rationale', 'source', 'decided_by', 'decided_at', 'supersedes_id', 'acceptance', 'status', 'decider', 'version', 'position'])]
 class Requirement extends Model
 {
     /** @use HasFactory<RequirementFactory> */

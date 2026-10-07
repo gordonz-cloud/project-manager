@@ -192,7 +192,7 @@ class RequirementTree extends Page
         return $this->selectedNumber === null ? null : Requirement::query()
             ->where('project_id', $this->project->id)
             ->where('number', $this->selectedNumber)
-            ->with(['revisions', 'linkedFeatures', 'tests', 'supersedes'])
+            ->with(['revisions', 'linkedFeatures', 'tests', 'supersedes', 'dependsOn', 'dependents'])
             ->first();
     }
 

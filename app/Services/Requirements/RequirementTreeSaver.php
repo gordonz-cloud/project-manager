@@ -17,10 +17,10 @@ use InvalidArgumentException;
 /**
  * Saves requirement-tree nodes the way tests:save saves test nodes: no "number" = new (numbered inside the
  * transaction), "number" = update, "ref"/"parent_ref" link new nodes. On top of that it guards the decision record:
- * levels must nest (目标 → 子目标 → 规则), a proposal that supersedes a 已定 rule is a 冲突, changing a 已定 rule
+ * levels must nest (目标 → 子目标 → 分组 → 规则), dependencies (prerequisites) must not loop, a proposal that supersedes a 已定 rule is a 冲突, changing a 已定 rule
  * needs a reason, and deciding a 冲突 voids the rule it replaces. Revisions are written by Requirement itself.
  *
- * @phpstan-type NodeInput array{number: int, parent?: int|null, supersedes?: int|null, kind?: string, title?: string, rationale?: string|null, source?: string|null, status?: string, decided_by?: string|null, decided_at?: string|null, decider?: string|null, reason?: string|null, features?: list<int>, tests?: list<int>}
+ * @phpstan-type NodeInput array{number: int, parent?: int|null, supersedes?: int|null, kind?: string, title?: string, rationale?: string|null, source?: string|null, status?: string, decided_by?: string|null, decided_at?: string|null, decider?: string|null, reason?: string|null, features?: list<int>, tests?: list<int>, depends_on?: list<int>, depends_on_refs?: list<string>, position?: int|null}
  * @phpstan-type NodeState array{kind: RequirementKind|null, status: RequirementStatus|null, parent: int|null, supersedes: int|null}
  */
 class RequirementTreeSaver
@@ -41,9 +41,10 @@ class RequirementTreeSaver
 
             /** @var list<NodeInput> $nodes */
             [$nodes, $assigned] = NumberedTreePayload::numbered($rawNodes, array_values($existing->map(fn (Requirement $requirement): int => (int) $requirement->number)->all()), 'requirement');
+            $nodes = $this->withDependencyRefsResolved($rawNodes, $nodes);
             $nodes = array_map(fn (array $node): array => $this->withConflictMarked($node, $existing->get($node['number'])), $nodes);
 
-            $this->assertValid($nodes, $existing->all(), $featureIds, $testIds);
+            $this->assertValid($nodes, $existing->all(), $featureIds, $testIds, $this->storedDependencies($project));
 
             $saved = [];
 
@@ -82,6 +83,10 @@ class RequirementTreeSaver
                     $requirement->tests()->sync(array_map(fn (int $number): int => $testIds[$number], $node['tests']));
                 }
 
+                if (array_key_exists('depends_on', $node)) {
+                    $requirement->dependsOn()->sync(array_map(fn (int $number): int => $idByNumber[$number], $node['depends_on']));
+                }
+
                 if ($this->voidSuperseded($requirement, $node['reason'] ?? '')) {
                     $voided[] = (int) $requirement->supersedes?->number;
                 }
@@ -107,6 +112,69 @@ class RequirementTreeSaver
         $superseded->save();
 
         return true;
+    }
+
+    /**
+     * Turns depends_on_refs into numbers and merges them into depends_on; passing either key replaces the node's set.
+     *
+     * @param  list<array{ref?: string}>  $rawNodes
+     * @param  list<NodeInput>  $nodes  same order as $rawNodes
+     * @return list<NodeInput>
+     */
+    private function withDependencyRefsResolved(array $rawNodes, array $nodes): array
+    {
+        $numberByRef = [];
+
+        foreach ($rawNodes as $index => $rawNode) {
+            if (isset($rawNode['ref'])) {
+                $numberByRef[$rawNode['ref']] = $nodes[$index]['number'];
+            }
+        }
+
+        $errors = [];
+        $resolved = [];
+
+        foreach ($nodes as $node) {
+            if (array_key_exists('depends_on_refs', $node)) {
+                $unknown = array_diff($node['depends_on_refs'], array_keys($numberByRef));
+
+                foreach ($unknown as $ref) {
+                    $errors[] = "#{$node['number']}: depends_on_refs \"{$ref}\" matches no ref in this payload.";
+                }
+
+                $refNumbers = array_map(fn (string $ref): int => $numberByRef[$ref] ?? 0, $node['depends_on_refs']);
+                $node['depends_on'] = array_values(array_unique([...$node['depends_on'] ?? [], ...$refNumbers]));
+                unset($node['depends_on_refs']);
+            }
+
+            $resolved[] = $node;
+        }
+
+        if ($errors !== []) {
+            throw new InvalidArgumentException(implode("\n", $errors));
+        }
+
+        return $resolved;
+    }
+
+    /**
+     * @return array<int, list<int>> number => numbers it depends on, as stored
+     */
+    private function storedDependencies(Project $project): array
+    {
+        $dependencies = [];
+
+        $rows = DB::table('requirement_dependencies')
+            ->join('requirements as dependent', 'dependent.id', '=', 'requirement_dependencies.requirement_id')
+            ->join('requirements as prerequisite', 'prerequisite.id', '=', 'requirement_dependencies.depends_on_requirement_id')
+            ->where('dependent.project_id', $project->id)
+            ->get(['dependent.number as dependent', 'prerequisite.number as prerequisite']);
+
+        foreach ($rows as $row) {
+            $dependencies[(int) $row->dependent][] = (int) $row->prerequisite;
+        }
+
+        return $dependencies;
     }
 
     /**
@@ -144,10 +212,13 @@ class RequirementTreeSaver
                 && (! isset($node['supersedes']) || is_int($node['supersedes']))
                 && $this->isNumberList($node['features'] ?? [])
                 && $this->isNumberList($node['tests'] ?? [])
+                && $this->isNumberList($node['depends_on'] ?? [])
+                && is_array($node['depends_on_refs'] ?? []) && array_is_list($node['depends_on_refs'] ?? []) && array_filter($node['depends_on_refs'] ?? [], 'is_string') === ($node['depends_on_refs'] ?? [])
+                && (! isset($node['position']) || is_int($node['position']))
                 && array_filter(self::TEXT_FIELDS, fn (string $key): bool => isset($node[$key]) && ! is_string($node[$key])) === [];
 
             if (! $valid) {
-                throw new InvalidArgumentException("Node at index {$index}: number/parent/supersedes must be integers, ref/parent_ref strings (parent_ref not with parent), features/tests lists of integers, text fields strings.");
+                throw new InvalidArgumentException("Node at index {$index}: number/parent/supersedes/position must be integers, ref/parent_ref strings (parent_ref not with parent), features/tests/depends_on lists of integers, depends_on_refs a list of strings, text fields strings.");
             }
 
             /** @var array{number?: int, ref?: string, parent_ref?: string, parent?: int|null} $node */
@@ -170,7 +241,7 @@ class RequirementTreeSaver
     {
         $columns = [];
 
-        foreach (['kind', 'title', 'rationale', 'source', 'status', 'decided_by', 'decided_at', 'decider'] as $key) {
+        foreach (['kind', 'title', 'rationale', 'source', 'status', 'decided_by', 'decided_at', 'decider', 'position'] as $key) {
             if (array_key_exists($key, $node)) {
                 $columns[$key] = $node[$key] === '' ? null : $node[$key];
             }
@@ -184,8 +255,9 @@ class RequirementTreeSaver
      * @param  array<int, Requirement>  $existing  number => stored node
      * @param  array<int, int>  $featureIds  number => id
      * @param  array<int, int>  $testIds  number => id
+     * @param  array<int, list<int>>  $dependencies  number => numbers it depends on, as stored
      */
-    private function assertValid(array $nodes, array $existing, array $featureIds, array $testIds): void
+    private function assertValid(array $nodes, array $existing, array $featureIds, array $testIds, array $dependencies): void
     {
         $errors = [];
         $numberById = collect($existing)->mapWithKeys(fn (Requirement $requirement): array => [$requirement->id => (int) $requirement->number])->all();
@@ -213,7 +285,14 @@ class RequirementTreeSaver
 
         foreach ($nodes as $node) {
             $errors = [...$errors, ...$this->levelErrors($node['number'], $states), ...$this->supersedeErrors($node, $states)];
+
+            if (array_key_exists('depends_on', $node)) {
+                $dependencies[$node['number']] = $node['depends_on'];
+                $errors = [...$errors, ...$this->dependencyTargetErrors($node['number'], $node['depends_on'], $states)];
+            }
         }
+
+        $errors = [...$errors, ...$this->dependencyCycleErrors($dependencies)];
 
         if ($errors !== []) {
             throw new InvalidArgumentException(implode("\n", array_unique($errors)));
@@ -305,6 +384,64 @@ class RequirementTreeSaver
         return in_array($parentKind, $allowed, true) ? [] : [
             "#{$number}: a {$kind->value} must sit under ".implode(' or ', array_map(fn (RequirementKind $allowedKind): string => $allowedKind->value, $allowed)).'.',
         ];
+    }
+
+    /**
+     * @param  list<int>  $dependsOn
+     * @param  array<int, NodeState>  $states
+     * @return list<string>
+     */
+    private function dependencyTargetErrors(int $number, array $dependsOn, array $states): array
+    {
+        $errors = [];
+
+        foreach ($dependsOn as $target) {
+            $errors[] = match (true) {
+                $target === $number => "#{$number}: a node cannot depend on itself.",
+                ! isset($states[$target]) => "#{$number}: depends on #{$target}, which does not exist in this project.",
+                default => null,
+            };
+        }
+
+        return array_values(array_filter($errors));
+    }
+
+    /**
+     * @param  array<int, list<int>>  $dependencies  number => numbers it depends on, after the payload is applied
+     * @return list<string>
+     */
+    private function dependencyCycleErrors(array $dependencies): array
+    {
+        $state = [];
+        $errors = [];
+
+        $visit = function (int $number, array $path) use (&$visit, &$state, &$errors, $dependencies): void {
+            $state[$number] = 'open';
+            $path[] = $number;
+
+            foreach ($dependencies[$number] ?? [] as $target) {
+                if ($target === $number) {
+                    continue;
+                }
+
+                if (($state[$target] ?? null) === 'open') {
+                    $cycle = [...array_slice($path, (int) array_search($target, $path, true)), $target];
+                    $errors[] = 'dependencies loop: '.implode(' → ', array_map(fn (int $step): string => "#{$step}", $cycle)).'.';
+                } elseif (! isset($state[$target])) {
+                    $visit($target, $path);
+                }
+            }
+
+            $state[$number] = 'done';
+        };
+
+        foreach (array_keys($dependencies) as $number) {
+            if (! isset($state[$number])) {
+                $visit($number, []);
+            }
+        }
+
+        return $errors;
     }
 
     /**

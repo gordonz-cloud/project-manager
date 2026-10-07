@@ -10,6 +10,7 @@ use App\Models\Project;
 use App\Models\Requirement;
 use App\Models\RequirementRevision;
 use Illuminate\Database\Eloquent\Collection;
+use Illuminate\Support\Facades\DB;
 
 /**
  * Reads a project's requirement tree, the decisions waiting on Gordon, and what changed lately.
@@ -17,18 +18,22 @@ use Illuminate\Database\Eloquent\Collection;
 class RequirementTreeService
 {
     /**
+     * Every level in RequirementSiblingOrder: depended-on first, then position, then number.
+     *
      * @return list<RequirementTreeNode>
      */
     public function tree(Project $project): array
     {
-        $childrenByParent = Requirement::withoutGlobalScopes()
+        $requirements = Requirement::withoutGlobalScopes()
             ->where('project_id', $project->id)
             ->with(['linkedFeatures:id,status', 'tests:id,last_result'])
-            ->orderBy('number')
+            ->get();
+        $dependencies = DB::table('requirement_dependencies')
+            ->whereIn('requirement_id', Requirement::withoutGlobalScopes()->where('project_id', $project->id)->select('id'))
             ->get()
-            ->groupBy(fn (Requirement $requirement): int => $requirement->parent_id ?? 0);
+            ->map(fn (object $row): array => [(int) $row->requirement_id, (int) $row->depends_on_requirement_id]);
 
-        return $this->branch($childrenByParent->all(), 0);
+        return $this->branch(RequirementSiblingOrder::childrenByParent($requirements, $dependencies), 0);
     }
 
     /**
@@ -85,7 +90,7 @@ class RequirementTreeService
     }
 
     /**
-     * @param  array<int, \Illuminate\Support\Collection<int, Requirement>>  $childrenByParent
+     * @param  array<int, list<Requirement>>  $childrenByParent
      * @return list<RequirementTreeNode>
      */
     private function branch(array $childrenByParent, int $parentId): array

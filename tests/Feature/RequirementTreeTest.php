@@ -321,3 +321,121 @@ it('groups pending decisions by who must decide [T51]', function () {
         ->assertSeeInOrder(['等 Gordon 拍板 1', '等老板拍板 3'])
         ->assertSeeInOrder(['等 Gordon 拍板 (1)', 'Gordon proposal', '等老板拍板 (3)', 'Boss conflict', '待定：boss question', 'Boss proposal', '未指定 (1)', 'Nobody yet']);
 });
+
+it('puts groups under sub-goals and rules under groups [T52]', function (array $nodes, ?string $message) {
+    $project = Project::factory()->create(['slug' => 'rq']);
+    saveRequirements(['project' => 'rq', 'nodes' => [
+        ['ref' => 'g', 'kind' => '目标', 'title' => 'G', 'status' => '已定'],
+        ['ref' => 's', 'parent_ref' => 'g', 'kind' => '子目标', 'title' => 'S', 'status' => '已定'],
+        ['ref' => 'x', 'parent_ref' => 's', 'kind' => '分组', 'title' => 'X', 'status' => '已定'],
+        ['parent_ref' => 'x', 'kind' => '规则', 'title' => 'R', 'status' => '已定'],
+    ]])->assertSuccessful();
+
+    expect(requirementNumbered($project, 4)->parent->kind)->toBe(RequirementKind::Group);
+
+    $command = saveRequirements(['project' => 'rq', 'nodes' => $nodes]);
+    $message === null ? $command->assertSuccessful() : $command->expectsOutputToContain($message)->assertFailed();
+})->with([
+    'group under a goal' => [[['parent' => 1, 'kind' => '分组', 'title' => 'x']], 'a 分组 must sit under 子目标'],
+    'group under a group' => [[['parent' => 3, 'kind' => '分组', 'title' => 'x']], 'a 分组 must sit under 子目标'],
+    'group at the root' => [[['kind' => '分组', 'title' => 'x']], 'a 分组 must sit under 子目标'],
+    'rule still under a sub-goal' => [[['parent' => 2, 'kind' => '规则', 'title' => 'x']], null],
+]);
+
+it('records dependencies with depends_on and same-batch refs, replacing the set only when passed [T53]', function () {
+    $project = Project::factory()->create(['slug' => 'rq']);
+    saveRequirements(['project' => 'rq', 'nodes' => [
+        ['ref' => 'g', 'kind' => '目标', 'title' => 'G', 'status' => '已定'],
+        ['ref' => 'a', 'parent_ref' => 'g', 'kind' => '规则', 'title' => 'A'],
+        ['ref' => 'b', 'parent_ref' => 'g', 'kind' => '规则', 'title' => 'B', 'depends_on_refs' => ['a'], 'position' => 3],
+        ['parent_ref' => 'g', 'kind' => '规则', 'title' => 'C', 'depends_on' => [2], 'depends_on_refs' => ['b']],
+    ]])->assertSuccessful();
+
+    $dependsOn = fn (int $number): array => requirementNumbered($project, $number)->dependsOn()->orderBy('number')->pluck('number')->all();
+
+    expect($dependsOn(3))->toBe([2])->and($dependsOn(4))->toBe([2, 3])
+        ->and(requirementNumbered($project, 3)->position)->toBe(3);
+
+    saveRequirements(['project' => 'rq', 'nodes' => [['number' => 4, 'title' => 'C2'], ['number' => 3, 'depends_on' => []]]])->assertSuccessful();
+
+    expect($dependsOn(4))->toBe([2, 3])->and($dependsOn(3))->toBe([]);
+});
+
+it('rejects a dependency on itself, on nothing, or one that closes a loop [T54]', function (array $nodes, string $message) {
+    $project = Project::factory()->create(['slug' => 'rq']);
+    saveRequirements(['project' => 'rq', 'nodes' => [
+        ['ref' => 'g', 'kind' => '目标', 'title' => 'G', 'status' => '已定'],
+        ['parent_ref' => 'g', 'kind' => '规则', 'title' => 'A'],
+        ['parent_ref' => 'g', 'kind' => '规则', 'title' => 'B', 'depends_on' => [2]],
+        ['parent_ref' => 'g', 'kind' => '规则', 'title' => 'C', 'depends_on' => [3]],
+    ]])->assertSuccessful();
+
+    saveRequirements(['project' => 'rq', 'nodes' => $nodes])->expectsOutputToContain($message)->assertFailed();
+
+    expect(DB::table('requirement_dependencies')->count())->toBe(2)->and(Requirement::count())->toBe(4);
+})->with([
+    'itself' => [[['number' => 2, 'depends_on' => [2]]], '#2: a node cannot depend on itself'],
+    'missing number' => [[['number' => 2, 'depends_on' => [99]]], '#2: depends on #99, which does not exist'],
+    'missing ref' => [[['number' => 2, 'depends_on_refs' => ['nope']]], 'depends_on_refs "nope" matches no ref'],
+    'loop through stored dependencies' => [[['number' => 2, 'depends_on' => [4]]], 'dependencies loop: #3 → #2 → #4 → #3'],
+    'loop inside the batch' => [[['ref' => 'x', 'parent' => 1, 'kind' => '规则', 'title' => 'X', 'depends_on_refs' => ['y']], ['ref' => 'y', 'parent' => 1, 'kind' => '规则', 'title' => 'Y', 'depends_on_refs' => ['x']]], 'dependencies loop'],
+    'not a list' => [[['number' => 2, 'depends_on' => 'A']], 'depends_on lists of integers'],
+]);
+
+it('orders every level depended-on first, then by position and number, lifting dependencies to siblings [T55]', function () {
+    $project = Project::factory()->create();
+    $node = fn (int $number, ?Requirement $parent, RequirementKind $kind, ?int $position = null): Requirement => Requirement::factory()->create([
+        'project_id' => $project->id, 'number' => $number, 'parent_id' => $parent?->id, 'kind' => $kind, 'status' => RequirementStatus::Decided, 'position' => $position,
+    ]);
+    $goal = $node(1, null, RequirementKind::Goal);
+    $sub = $node(2, $goal, RequirementKind::SubGoal);
+    $x = $node(3, $sub, RequirementKind::Group);
+    $y = $node(4, $sub, RequirementKind::Group);
+    $z = $node(5, $sub, RequirementKind::Group, position: 1);
+    $x1 = $node(6, $x, RequirementKind::Rule);
+    $x2 = $node(7, $x, RequirementKind::Rule);
+    $x3 = $node(8, $x, RequirementKind::Rule, position: 0);
+    $y1 = $node(9, $y, RequirementKind::Rule);
+    $z1 = $node(10, $z, RequirementKind::Rule);
+    $otherGoal = $node(11, null, RequirementKind::Goal);
+    $otherRule = $node(12, $otherGoal, RequirementKind::Rule);
+
+    $x1->dependsOn()->attach($x2);       // direct: 7 before 6
+    $x1->dependsOn()->attach($y1);       // lifted: group 4 before group 3
+    $y1->dependsOn()->attach($x3);       // lifted back: 3 before 4 — closes a loop, skipped
+    $z1->dependsOn()->attach($otherRule); // lifted to roots: goal 11 before goal 1
+
+    $children = fn (array $nodes): array => array_map(fn (RequirementTreeNode $node): int => $node->requirement->number, $nodes);
+    $tree = app(RequirementTreeService::class)->tree($project);
+    $flat = flatRequirementTree($tree);
+
+    expect($children($tree))->toBe([11, 1])
+        ->and($children($flat[2]->children))->toBe([5, 4, 3])
+        ->and($children($flat[3]->children))->toBe([8, 7, 6]);
+});
+
+it('shows groups in the tree, dependencies in the detail and groups in the pending path [T56]', function () {
+    $project = requirementTreePage();
+    $node = fn (int $number, ?Requirement $parent, RequirementKind $kind, string $title, RequirementStatus $status = RequirementStatus::Decided): Requirement => Requirement::factory()->create([
+        'project_id' => $project->id, 'number' => $number, 'parent_id' => $parent?->id, 'kind' => $kind, 'status' => $status, 'title' => $title,
+    ]);
+    $goal = $node(1, null, RequirementKind::Goal, 'Members buy by tier');
+    $sub = $node(2, $goal, RequirementKind::SubGoal, 'Direct visibility');
+    $group = $node(3, $sub, RequirementKind::Group, 'Cart rules');
+    $later = $node(4, $group, RequirementKind::Rule, 'Add to cart needs tier');
+    $first = $node(5, $group, RequirementKind::Rule, 'Tier is known at login', RequirementStatus::Proposed);
+    $later->dependsOn()->attach($first);
+
+    Livewire::test(RequirementTree::class, ['expanded' => [$sub->id => true, $group->id => true]])
+        ->assertSeeInOrder(['Members buy by tier', '子目标', 'Direct visibility', '分组', 'Cart rules', 'Tier is known at login', 'Add to cart needs tier'])
+        ->assertDontSee('依赖');
+
+    Livewire::withQueryParams(['selectedNumber' => 4])->test(RequirementTree::class)
+        ->assertSeeInOrder(['Add to cart needs tier', '依赖', '#5 Tier is known at login']);
+
+    Livewire::withQueryParams(['selectedNumber' => 5])->test(RequirementTree::class)
+        ->assertSeeInOrder(['被依赖', '#4 Add to cart needs tier']);
+
+    Livewire::withQueryParams(['tab' => 'pending'])->test(RequirementTree::class)
+        ->assertSeeInOrder(['Members buy by tier', '›', 'Direct visibility', '›', 'Cart rules', 'Tier is known at login']);
+});

@@ -139,6 +139,15 @@
                     @if ($requirement->supersedes)
                         <div><dt class="text-xs text-slate-500">要取代</dt><dd><button type="button" wire:click="selectNode({{ $requirement->supersedes->number }})" class="text-left hover:underline">#{{ $requirement->supersedes->number }} {{ $requirement->supersedes->title }}</button></dd></div>
                     @endif
+                    @foreach (['依赖' => $requirement->dependsOn, '被依赖' => $requirement->dependents] as $label => $related)
+                        @if ($related->isNotEmpty())
+                            <div data-requirement-dependencies="{{ $label }}"><dt class="text-xs text-slate-500">{{ $label }}</dt>
+                                @foreach ($related->sortBy('number') as $other)
+                                    <dd><button type="button" wire:click="selectNode({{ $other->number }})" class="text-left hover:underline">#{{ $other->number }} {{ $other->title }}</button></dd>
+                                @endforeach
+                            </div>
+                        @endif
+                    @endforeach
                 </dl>
                 <div class="mt-4">
                     <h3 class="mb-1 text-xs font-medium text-slate-500">功能与测试</h3>
