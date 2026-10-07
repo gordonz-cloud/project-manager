@@ -119,7 +119,7 @@ it('shows one status per node and rolls them up as 待决策 / 待做 / 进行�
     Livewire::test(RequirementTree::class)
         ->assertSee('title="1 待决策 · 1 待做 · 1 进行中 · 1 完成"', false)
         ->assertSeeHtmlInOrder(['1<span class="hidden @xl:inline"> 待决策</span>', '1<span class="hidden @xl:inline"> 完成</span>'])
-        ->assertSeeInOrder(['Rule 2', '待决策 · 等老板', 'Rule 3', '待做', 'Rule 4', '进行中', 'Rule 5', '完成', 'Rule 6', '放弃']);
+        ->assertSeeInOrder(['Rule 2', '待决策 · 等我', 'Rule 3', '待做', 'Rule 4', '进行中', 'Rule 5', '完成', 'Rule 6', '放弃']);
 });
 
 it('keeps a pick as a draft that survives reopening the page and counts it [T60]', function () {
@@ -166,7 +166,7 @@ it('applies every kind of answer in one confirmed batch, with history, and clear
 
     Livewire::withQueryParams(['tab' => 'pending'])->test(RequirementTree::class)
         ->call('confirmAllDrafts')
-        ->assertNotified('定了 4 条，转老板 1 条，先不定 1 条');
+        ->assertNotified('定下 4 条（你拍板 4，按老板回复 0） · 加入问老板清单 0 条 · 转老板 1 条 · 先不定 1 条');
 
     expect($conflict->fresh()->only(['status', 'title', 'source', 'decided_by', 'decider']))->toBe(['status' => RequirementStatus::Decided, 'title' => 'Free shipping over 80 from November', 'source' => "spec v1；Gordon 拍板 {$today}：选 A Raise to 80", 'decided_by' => 'Gordon', 'decider' => null])
         ->and($conflict->fresh()->decided_at->toDateString())->toBe($today)
@@ -205,19 +205,37 @@ it('changes nothing when one answer in the batch no longer fits [T61]', function
         ->and(RequirementDecisionDraft::count())->toBe(2);
 });
 
-it('lists every question waiting on the boss as plain text, with what we recommend [T62]', function () {
+it('takes Gordon\'s opinion on a boss question to the boss list without deciding it, then marks the list sent [T62]', function () {
     [$project, $user, $goal] = decisionDesk();
-    decisionRule($goal, 2, RequirementStatus::Proposed, ['decider' => RequirementDecider::Boss, 'title' => 'Free shipping over 80', 'decision' => shippingDecision()]);
+    $question = decisionRule($goal, 2, RequirementStatus::Proposed, ['decider' => RequirementDecider::Boss, 'title' => 'Free shipping over 80', 'decision' => [...shippingDecision(), 'why_boss' => 'It changes what members pay']]);
     $forwarded = decisionRule($goal, 3, RequirementStatus::Proposed, ['title' => 'Gift wrap for members']);
-    decisionRule($goal, 4, RequirementStatus::Proposed, ['decider' => RequirementDecider::Gordon, 'title' => 'Not for the boss']);
-    app(RequirementDecisions::class)->choose($forwarded, $user, 'ask_boss');
-    app(RequirementDecisions::class)->confirm($project, $user, collect([$forwarded]));
+    decisionRule($goal, 4, RequirementStatus::Proposed, ['decider' => RequirementDecider::Boss, 'title' => 'No opinion yet']);
+    decisionRule($goal, 5, RequirementStatus::Proposed, ['decider' => RequirementDecider::Gordon, 'title' => 'Not for the boss']);
+    $decisions = app(RequirementDecisions::class);
+    $decisions->choose($forwarded, $user, 'ask_boss');
+    $decisions->confirm($project, $user, collect([$forwarded]));
 
-    $text = app(RequirementDecisions::class)->bossQuestions($project);
+    expect($forwarded->fresh()->decisionStage())->toBe(Requirement::STAGE_MINE)
+        ->and(fn () => $decisions->choose($question, $user, 'A'))->toThrow(InvalidArgumentException::class, '等老板定');
+
+    $decisions->choose($question, $user, 'opinion:A');
+    $decisions->choose($forwarded->fresh(), $user, 'opinion:custom', 'Only for gold members');
+
+    expect($decisions->preview($user, collect([$question, $forwarded]))->summary())->toBe('定下 0 条（你拍板 0，按老板回复 0） · 加入问老板清单 2 条');
+
+    $decisions->confirm($project, $user, collect([$question, $forwarded->fresh()]));
+    $today = now()->toDateString();
+
+    expect($question->fresh()->only(['status', 'decision_opinion']))->toBe(['status' => RequirementStatus::Proposed, 'decision_opinion' => ['key' => 'A', 'label' => 'Raise to 80', 'by' => 'Gordon', 'at' => $today]])
+        ->and($question->revisions()->count())->toBe(1)
+        ->and($question->fresh()->decisionStage())->toBe(Requirement::STAGE_TO_SEND);
+
+    $text = $decisions->bossQuestions($project);
 
     expect($text)->toContain('共 2 条')
         ->toContain(implode("\n", [
             '1. Free shipping over 80（编号 2）',
+            '   为什么要您定：It changes what members pay',
             '   现在：Free shipping over 50, because the old carrier was cheap',
             '   要改成：Free shipping over 80',
             '   差别：Orders between 50 and 80 pay shipping',
@@ -226,25 +244,31 @@ it('lists every question waiting on the boss as plain text, with what we recomme
             '     A. Raise to 80 —— Old rule voided',
             '     B. Keep 50 —— Nothing changes',
             '     C. Raise to 65 —— Middle ground',
-            '   我们推荐：A. Raise to 80',
+            '   Gordon 的意见：A. Raise to 80（Old rule voided）',
         ]))
         ->toContain("2. Gift wrap for members（编号 3）\n   现在：还没有这条规则")
-        ->toContain('   我们推荐：没有倾向，请老板定')
+        ->toContain('   Gordon 的意见：Only for gold members')
+        ->not->toContain('No opinion yet')
         ->not->toContain('Not for the boss');
 
-    Livewire::withQueryParams(['tab' => 'pending'])->test(RequirementTree::class)
+    Livewire::withQueryParams(['tab' => 'pending', 'waitingOn' => 'to_send'])->test(RequirementTree::class)
         ->call('toggleBossQuestions')
-        ->assertSee('Gift wrap for members');
+        ->assertSee('Gift wrap for members')
+        ->call('markSentToBoss')
+        ->assertNotified('已标记 2 条发给老板');
+
+    expect($question->fresh()->decisionStage())->toBe(Requirement::STAGE_AWAITING_BOSS)
+        ->and($decisions->bossQuestions($project))->toContain('共 0 条');
 });
 
 it('records the boss answer through the same cards, credited to the boss [T63]', function () {
     [, , $goal] = decisionDesk();
     $rule = decisionRule($goal, 2, RequirementStatus::Proposed, ['decider' => RequirementDecider::Boss, 'decision' => shippingDecision()]);
 
-    Livewire::withQueryParams(['tab' => 'pending', 'waitingOn' => 'boss', 'selectedNumber' => 2])->test(RequirementTree::class)
-        ->assertSee('老板的答复')
-        ->assertDontSee('问老板')
-        ->call('choose', $rule->id, 'A')
+    Livewire::withQueryParams(['tab' => 'pending', 'selectedNumber' => 2])->test(RequirementTree::class)
+        ->assertSeeInOrder(['老板的问题', '你的意见（会带进问老板清单）', 'A. Raise to 80', '记老板的回复', 'A. Raise to 80'])
+        ->assertDontSeeHtml('>问老板</button>')
+        ->call('choose', $rule->id, 'boss:A')
         ->call('confirmAllDrafts');
 
     $today = now()->toDateString();
@@ -307,7 +331,7 @@ it('never asks to decide a 分组: no card, no count, not on the boss list, and 
     $pendingGroup = Requirement::factory()->create(['project_id' => $project->id, 'number' => 3, 'parent_id' => $sub->id, 'kind' => RequirementKind::Group, 'status' => RequirementStatus::Proposed, 'decider' => RequirementDecider::Boss, 'title' => 'Pending group']);
     $builtGroup = Requirement::factory()->create(['project_id' => $project->id, 'number' => 4, 'parent_id' => $sub->id, 'kind' => RequirementKind::Group, 'status' => RequirementStatus::Proposed, 'title' => 'Built group']);
     decisionRule($pendingGroup, 5, RequirementStatus::Proposed, ['title' => 'Rule for me']);
-    decisionRule($pendingGroup, 6, RequirementStatus::Proposed, ['title' => 'Rule for the boss', 'decider' => RequirementDecider::Boss]);
+    decisionRule($pendingGroup, 6, RequirementStatus::Proposed, ['title' => 'Rule for the boss', 'decider' => RequirementDecider::Boss, 'decision_opinion' => ['key' => 'A', 'label' => '同意', 'by' => 'Gordon', 'at' => '2026-10-07']]);
     decisionRule($builtGroup, 7, RequirementStatus::Decided, ['title' => 'Done rule'])->linkedFeatures()->attach(Feature::factory()->create(['project_id' => $project->id, 'status' => FeatureStatus::Done]));
 
     $tree = app(RequirementTreeService::class)->tree($project);
@@ -320,11 +344,11 @@ it('never asks to decide a 分组: no card, no count, not on the boss list, and 
         ->and(app(RequirementDecisions::class)->bossQuestions($project))->toContain('共 1 条')->not->toContain('Pending group');
 
     Livewire::withQueryParams(['selectedNumber' => 3])->test(RequirementTree::class)
-        ->assertSeeInOrder(['等我 1', '等老板 1', '待决策（2）'])
+        ->assertSeeInOrder(['等我 1', '待发老板 1', '待决策（2）'])
         ->assertSeeInOrder(['Pending group', '含 2 待决策']);
 
-    Livewire::withQueryParams(['tab' => 'pending', 'waitingOn' => 'all'])->test(RequirementTree::class)
-        ->assertSee(['Rule for me', 'Rule for the boss'])
+    Livewire::withQueryParams(['tab' => 'pending'])->test(RequirementTree::class)
+        ->assertSee('Rule for me')
         ->assertDontSee('Built group');
 });
 
@@ -349,7 +373,7 @@ it('decides a pending node right from the 全貌 detail and confirms every draft
     $rule = decisionRule($goal, 2, RequirementStatus::Proposed, ['title' => 'Free shipping over 80', 'decision' => shippingDecision(), 'rationale' => 'margin']);
     $bossRule = decisionRule($goal, 3, RequirementStatus::Proposed, ['decider' => RequirementDecider::Boss, 'title' => 'Boss rule']);
     decisionRule($goal, 4, RequirementStatus::Decided, ['title' => 'Settled rule']);
-    app(RequirementDecisions::class)->choose($bossRule, $user, 'A');
+    app(RequirementDecisions::class)->choose($bossRule, $user, 'boss:A');
 
     Livewire::withQueryParams(['selectedNumber' => 2])->test(RequirementTree::class)
         ->assertSeeInOrder(['需要你决定', '现在', 'Free shipping over 50, because the old carrier was cheap', '要改成', 'A. Raise to 80', '★推荐', '✎ 自己写', '问老板', '先不定', '为什么', 'margin', '历史'])
@@ -362,7 +386,7 @@ it('decides a pending node right from the 全貌 detail and confirms every draft
         ->assertDontSee('需要你决定')
         ->assertSee('已选 2 / 2')
         ->call('confirmAllDrafts')
-        ->assertNotified('定了 2 条，转老板 0 条，先不定 0 条');
+        ->assertNotified('定下 2 条（你拍板 1，按老板回复 1） · 加入问老板清单 0 条');
 
     expect($rule->fresh()->only(['status', 'title']))->toBe(['status' => RequirementStatus::Decided, 'title' => 'Free shipping over 80 from November'])
         ->and($bossRule->fresh()->decided_by)->toBe('老板')
@@ -387,4 +411,27 @@ it('folds a rationale that retells 现在: two shared runs of 8+ characters, or 
         ->and($decision->retells('老板要求按 #15 改'))->toBeFalse()
         ->and($decision->retells('Gordon 2026-10-02 说的，与此无关'))->toBeFalse()
         ->and($decision->retells('margin'))->toBeFalse();
+});
+
+it('says what the batch will do before it is confirmed [T71]', function () {
+    [, $user, $goal] = decisionDesk();
+    $mine = decisionRule($goal, 2, RequirementStatus::Proposed, ['title' => 'Mine', 'decision' => shippingDecision()]);
+    $replied = decisionRule($goal, 3, RequirementStatus::Proposed, ['title' => 'Replied', 'decider' => RequirementDecider::Boss, 'decision' => shippingDecision()]);
+    $opinion = decisionRule($goal, 4, RequirementStatus::Proposed, ['title' => 'Opinion', 'decider' => RequirementDecider::Boss, 'decision' => shippingDecision()]);
+    $decisions = app(RequirementDecisions::class);
+    $decisions->choose($mine, $user, 'A');
+    $decisions->choose($replied, $user, 'boss:B');
+    $decisions->choose($opinion, $user, 'opinion:C');
+
+    expect(fn () => $decisions->choose($mine, $user, 'opinion:A'))->toThrow(InvalidArgumentException::class, '不在等老板')
+        ->and(fn () => $decisions->choose($opinion, $user, 'ask_boss'))->toThrow(InvalidArgumentException::class, '等老板定');
+
+    Livewire::test(RequirementTree::class)
+        ->assertSeeInOrder(['已选 3 / 3', '这批会：定下 2 条（你拍板 1，按老板回复 1） · 加入问老板清单 1 条'])
+        ->assertSeeHtml('#2 定 A Raise to 80'.PHP_EOL.'#3 老板回复 B Keep 50'.PHP_EOL.'#4 意见 C Raise to 65');
+
+    RequirementDecisionDraft::where('requirement_id', $opinion->id)->update(['choice' => 'A']);
+
+    expect(fn () => $decisions->confirm($goal->project, $user, collect([$mine, $replied, $opinion])))->toThrow(InvalidArgumentException::class, '#4 等老板定')
+        ->and($mine->fresh()->status)->toBe(RequirementStatus::Proposed);
 });

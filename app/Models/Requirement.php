@@ -43,14 +43,25 @@ use LogicException;
  * @property string|null $version
  * @property int|null $position
  * @property RequirementDecision|null $decision
+ * @property array{key: string, label: string, by: string, at: string}|null $decision_opinion Gordon's opinion on a question for 老板
+ * @property Carbon|null $sent_to_boss_at when the question went to 老板
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at
  */
-#[Fillable(['number', 'parent_id', 'kind', 'title', 'rationale', 'source', 'decided_by', 'decided_at', 'supersedes_id', 'acceptance', 'status', 'decider', 'version', 'position', 'decision'])]
+#[Fillable(['number', 'parent_id', 'kind', 'title', 'rationale', 'source', 'decided_by', 'decided_at', 'supersedes_id', 'acceptance', 'status', 'decider', 'version', 'position', 'decision', 'decision_opinion', 'sent_to_boss_at'])]
 class Requirement extends Model
 {
     /** @use HasFactory<RequirementFactory> */
     use BelongsToProject, HasFactory, HasProjectSequence;
+
+    /** Waits on Gordon: his to decide, or 老板's but Gordon has not given his opinion yet. */
+    public const STAGE_MINE = 'me';
+
+    /** 老板's, with Gordon's opinion, not sent yet. */
+    public const STAGE_TO_SEND = 'to_send';
+
+    /** Sent to 老板, waiting for the reply. */
+    public const STAGE_AWAITING_BOSS = 'awaiting_boss';
 
     /** Why the statement or status changed; written into the revision of the next save, then cleared. */
     public ?string $revisionReason = null;
@@ -92,6 +103,8 @@ class Requirement extends Model
             'decider' => RequirementDecider::class,
             'decided_at' => 'date',
             'decision' => RequirementDecision::class,
+            'decision_opinion' => 'array',
+            'sent_to_boss_at' => 'datetime',
         ];
     }
 
@@ -139,6 +152,19 @@ class Requirement extends Model
     public function tests(): BelongsToMany
     {
         return $this->belongsToMany(Test::class);
+    }
+
+    /**
+     * Where an open decision stands (one of the STAGE_ constants); null once it is decided or voided.
+     */
+    public function decisionStage(): ?string
+    {
+        return match (true) {
+            ! $this->status->awaitsDecision() => null,
+            $this->decider !== RequirementDecider::Boss || $this->decision_opinion === null => self::STAGE_MINE,
+            $this->sent_to_boss_at === null => self::STAGE_TO_SEND,
+            default => self::STAGE_AWAITING_BOSS,
+        };
     }
 
     /**

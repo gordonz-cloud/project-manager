@@ -16,7 +16,7 @@ use Illuminate\Database\Eloquent\Model;
  */
 final readonly class RequirementDecision implements Castable
 {
-    private const TEXT_KEYS = ['now', 'change', 'difference', 'risk', 'impact'];
+    private const TEXT_KEYS = ['now', 'change', 'difference', 'risk', 'impact', 'why_boss'];
 
     /**
      * @param  list<DecisionOption>  $options
@@ -28,6 +28,7 @@ final readonly class RequirementDecision implements Castable
         public ?string $difference = null,
         public ?string $risk = null,
         public ?string $impact = null,
+        public ?string $whyBoss = null,
     ) {}
 
     /**
@@ -75,6 +76,7 @@ final readonly class RequirementDecision implements Castable
             difference: $data['difference'] ?? null,
             risk: $data['risk'] ?? null,
             impact: $data['impact'] ?? null,
+            whyBoss: $data['why_boss'] ?? null,
         );
     }
 
@@ -86,7 +88,7 @@ final readonly class RequirementDecision implements Castable
     public static function errors(mixed $raw): array
     {
         if (! is_array($raw) || array_is_list($raw)) {
-            return ['decision must be an object {now, change, difference?, risk?, impact?, options}.'];
+            return ['decision must be an object {now, change, difference?, risk?, impact?, why_boss?, options}.'];
         }
 
         $errors = [];
@@ -212,6 +214,7 @@ final readonly class RequirementDecision implements Castable
             'risk' => $this->risk,
             'options' => array_map(fn (DecisionOption $option): array => $option->toArray(), $this->options),
             'impact' => $this->impact,
+            'why_boss' => $this->whyBoss,
         ], fn (mixed $value): bool => $value !== null);
     }
 

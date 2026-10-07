@@ -2,12 +2,12 @@
 
 namespace App\Filament\Pages;
 
+use App\Data\Requirements\DecisionBatchResult;
 use App\Data\Requirements\RequirementChangeGroup;
 use App\Data\Requirements\RequirementProgress;
 use App\Data\Requirements\RequirementRollup;
 use App\Data\Requirements\RequirementTreeNode;
 use App\Enums\NavigationGroup;
-use App\Enums\RequirementDecider;
 use App\Models\Feature;
 use App\Models\Project;
 use App\Models\Requirement;
@@ -45,7 +45,7 @@ class RequirementTree extends Page
     public const TABS = ['overview' => '全貌', 'pending' => '待决策', 'todo' => '待做', 'changes' => '最近变化'];
 
     /** @var array<string, string> 待决策 filter key => label */
-    public const WAITING_ON = ['me' => '等我', 'boss' => '等老板', 'all' => '全部'];
+    public const WAITING_ON = [Requirement::STAGE_MINE => '等我', Requirement::STAGE_TO_SEND => '待发老板', Requirement::STAGE_AWAITING_BOSS => '等老板回复'];
 
     protected string $view = 'filament.pages.requirement-tree';
 
@@ -69,7 +69,7 @@ class RequirementTree extends Page
     public bool $showUnfiled = false;
 
     #[Url]
-    public string $waitingOn = 'me';
+    public string $waitingOn = Requirement::STAGE_MINE;
 
     public bool $showBossQuestions = false;
 
@@ -100,7 +100,7 @@ class RequirementTree extends Page
 
     public function setWaitingOn(string $waitingOn): void
     {
-        $this->waitingOn = isset(self::WAITING_ON[$waitingOn]) ? $waitingOn : 'me';
+        $this->waitingOn = isset(self::WAITING_ON[$waitingOn]) ? $waitingOn : Requirement::STAGE_MINE;
     }
 
     public function choose(int $requirementId, string $choice, ?string $customText = null): void
@@ -117,17 +117,17 @@ class RequirementTree extends Page
             Notification::make()->title($exception->getMessage())->danger()->send();
         }
 
-        unset($this->drafts);
+        unset($this->drafts, $this->batchPreview);
     }
 
     /**
-     * The 自己写 box: text drafts a custom answer, emptying it drops a custom draft.
+     * A 自己写 box: text drafts $choice (custom, opinion:custom or boss:custom), emptying it drops that draft.
      */
-    public function writeCustom(int $requirementId, string $text): void
+    public function writeCustom(int $requirementId, string $text, string $choice = RequirementDecisionDraft::CUSTOM): void
     {
         if (trim($text) !== '') {
-            $this->choose($requirementId, RequirementDecisionDraft::CUSTOM, $text);
-        } elseif ($this->drafts->get($requirementId)?->choice === RequirementDecisionDraft::CUSTOM) {
+            $this->choose($requirementId, $choice, $text);
+        } elseif ($this->drafts->get($requirementId)?->choice === $choice) {
             $this->clearChoice($requirementId);
         }
     }
@@ -138,7 +138,7 @@ class RequirementTree extends Page
             $this->requirementDecisions()->clear($requirement, $this->user());
         }
 
-        unset($this->drafts);
+        unset($this->drafts, $this->batchPreview);
     }
 
     /**
@@ -154,8 +154,27 @@ class RequirementTree extends Page
             return;
         }
 
-        unset($this->tree, $this->awaitingDecision, $this->pendingByGoal, $this->drafts, $this->nodesById, $this->total, $this->selectedRequirement);
+        unset($this->tree, $this->awaitingDecision, $this->pendingByGoal, $this->drafts, $this->batchPreview, $this->bossQuestions, $this->nodesById, $this->total, $this->selectedRequirement);
         Notification::make()->title($result->summary())->success()->send();
+    }
+
+    /**
+     * Gordon sent the list: those questions now wait for the boss's reply.
+     */
+    public function markSentToBoss(): void
+    {
+        $sent = $this->requirementDecisions()->markSentToBoss($this->project);
+        unset($this->awaitingDecision, $this->pendingByGoal, $this->bossQuestions, $this->selectedRequirement);
+        Notification::make()->title("已标记 {$sent} 条发给老板")->success()->send();
+    }
+
+    /**
+     * What the bottom bar's 确认这一批 would do, shown before it is pressed.
+     */
+    #[Computed]
+    public function batchPreview(): DecisionBatchResult
+    {
+        return $this->requirementDecisions()->preview($this->user(), $this->awaitingDecision);
     }
 
     public function toggleBossQuestions(): void
@@ -258,11 +277,7 @@ class RequirementTree extends Page
 
     private function isWaitingOn(Requirement $requirement, string $waitingOn): bool
     {
-        return match ($waitingOn) {
-            'boss' => $requirement->decider === RequirementDecider::Boss,
-            'all' => true,
-            default => $requirement->decider !== RequirementDecider::Boss,
-        };
+        return $requirement->decisionStage() === $waitingOn;
     }
 
     /**

@@ -304,31 +304,35 @@ it('shows a selected requirement with why, source, history, features, tests and 
         ->assertSeeInOrder(['Members buy by tier', '完成', 'Gordon 拍板 2026-10-02', '为什么', 'protect channel price', '来源：S5 spec v1.0', '做到哪了', 'F4 · Tier gate · 完成', 'T12 · 通过', '历史', '新建 → 已定', 'Add tier gate']);
 });
 
-it('filters pending decisions by who must decide, conflicts first [T51]', function () {
+it('filters pending decisions by stage: mine, to send to the boss, waiting for the boss, conflicts first [T51]', function () {
     $project = requirementTreePage();
     $goal = Requirement::factory()->create(['project_id' => $project->id, 'number' => 1, 'kind' => RequirementKind::Goal, 'status' => RequirementStatus::Decided, 'title' => 'G']);
-    $pending = fn (int $number, string $title, RequirementStatus $status = RequirementStatus::Proposed, ?RequirementDecider $decider = null) => Requirement::factory()->create([
-        'project_id' => $project->id, 'number' => $number, 'parent_id' => $goal->id, 'kind' => RequirementKind::Rule, 'status' => $status, 'decider' => $decider,
-        'title' => $title, 'supersedes_id' => $status === RequirementStatus::Conflict ? $goal->id : null,
+    $opinion = ['key' => 'A', 'label' => '同意', 'by' => 'Gordon', 'at' => '2026-10-07'];
+    $pending = fn (int $number, string $title, array $attributes = []) => Requirement::factory()->create([
+        'project_id' => $project->id, 'number' => $number, 'parent_id' => $goal->id, 'kind' => RequirementKind::Rule, 'status' => RequirementStatus::Proposed, 'title' => $title, ...$attributes,
     ]);
-    $pending(2, 'Boss proposal', decider: RequirementDecider::Boss);
-    $pending(3, '待定：boss question', decider: RequirementDecider::Boss);
-    $pending(4, 'Boss conflict', RequirementStatus::Conflict, RequirementDecider::Boss);
-    $pending(5, 'Gordon proposal', decider: RequirementDecider::Gordon);
-    $pending(6, 'Nobody yet');
+    $pending(2, 'Boss without opinion', ['decider' => RequirementDecider::Boss]);
+    $pending(3, 'Boss to send', ['decider' => RequirementDecider::Boss, 'decision_opinion' => $opinion]);
+    $pending(4, 'Boss conflict to send', ['decider' => RequirementDecider::Boss, 'decision_opinion' => $opinion, 'status' => RequirementStatus::Conflict, 'supersedes_id' => $goal->id]);
+    $pending(5, 'Sent to boss', ['decider' => RequirementDecider::Boss, 'decision_opinion' => $opinion, 'sent_to_boss_at' => now()]);
+    $pending(6, 'Gordon proposal', ['decider' => RequirementDecider::Gordon]);
+    $pending(7, 'Nobody yet');
 
     Livewire::withQueryParams(['tab' => 'pending'])->test(RequirementTree::class)
-        ->assertSeeInOrder(['等我 2', '等老板 3'])
-        ->assertSeeInOrder(['Gordon proposal', 'Nobody yet'])
-        ->assertDontSee('Boss proposal');
+        ->assertSeeInOrder(['等我 3', '待发老板 2', '等老板回复 1'])
+        ->assertSeeInOrder(['Boss without opinion', 'Gordon proposal', 'Nobody yet'])
+        ->assertDontSee('Boss to send')
+        ->assertDontSee('Sent to boss');
 
     // After a call() the haystack is the JSON response with Chinese escaped, so each filter is opened fresh.
-    Livewire::withQueryParams(['tab' => 'pending', 'waitingOn' => 'boss'])->test(RequirementTree::class)
-        ->assertSeeInOrder(['Boss conflict', 'Boss proposal', '待定：boss question'])
-        ->assertDontSee('Gordon proposal');
+    Livewire::withQueryParams(['tab' => 'pending', 'waitingOn' => 'to_send'])->test(RequirementTree::class)
+        ->assertSeeInOrder(['Boss conflict to send', 'Boss to send'])
+        ->assertDontSee('Gordon proposal')
+        ->assertDontSee('Sent to boss');
 
-    Livewire::withQueryParams(['tab' => 'pending', 'waitingOn' => 'all'])->test(RequirementTree::class)
-        ->assertSeeInOrder(['Boss conflict', 'Boss proposal', '待定：boss question', 'Gordon proposal', 'Nobody yet']);
+    Livewire::withQueryParams(['tab' => 'pending', 'waitingOn' => 'awaiting_boss'])->test(RequirementTree::class)
+        ->assertSee('Sent to boss')
+        ->assertDontSee('Boss to send');
 });
 
 it('puts groups under sub-goals and rules under groups [T52]', function (array $nodes, ?string $message) {
