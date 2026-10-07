@@ -1,4 +1,4 @@
-<span class="inline-flex shrink-0 gap-1.5 text-xs tabular-nums text-slate-500 dark:text-slate-400" data-rollup>
+<span class="inline-flex shrink-0 gap-1.5 whitespace-nowrap text-xs tabular-nums text-slate-500 dark:text-slate-400" data-rollup>
     @foreach (array_filter($rollup->progressCounts()) as $label => $count)
         @if (! $loop->first)<span>·</span>@endif
         <span>{{ $count }} {{ $label }}</span>

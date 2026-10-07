@@ -111,6 +111,11 @@
         <section class="min-w-0 rounded-lg border border-slate-200 bg-white px-5 py-4 dark:border-white/10 dark:bg-slate-950 xl:max-h-[calc(100vh-10rem)] xl:overflow-y-auto">
             @if ($requirement)
                 @php($delivery = $this->deliveryOf($requirement))
+                @if ($this->isDecidable($requirement))
+                    <div class="mb-4" data-detail-decision>
+                        @include('filament.pages.partials.requirement-decision-card', ['requirement' => $requirement])
+                    </div>
+                @endif
                 <nav class="flex flex-wrap gap-1 text-xs text-slate-500 dark:text-slate-400" data-requirement-path>
                     @foreach ($requirement->ancestors() as $step)
                         @if (! $loop->first)<span>›</span>@endif
@@ -159,4 +164,12 @@
         </section>
         @endunless
     </div>
+
+    @if ($this->tab === 'overview' && $this->awaitingDecision->isNotEmpty())
+        <div class="sticky bottom-0 z-10 flex flex-wrap items-center gap-3 rounded-lg border border-slate-200 bg-white/95 px-4 py-2 text-sm shadow-lg backdrop-blur dark:border-white/10 dark:bg-slate-950/95" data-decision-bar>
+            <span class="tabular-nums text-slate-700 dark:text-slate-200">已选 {{ $this->drafts->count() }} / {{ $this->awaitingDecision->count() }} 待决策</span>
+            <span class="text-xs text-slate-500 dark:text-slate-400">确认的是你所有已选的（包括在待决策页里选的），没选的不动。</span>
+            <x-filament::button size="sm" class="ml-auto" wire:click="confirmAllDrafts" wire:confirm="把已选的 {{ $this->drafts->count() }} 条一次写进需求树？" :disabled="$this->drafts->isEmpty()">确认这一批</x-filament::button>
+        </div>
+    @endif
 </x-filament-panels::page>

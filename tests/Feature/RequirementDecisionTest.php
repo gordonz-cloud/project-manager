@@ -331,3 +331,28 @@ it('saves a new 分组 as 已定 and refuses to make any 分组 a 提议 or 冲�
     expect($group->fresh()->status)->toBe(RequirementStatus::Decided)
         ->and(Requirement::where('project_id', $project->id)->where('title', 'Proposed group')->exists())->toBeFalse();
 });
+
+it('decides a pending node right from the 全貌 detail and confirms every draft from the bottom bar [T68]', function () {
+    [, $user, $goal] = decisionDesk();
+    $rule = decisionRule($goal, 2, RequirementStatus::Proposed, ['title' => 'Free shipping over 80', 'decision' => shippingDecision(), 'rationale' => 'margin']);
+    $bossRule = decisionRule($goal, 3, RequirementStatus::Proposed, ['decider' => RequirementDecider::Boss, 'title' => 'Boss rule']);
+    decisionRule($goal, 4, RequirementStatus::Decided, ['title' => 'Settled rule']);
+    app(RequirementDecisions::class)->choose($bossRule, $user, 'A');
+
+    Livewire::withQueryParams(['selectedNumber' => 2])->test(RequirementTree::class)
+        ->assertSeeInOrder(['data-detail-decision', '现在', 'Free shipping over 50, because the old carrier was cheap', '要改成', 'A. Raise to 80', '★推荐', '自己写…', '问老板', '先不定', '为什么', 'margin', '历史与最近 commit'])
+        ->assertSeeInOrder(['data-decision-bar', '已选 1 / 2 待决策', '确认这一批'])
+        ->call('choose', $rule->id, 'A');
+
+    expect(RequirementDecisionDraft::where('requirement_id', $rule->id)->value('choice'))->toBe('A');
+
+    Livewire::withQueryParams(['selectedNumber' => 4])->test(RequirementTree::class)
+        ->assertDontSee('data-detail-decision', false)
+        ->assertSee('已选 2 / 2 待决策')
+        ->call('confirmAllDrafts')
+        ->assertNotified('定了 2 条，转老板 0 条，先不定 0 条');
+
+    expect($rule->fresh()->only(['status', 'title']))->toBe(['status' => RequirementStatus::Decided, 'title' => 'Free shipping over 80 from November'])
+        ->and($bossRule->fresh()->decided_by)->toBe('老板')
+        ->and(RequirementDecisionDraft::count())->toBe(0);
+});

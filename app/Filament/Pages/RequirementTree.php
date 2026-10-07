@@ -143,12 +143,28 @@ class RequirementTree extends Page
     }
 
     /**
-     * Applies the drafts on the cards in view, then everything on the page is read again.
+     * Applies the drafts on the cards in view (待决策 tab, current filter), then everything on the page is read again.
      */
     public function confirmBatch(): void
     {
+        $this->applyDrafts($this->pendingCards);
+    }
+
+    /**
+     * Applies every draft of this user, wherever it was picked (全貌 detail or 待决策 tab, any filter).
+     */
+    public function confirmAllDrafts(): void
+    {
+        $this->applyDrafts($this->awaitingDecision);
+    }
+
+    /**
+     * @param  Collection<int, Requirement>  $requirements
+     */
+    private function applyDrafts(Collection $requirements): void
+    {
         try {
-            $result = $this->requirementDecisions()->confirm($this->project, $this->user(), $this->pendingCards);
+            $result = $this->requirementDecisions()->confirm($this->project, $this->user(), $requirements);
         } catch (InvalidArgumentException $exception) {
             Notification::make()->title('没有确认，什么都没改')->body($exception->getMessage())->danger()->send();
 
@@ -267,6 +283,14 @@ class RequirementTree extends Page
             ->whereIn('requirement_id', $this->awaitingDecision->pluck('id'))
             ->get()
             ->keyBy('requirement_id');
+    }
+
+    /**
+     * Whether the selected node is one Gordon can decide right here (a 提议/冲突 that is not a 分组).
+     */
+    public function isDecidable(Requirement $requirement): bool
+    {
+        return $this->awaitingDecision->contains('id', $requirement->id);
     }
 
     public function draftedCount(): int
