@@ -3,6 +3,7 @@
 namespace App\Services\Requirements;
 
 use App\Data\Requirements\RequirementTreeSaveResult;
+use App\Enums\RequirementDecider;
 use App\Enums\RequirementKind;
 use App\Enums\RequirementStatus;
 use App\Models\Feature;
@@ -19,12 +20,12 @@ use InvalidArgumentException;
  * levels must nest (目标 → 子目标 → 规则), a proposal that supersedes a 已定 rule is a 冲突, changing a 已定 rule
  * needs a reason, and deciding a 冲突 voids the rule it replaces. Revisions are written by Requirement itself.
  *
- * @phpstan-type NodeInput array{number: int, parent?: int|null, supersedes?: int|null, kind?: string, title?: string, rationale?: string|null, source?: string|null, status?: string, decided_by?: string|null, decided_at?: string|null, reason?: string|null, features?: list<int>, tests?: list<int>}
+ * @phpstan-type NodeInput array{number: int, parent?: int|null, supersedes?: int|null, kind?: string, title?: string, rationale?: string|null, source?: string|null, status?: string, decided_by?: string|null, decided_at?: string|null, decider?: string|null, reason?: string|null, features?: list<int>, tests?: list<int>}
  * @phpstan-type NodeState array{kind: RequirementKind|null, status: RequirementStatus|null, parent: int|null, supersedes: int|null}
  */
 class RequirementTreeSaver
 {
-    private const TEXT_FIELDS = ['kind', 'title', 'rationale', 'source', 'status', 'decided_by', 'decided_at', 'reason'];
+    private const TEXT_FIELDS = ['kind', 'title', 'rationale', 'source', 'status', 'decided_by', 'decided_at', 'decider', 'reason'];
 
     /**
      * @param  array<mixed>  $input  untrusted JSON nodes
@@ -169,7 +170,7 @@ class RequirementTreeSaver
     {
         $columns = [];
 
-        foreach (['kind', 'title', 'rationale', 'source', 'status', 'decided_by', 'decided_at'] as $key) {
+        foreach (['kind', 'title', 'rationale', 'source', 'status', 'decided_by', 'decided_at', 'decider'] as $key) {
             if (array_key_exists($key, $node)) {
                 $columns[$key] = $node[$key] === '' ? null : $node[$key];
             }
@@ -243,6 +244,16 @@ class RequirementTreeSaver
 
         if (filled($node['decided_at'] ?? null) && ! preg_match('/^\d{4}-\d{2}-\d{2}$/', $node['decided_at'])) {
             $errors[] = "#{$number}: decided_at must be YYYY-MM-DD.";
+        }
+
+        if (filled($node['decider'] ?? null)) {
+            $status = RequirementStatus::tryFrom($node['status'] ?? '') ?? $stored->status ?? RequirementStatus::Proposed;
+
+            if (RequirementDecider::tryFrom($node['decider']) === null) {
+                $errors[] = "#{$number}: decider \"{$node['decider']}\" is not one of ".implode('/', array_column(RequirementDecider::cases(), 'value')).'.';
+            } elseif (! $status->awaitsDecision()) {
+                $errors[] = "#{$number}: decider only applies to a 提议 or 冲突, this node is {$status->value}.";
+            }
         }
 
         foreach ($node['features'] ?? [] as $featureNumber) {

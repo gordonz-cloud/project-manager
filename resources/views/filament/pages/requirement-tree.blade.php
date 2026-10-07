@@ -4,6 +4,9 @@
     <div class="flex flex-wrap items-center gap-3 text-sm" data-requirement-summary>
         <span class="text-slate-500 dark:text-slate-400">全项目</span>
         @include('filament.pages.partials.requirement-rollup', ['rollup' => $this->total])
+        @foreach (array_slice($this->pendingByDecider, 0, 2) as $label => $items)
+            <span class="text-xs text-slate-500 dark:text-slate-400">{{ $label }} {{ $items->count() }}</span>
+        @endforeach
     </div>
 
     <div class="grid gap-4 xl:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
@@ -46,43 +49,49 @@
                         @endif
                     </div>
                 @elseif ($this->tab === 'pending')
-                    <div class="space-y-3" data-tab="pending">
-                        @forelse ($this->awaitingDecision as $item)
-                            @php($old = $item->supersedes)
-                            <article wire:key="pending-{{ $item->id }}" class="rounded-md border border-slate-200 p-3 dark:border-white/10" data-pending="{{ $item->number }}">
-                                <nav class="flex flex-wrap gap-1 text-xs text-slate-500 dark:text-slate-400">
-                                    @foreach ($item->ancestors() as $step)
-                                        @if (! $loop->first)<span>›</span>@endif
-                                        <button type="button" wire:click="selectNode({{ $step->number }})" class="hover:underline">{{ \Illuminate\Support\Str::limit($step->title, 30) }}</button>
-                                    @endforeach
-                                </nav>
-                                <div class="mt-1 grid gap-3 {{ $old ? 'md:grid-cols-2' : '' }}">
-                                    @if ($old)
-                                        <div class="rounded bg-slate-50 p-2 dark:bg-white/5" data-superseded>
-                                            <p class="text-xs text-slate-500">现行规则 #{{ $old->number }}</p>
-                                            <button type="button" wire:click="selectNode({{ $old->number }})" class="mt-1 text-left text-sm text-slate-800 hover:underline dark:text-slate-200">{{ $old->title }}</button>
-                                            <p class="mt-1 text-xs text-slate-500">{{ $old->source ?: '来源未记' }}</p>
-                                            @if ($old->rationale)<p class="mt-1 whitespace-pre-wrap text-xs text-slate-600 dark:text-slate-400">为什么：{{ $old->rationale }}</p>@endif
+                    <div class="space-y-4" data-tab="pending">
+                        @foreach ($this->pendingByDecider as $label => $items)
+                            <section class="space-y-3" data-pending-section="{{ $label }}">
+                                <h3 class="px-1 text-sm font-medium text-slate-700 dark:text-slate-200">{{ $label }} ({{ $items->count() }})</h3>
+                                @foreach ($items as $item)
+                                    @php($old = $item->supersedes)
+                                    <article wire:key="pending-{{ $item->id }}" class="rounded-md border border-slate-200 p-3 dark:border-white/10" data-pending="{{ $item->number }}">
+                                        <nav class="flex flex-wrap gap-1 text-xs text-slate-500 dark:text-slate-400">
+                                            @foreach ($item->ancestors() as $step)
+                                                @if (! $loop->first)<span>›</span>@endif
+                                                <button type="button" wire:click="selectNode({{ $step->number }})" class="hover:underline">{{ \Illuminate\Support\Str::limit($step->title, 30) }}</button>
+                                            @endforeach
+                                        </nav>
+                                        <div class="mt-1 grid gap-3 {{ $old ? 'md:grid-cols-2' : '' }}">
+                                            @if ($old)
+                                                <div class="rounded bg-slate-50 p-2 dark:bg-white/5" data-superseded>
+                                                    <p class="text-xs text-slate-500">现行规则 #{{ $old->number }}</p>
+                                                    <button type="button" wire:click="selectNode({{ $old->number }})" class="mt-1 text-left text-sm text-slate-800 hover:underline dark:text-slate-200">{{ $old->title }}</button>
+                                                    <p class="mt-1 text-xs text-slate-500">{{ $old->source ?: '来源未记' }}</p>
+                                                    @if ($old->rationale)<p class="mt-1 whitespace-pre-wrap text-xs text-slate-600 dark:text-slate-400">为什么：{{ $old->rationale }}</p>@endif
+                                                </div>
+                                            @endif
+                                            <div class="rounded p-2 {{ $old ? 'bg-amber-50 dark:bg-amber-500/10' : '' }}">
+                                                <p class="flex items-center gap-2 text-xs text-slate-500">#{{ $item->number }} @include('filament.pages.partials.requirement-status', ['requirement' => $item])</p>
+                                                <button type="button" wire:click="selectNode({{ $item->number }})" class="mt-1 text-left text-sm font-medium text-slate-950 hover:underline dark:text-white">{{ $item->title }}</button>
+                                                <p class="mt-1 text-xs text-slate-500">{{ $item->source ?: '来源未记' }}</p>
+                                                @if ($item->rationale)<p class="mt-1 whitespace-pre-wrap text-xs text-slate-600 dark:text-slate-400">为什么：{{ $item->rationale }}</p>@endif
+                                            </div>
                                         </div>
-                                    @endif
-                                    <div class="rounded p-2 {{ $old ? 'bg-amber-50 dark:bg-amber-500/10' : '' }}">
-                                        <p class="flex items-center gap-2 text-xs text-slate-500">#{{ $item->number }} @include('filament.pages.partials.requirement-status', ['requirement' => $item])</p>
-                                        <button type="button" wire:click="selectNode({{ $item->number }})" class="mt-1 text-left text-sm font-medium text-slate-950 hover:underline dark:text-white">{{ $item->title }}</button>
-                                        <p class="mt-1 text-xs text-slate-500">{{ $item->source ?: '来源未记' }}</p>
-                                        @if ($item->rationale)<p class="mt-1 whitespace-pre-wrap text-xs text-slate-600 dark:text-slate-400">为什么：{{ $item->rationale }}</p>@endif
-                                    </div>
-                                </div>
-                                <div class="mt-2">
-                                    <p class="mb-1 text-xs text-slate-500">会影响</p>
-                                    @include('filament.pages.partials.requirement-links', [
-                                        'features' => $item->linkedFeatures->merge($old?->linkedFeatures ?? [])->unique('id'),
-                                        'tests' => $item->tests->merge($old?->tests ?? [])->unique('id'),
-                                    ])
-                                </div>
-                            </article>
-                        @empty
+                                        <div class="mt-2">
+                                            <p class="mb-1 text-xs text-slate-500">会影响</p>
+                                            @include('filament.pages.partials.requirement-links', [
+                                                'features' => $item->linkedFeatures->merge($old?->linkedFeatures ?? [])->unique('id'),
+                                                'tests' => $item->tests->merge($old?->tests ?? [])->unique('id'),
+                                            ])
+                                        </div>
+                                    </article>
+                                @endforeach
+                            </section>
+                        @endforeach
+                        @if ($this->awaitingDecision->isEmpty())
                             <p class="px-2 py-6 text-center text-xs text-slate-400">没有等你拍板的事。</p>
-                        @endforelse
+                        @endif
                     </div>
                 @else
                     <div class="space-y-3" data-tab="changes">
@@ -126,6 +135,7 @@
                     <div><dt class="text-xs text-slate-500">为什么</dt><dd class="whitespace-pre-wrap">{{ $requirement->rationale ?: '—' }}</dd></div>
                     <div><dt class="text-xs text-slate-500">来源</dt><dd class="break-all">{{ $requirement->source ?: '—' }}</dd></div>
                     <div><dt class="text-xs text-slate-500">谁定的 / 何时</dt><dd>{{ $requirement->decided_by ?: '—' }} · {{ $requirement->decided_at?->toDateString() ?? '—' }}</dd></div>
+                    @if ($requirement->decider)<div><dt class="text-xs text-slate-500">等谁拍板</dt><dd>{{ $requirement->decider->value }}</dd></div>@endif
                     @if ($requirement->supersedes)
                         <div><dt class="text-xs text-slate-500">要取代</dt><dd><button type="button" wire:click="selectNode({{ $requirement->supersedes->number }})" class="text-left hover:underline">#{{ $requirement->supersedes->number }} {{ $requirement->supersedes->title }}</button></dd></div>
                     @endif

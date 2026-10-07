@@ -3,6 +3,7 @@
 use App\Data\Requirements\DeliveryStatus;
 use App\Data\Requirements\RequirementTreeNode;
 use App\Enums\FeatureStatus;
+use App\Enums\RequirementDecider;
 use App\Enums\RequirementKind;
 use App\Enums\RequirementStatus;
 use App\Enums\TestLastResult;
@@ -149,6 +150,34 @@ it('stores a proposal that supersedes a decided rule as a conflict and voids the
         ->toBe(['old_status' => '冲突', 'new_status' => '已定']);
 });
 
+it('records who must decide a proposal and rejects it elsewhere [T49]', function () {
+    $project = Project::factory()->create(['slug' => 'rq']);
+    saveRequirements(['project' => 'rq', 'nodes' => [
+        ['ref' => 'g', 'kind' => '目标', 'title' => 'G', 'status' => '已定'],
+        ['parent_ref' => 'g', 'kind' => '规则', 'title' => '待定：选哪个', 'decider' => '老板'],
+    ]])->assertSuccessful();
+
+    expect(requirementNumbered($project, 2)->decider)->toBe(RequirementDecider::Boss);
+
+    saveRequirements(['project' => 'rq', 'nodes' => [['number' => 2, 'decider' => '老王']]])->expectsOutputToContain('#2: decider "老王" is not one of Gordon/老板')->assertFailed();
+    saveRequirements(['project' => 'rq', 'nodes' => [['number' => 1, 'decider' => 'Gordon']]])->expectsOutputToContain('#1: decider only applies to a 提议 or 冲突')->assertFailed();
+    saveRequirements(['project' => 'rq', 'nodes' => [['number' => 2, 'status' => '已定', 'decider' => 'Gordon']]])->expectsOutputToContain('#2: decider only applies')->assertFailed();
+
+    expect(requirementNumbered($project, 2)->decider)->toBe(RequirementDecider::Boss);
+});
+
+it('clears who must decide once the node is decided or voided [T50]', function (string $status) {
+    $project = Project::factory()->create(['slug' => 'rq']);
+    saveRequirements(['project' => 'rq', 'nodes' => [
+        ['ref' => 'g', 'kind' => '目标', 'title' => 'G', 'status' => '已定'],
+        ['parent_ref' => 'g', 'kind' => '规则', 'title' => 'R', 'decider' => 'Gordon'],
+    ]])->assertSuccessful();
+
+    saveRequirements(['project' => 'rq', 'nodes' => [['number' => 2, 'status' => $status, 'decided_by' => 'Gordon']]])->assertSuccessful();
+
+    expect(requirementNumbered($project, 2)->only(['decider', 'decided_by']))->toBe(['decider' => null, 'decided_by' => 'Gordon']);
+})->with(['已定', '作废']);
+
 it('derives delivery from linked features and tests and rolls it up through decided children [T44]', function () {
     $project = Project::factory()->create();
     $goal = Requirement::factory()->create(['project_id' => $project->id, 'number' => 1, 'kind' => RequirementKind::Goal, 'status' => RequirementStatus::Decided]);
@@ -273,4 +302,22 @@ it('shows a selected requirement with why, source, history, features, tests and 
 
     Livewire::withQueryParams(['selectedNumber' => 1])->test(RequirementTree::class)
         ->assertSeeInOrder(['Members buy by tier', '已验证', 'protect channel price', 'S5 spec v1.0', 'Gordon · 2026-10-02', 'F4 Tier gate · 完成', 'T12 · 通过', '新建 → 已定', 'Add tier gate']);
+});
+
+it('groups pending decisions by who must decide [T51]', function () {
+    $project = requirementTreePage();
+    $goal = Requirement::factory()->create(['project_id' => $project->id, 'number' => 1, 'kind' => RequirementKind::Goal, 'status' => RequirementStatus::Decided, 'title' => 'G']);
+    $pending = fn (int $number, string $title, RequirementStatus $status = RequirementStatus::Proposed, ?RequirementDecider $decider = null) => Requirement::factory()->create([
+        'project_id' => $project->id, 'number' => $number, 'parent_id' => $goal->id, 'kind' => RequirementKind::Rule, 'status' => $status, 'decider' => $decider,
+        'title' => $title, 'supersedes_id' => $status === RequirementStatus::Conflict ? $goal->id : null,
+    ]);
+    $pending(2, 'Boss proposal', decider: RequirementDecider::Boss);
+    $pending(3, '待定：boss question', decider: RequirementDecider::Boss);
+    $pending(4, 'Boss conflict', RequirementStatus::Conflict, RequirementDecider::Boss);
+    $pending(5, 'Gordon proposal', decider: RequirementDecider::Gordon);
+    $pending(6, 'Nobody yet');
+
+    Livewire::withQueryParams(['tab' => 'pending'])->test(RequirementTree::class)
+        ->assertSeeInOrder(['等 Gordon 拍板 1', '等老板拍板 3'])
+        ->assertSeeInOrder(['等 Gordon 拍板 (1)', 'Gordon proposal', '等老板拍板 (3)', 'Boss conflict', '待定：boss question', 'Boss proposal', '未指定 (1)', 'Nobody yet']);
 });

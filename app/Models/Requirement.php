@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Enums\RequirementDecider;
 use App\Enums\RequirementKind;
 use App\Enums\RequirementStatus;
 use App\Models\Concerns\BelongsToProject;
@@ -37,11 +38,12 @@ use LogicException;
  * @property int|null $supersedes_id
  * @property string|null $acceptance
  * @property RequirementStatus $status
+ * @property RequirementDecider|null $decider
  * @property string|null $version
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at
  */
-#[Fillable(['number', 'parent_id', 'kind', 'title', 'rationale', 'source', 'decided_by', 'decided_at', 'supersedes_id', 'acceptance', 'status', 'version'])]
+#[Fillable(['number', 'parent_id', 'kind', 'title', 'rationale', 'source', 'decided_by', 'decided_at', 'supersedes_id', 'acceptance', 'status', 'decider', 'version'])]
 class Requirement extends Model
 {
     /** @use HasFactory<RequirementFactory> */
@@ -52,6 +54,12 @@ class Requirement extends Model
 
     protected static function booted(): void
     {
+        static::saving(function (self $requirement): void {
+            if (! $requirement->status->awaitsDecision()) {
+                $requirement->decider = null;
+            }
+        });
+
         static::created(function (self $requirement): void {
             $requirement->recordRevision(isNew: true);
         });
@@ -78,6 +86,7 @@ class Requirement extends Model
         return [
             'status' => RequirementStatus::class,
             'kind' => RequirementKind::class,
+            'decider' => RequirementDecider::class,
             'decided_at' => 'date',
         ];
     }

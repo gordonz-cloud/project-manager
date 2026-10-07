@@ -7,6 +7,8 @@ use App\Data\Requirements\RequirementChangeGroup;
 use App\Data\Requirements\RequirementRollup;
 use App\Data\Requirements\RequirementTreeNode;
 use App\Enums\NavigationGroup;
+use App\Enums\RequirementDecider;
+use App\Enums\RequirementStatus;
 use App\Models\Feature;
 use App\Models\Project;
 use App\Models\Requirement;
@@ -27,6 +29,8 @@ use LogicException;
  * @property-read Project $project
  * @property-read list<RequirementTreeNode> $tree
  * @property-read Requirement|null $selectedRequirement
+ * @property-read Collection<int, Requirement> $awaitingDecision
+ * @property-read array<string, Collection<int, Requirement>> $pendingByDecider
  */
 class RequirementTree extends Page
 {
@@ -139,6 +143,38 @@ class RequirementTree extends Page
     public function awaitingDecision(): Collection
     {
         return $this->requirementTreeService()->awaitingDecision($this->project);
+    }
+
+    /**
+     * Pending decisions per decider (Gordon, 老板, then 未指定 only if any); 冲突 first, open questions (待定) next, then 提议.
+     *
+     * @return array<string, Collection<int, Requirement>> section label => requirements
+     */
+    #[Computed]
+    public function pendingByDecider(): array
+    {
+        $sorted = $this->awaitingDecision->sortBy([
+            fn (Requirement $a, Requirement $b): int => $this->pendingRank($a) <=> $this->pendingRank($b),
+            fn (Requirement $a, Requirement $b): int => $a->number <=> $b->number,
+        ]);
+        $sections = [];
+
+        foreach (RequirementDecider::cases() as $decider) {
+            $sections[$decider === RequirementDecider::Boss ? '等老板拍板' : "等 {$decider->value} 拍板"] = $sorted->filter(fn (Requirement $requirement): bool => $requirement->decider === $decider)->values();
+        }
+
+        $unassigned = $sorted->whereNull('decider')->values();
+
+        return $unassigned->isEmpty() ? $sections : [...$sections, '未指定' => $unassigned];
+    }
+
+    private function pendingRank(Requirement $requirement): int
+    {
+        return match (true) {
+            $requirement->status === RequirementStatus::Conflict => 0,
+            str_starts_with($requirement->title, '待定') => 1,
+            default => 2,
+        };
     }
 
     /**

@@ -13,7 +13,7 @@ use LogicException;
  * Saves requirement-tree nodes from a JSON file. Omit "number" to create (the server assigns it; use "ref"/"parent_ref"
  * to link new nodes), give "number" to update an existing node:
  * {"project": "sg", "nodes": [{"number"?, "ref"?, "parent"?, "parent_ref"?, "kind", "title", "rationale", "source", "status",
- * "decided_by", "decided_at", "supersedes"?, "reason"?, "features": [feature numbers], "tests": [test numbers]}]}.
+ * "decided_by", "decided_at", "supersedes"?, "decider"? (Gordon|老板, only on 提议/冲突), "reason"?, "features": [feature numbers], "tests": [test numbers]}]}.
  */
 class SaveRequirementsCommand extends Command
 {
