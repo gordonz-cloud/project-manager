@@ -578,12 +578,14 @@ it('pieces a timeline together from the replaced rule, dated sources and rewrite
         ['2026-09-01', '已被取代的旧规则', 'Show nothing to visitors', false],
     ]);
 
-    $old->update(['title' => 'Visitors see a rounded price range', 'decided_by' => 'Gordon']);
-    $oldEntries = app(RequirementTimelines::class)->for($old->fresh('revisions'))->entries;
+    $proposal = decisionRule($goal, 5, RequirementStatus::Proposed, ['title' => 'Gift wrap', 'source' => null]);
+    $proposal->update(['title' => 'Gift wrap for members']);
+    $proposal->update(['status' => RequirementStatus::Decided, 'decided_by' => '老板']);
+    $entries = app(RequirementTimelines::class)->for($proposal->fresh('revisions'))->entries;
 
-    expect($oldEntries[0]->current)->toBeTrue()
-        ->and($oldEntries[0]->said)->toBe('Visitors see a rounded price range')
-        ->and(collect($oldEntries)->pluck('said')->all())->not->toContain('Visitors see the market price');
+    expect(array_map(fn (TimelineEntry $entry): array => [$entry->who, $entry->said, $entry->current], $entries))->toBe([
+        ['老板拍板', 'Gift wrap for members', true],
+    ]);
 });
 
 it('shows the timeline above the decision, newest first, with conflicts and code that disagrees flagged [T75]', function () {

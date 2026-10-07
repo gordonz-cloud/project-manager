@@ -11,7 +11,8 @@ use App\Models\RequirementRevision;
 /**
  * The 来龙去脉 of a requirement: the timeline written for it, or, when none was written, one pieced together from what
  * is recorded — the rules it replaced (or that replaced it), the dated decisions and documents in its source, and the
- * rewrites of its wording. Dates are never made up: a saying without a recorded date is left out.
+ * moments it became 已定. Rewordings are left out (they are our edits, not anyone's new saying), and dates are never
+ * made up: a saying without a recorded date is left out.
  */
 class RequirementTimelines
 {
@@ -21,7 +22,7 @@ class RequirementTimelines
             return RequirementTimeline::fromArray($requirement->timeline);
         }
 
-        $own = [...$this->fromSource($requirement), ...$this->fromRewrites($requirement)];
+        $own = [...$this->fromSource($requirement), ...$this->fromConfirmations($requirement)];
 
         if ($requirement->status === RequirementStatus::Decided) {
             $own = $this->withCurrentMarked($requirement, $own);
@@ -59,14 +60,14 @@ class RequirementTimelines
     }
 
     /**
-     * Each rewrite of the wording, from the revisions.
+     * Each time an open 提议/冲突 was decided, from the revisions (a node created as 已定 is covered by its decided_at).
      *
      * @return list<TimelineEntry>
      */
-    private function fromRewrites(Requirement $requirement): array
+    private function fromConfirmations(Requirement $requirement): array
     {
         return array_values($requirement->revisions
-            ->filter(fn (RequirementRevision $revision): bool => $revision->changedStatement() && $revision->created_at !== null)
+            ->filter(fn (RequirementRevision $revision): bool => $revision->new_status === RequirementStatus::Decided->value && in_array($revision->old_status, [RequirementStatus::Proposed->value, RequirementStatus::Conflict->value], true) && $revision->created_at !== null)
             ->map(fn (RequirementRevision $revision): TimelineEntry => new TimelineEntry(
                 date: $revision->created_at?->toDateString(),
                 who: $this->whoDecided($revision->decided_by),
