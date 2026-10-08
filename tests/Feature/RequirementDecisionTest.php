@@ -619,7 +619,7 @@ it('shows the timeline above the decision, newest first, with conflicts and code
         ->and($html)->not->toContain('>为什么<');
 });
 
-it('words a rule decided in Gordon\'s own words as topic plus his words, unchanged [T76]', function (string $title, string $topic) {
+it('words a rule decided in Gordon\'s own words as topic plus his words, unchanged [T164]', function (string $title, string $topic) {
     [$project, $user, $goal] = decisionDesk();
     $question = decisionRule($goal, 2, RequirementStatus::Conflict, ['title' => $title, 'supersedes_id' => decisionRule($goal, 3, RequirementStatus::Decided)->id]);
 
