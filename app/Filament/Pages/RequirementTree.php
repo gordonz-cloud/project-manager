@@ -172,6 +172,16 @@ class RequirementTree extends Page
     }
 
     /**
+     * The selected 以后做 rule is wanted now: back to 提议, on the 待决策 list.
+     */
+    public function startNow(): void
+    {
+        $this->requirementDecisions()->startNow($this->project, $this->selectedRequirement ?? throw new LogicException('Nothing selected.'));
+        unset($this->tree, $this->awaitingDecision, $this->pendingByGoal, $this->nodesById, $this->total, $this->selectedRequirement);
+        Notification::make()->title('已改回提议，进待决策')->success()->send();
+    }
+
+    /**
      * Gordon sent the list: those questions now wait for the boss's reply.
      */
     public function markSentToBoss(): void

@@ -51,7 +51,7 @@ final readonly class RequirementTreeNode
             return RequirementProgress::Superseded;
         }
 
-        if ($children === [] || $requirement->status === RequirementStatus::Void) {
+        if ($children === [] || in_array($requirement->status, [RequirementStatus::Void, RequirementStatus::Later], true)) {
             return RequirementProgress::of($requirement->status, $delivery);
         }
 

@@ -30,6 +30,12 @@
         @if ($replacement = $requirement->status === \App\Enums\RequirementStatus::Void ? $requirement->supersededBy : null)
             <p class="mt-1 text-xs text-slate-500" data-superseded-by>被<button type="button" wire:click="selectNode({{ $replacement->number }})" class="mx-0.5 text-primary-600 hover:underline dark:text-primary-400">「{{ \Illuminate\Support\Str::limit($replacement->title, 30, '…') }}」</button>取代（{{ $replacement->decided_at?->toDateString() }}）</p>
         @endif
+        @if ($requirement->status === \App\Enums\RequirementStatus::Later)
+            <div class="mt-1 flex items-start gap-2 text-xs text-slate-500" data-later>
+                <p class="min-w-0 flex-1">这期不做，将来要做。什么时候再看：{{ $this->mentions->html($requirement->source ?: $requirement->rationale ?: '未记录') }}</p>
+                <button type="button" wire:click="startNow" class="shrink-0 rounded border border-slate-300 px-2 py-0.5 text-slate-700 hover:bg-slate-50 dark:border-white/20 dark:text-slate-200 dark:hover:bg-white/5">现在要做了</button>
+            </div>
+        @endif
         @if ($requirement->status === \App\Enums\RequirementStatus::Decided)
             <p class="mt-1 text-xs text-slate-500" data-decided>{{ $requirement->decided_by ? trim(($requirement->decided_by === '老板' ? '老板拍板 ' : "{$requirement->decided_by} 拍板 ").$requirement->decided_at?->toDateString()) : '现状（代码）' }}</p>
         @endif

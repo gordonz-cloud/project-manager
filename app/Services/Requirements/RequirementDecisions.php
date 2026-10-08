@@ -66,6 +66,18 @@ class RequirementDecisions
         }
     }
 
+    /**
+     * A 以后做 rule Gordon wants now goes back to 提议, waiting on him.
+     */
+    public function startNow(Project $project, Requirement $requirement): void
+    {
+        if ($requirement->status !== RequirementStatus::Later) {
+            throw new InvalidArgumentException("#{$requirement->number} 不是以后做。");
+        }
+
+        $this->requirementTreeSaver->save($project, [['number' => $requirement->number, 'status' => RequirementStatus::Proposed->value, 'decider' => RequirementDecider::Gordon->value, 'reason' => '现在要做了']]);
+    }
+
     public function clear(Requirement $requirement, User $user): void
     {
         RequirementDecisionDraft::query()->where('requirement_id', $requirement->id)->where('user_id', $user->id)->delete();

@@ -635,3 +635,50 @@ it('words a rule decided in Gordon\'s own words as topic plus his words, unchang
     'open question' => ['待定：Factory Direct 解锁看哪个公会等级?', 'Factory Direct 解锁看哪个公会等'],
     'long plain title' => ['首页公会专属区只给会员看，没货就隐藏，不放占位卡片', '首页公会专属区只给会员看，没货就'],
 ]);
+
+it('saves a rule as 以后做, shows it grey on the tree and keeps it out of the counts, 待决策 and 待做 [T165]', function () {
+    [$project, , $goal] = decisionDesk();
+    decisionRule($goal, 2, RequirementStatus::Decided, ['title' => 'Built rule'])->linkedFeatures()->attach(Feature::factory()->create(['project_id' => $project->id, 'status' => FeatureStatus::Done]));
+    decisionRule($goal, 3, RequirementStatus::Proposed, ['title' => 'Guild page later']);
+
+    saveDecisionNodes([['number' => 3, 'status' => '以后做', 'reason' => '区分以后做和放弃']])->assertSuccessful()->run();
+    $tree = app(RequirementTreeService::class)->tree($project);
+
+    $progress = collect(RequirementTreeNode::flattened($tree))->mapWithKeys(fn (RequirementTreeNode $node): array => [$node->requirement->number => $node->progress])->all();
+
+    expect($progress)->toBe([1 => RequirementProgress::Done, 2 => RequirementProgress::Done, 3 => RequirementProgress::Later])
+        ->and(RequirementTreeNode::total($tree)->progressCounts())->toBe(['待决策' => 0, '待做' => 0, '完成' => 1]);
+
+    Livewire::test(RequirementTree::class)->assertSeeInOrder(['Guild page later', 'data-progress="以后做"'], false)->assertDontSee('放弃');
+    Livewire::withQueryParams(['tab' => 'pending'])->test(RequirementTree::class)->assertDontSee('Guild page later');
+    Livewire::withQueryParams(['tab' => 'todo'])->test(RequirementTree::class)->assertDontSee('Guild page later');
+});
+
+it('says when to look again at a 以后做 rule and puts it back to 提议 on 现在要做了 [T166]', function () {
+    [, , $goal] = decisionDesk();
+    $rule = decisionRule($goal, 2, RequirementStatus::Later, ['title' => 'Guild page later', 'source' => 'Gordon 拍板 2026-10-08：等复购期再评估', 'decider' => RequirementDecider::Boss]);
+
+    Livewire::withQueryParams(['selectedNumber' => 2])->test(RequirementTree::class)
+        ->assertSeeInOrder(['什么时候再看：', '等复购期再评估', '现在要做了'])
+        ->call('startNow')
+        ->assertNotified('已改回提议，进待决策');
+
+    Livewire::withQueryParams(['selectedNumber' => 2])->test(RequirementTree::class)->assertSeeInOrder(['Guild page later', '待决策 · 等我'])->assertDontSee('wire:click="startNow"', false);
+
+    expect($rule->fresh()->only(['status', 'decider']))->toBe(['status' => RequirementStatus::Proposed, 'decider' => RequirementDecider::Gordon])
+        ->and($rule->revisions()->first()->only(['old_status', 'new_status', 'reason']))->toBe(['old_status' => '以后做', 'new_status' => '提议', 'reason' => '现在要做了']);
+});
+
+it('records a rule picked for later as 以后做, not 作废 [T167]', function () {
+    [, $user, $goal] = decisionDesk();
+    $rule = decisionRule($goal, 2, RequirementStatus::Proposed, ['decision' => [...shippingDecision(), 'options' => [
+        ...shippingDecision()['options'],
+        ['key' => 'D', 'label' => 'Not this round', 'outcome' => 'later', 'consequence' => 'Look again after launch'],
+    ]]]);
+    app(RequirementDecisions::class)->choose($rule, $user, 'D');
+
+    Livewire::test(RequirementTree::class)->call('confirmAllDrafts');
+
+    expect($rule->fresh()->status)->toBe(RequirementStatus::Later)
+        ->and($rule->revisions()->first()->reason)->toBe('Not this round：Look again after launch');
+});
