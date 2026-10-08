@@ -4,9 +4,6 @@
     <div class="@container flex flex-wrap items-center gap-3 text-sm" data-requirement-summary>
         <span class="text-slate-500 dark:text-slate-400">全项目</span>
         @include('filament.pages.partials.requirement-rollup', ['rollup' => $this->total])
-        @foreach (\App\Filament\Pages\RequirementTree::WAITING_ON as $key => $label)
-            <span class="text-xs text-slate-500 dark:text-slate-400">{{ $label }} {{ $this->waitingOnCount($key) }}</span>
-        @endforeach
     </div>
 
     <div class="grid gap-4 xl:grid-cols-[minmax(0,11fr)_minmax(0,9fr)]">
@@ -48,25 +45,6 @@
                     </div>
                 @elseif ($this->tab === 'pending')
                     <div class="space-y-3" data-tab="pending">
-                        <div class="flex flex-wrap items-center gap-2">
-                            @foreach (\App\Filament\Pages\RequirementTree::WAITING_ON as $key => $label)
-                                <button type="button" wire:click="setWaitingOn(@js($key))" class="rounded-md border px-2 py-1 text-xs {{ $this->waitingOn === $key ? 'border-primary-600 bg-primary-600 text-white' : 'border-slate-300 text-slate-600 dark:border-white/10 dark:text-slate-300' }}">{{ $label }} {{ $this->waitingOnCount($key) }}</button>
-                            @endforeach
-                            <span class="ml-auto"></span>
-                            <x-filament::button size="sm" color="gray" wire:click="toggleBossQuestions">给老板的问题单</x-filament::button>
-                        </div>
-
-                        @if ($this->showBossQuestions)
-                            <div x-data class="rounded-lg border border-slate-200 p-3 dark:border-white/10" data-boss-questions>
-                                <div class="mb-2 flex items-center gap-2 text-xs text-slate-500">
-                                    <span>待发老板的问题（带你的意见）。复制发给老板后点「标记已发送」，它们进「等老板回复」；老板回了，在卡上「记老板的回复」。</span>
-                                    <x-filament::button size="xs" color="gray" class="ml-auto" x-on:click="navigator.clipboard.writeText($refs.text.value); $el.innerText = '已复制'">复制</x-filament::button>
-                                    <x-filament::button size="xs" wire:click="markSentToBoss" wire:confirm="这些问题已经发给老板了？" :disabled="$this->waitingOnCount(\App\Models\Requirement::STAGE_TO_SEND) === 0">标记已发送</x-filament::button>
-                                </div>
-                                <textarea x-ref="text" readonly rows="16" class="block w-full rounded-md border border-slate-200 p-2 font-mono text-xs dark:border-white/10 dark:bg-white/5">{{ $this->bossQuestions }}</textarea>
-                            </div>
-                        @endif
-
                         @forelse ($this->pendingByGoal as $goal => $items)
                             <section wire:key="pending-goal-{{ md5($goal) }}">
                                 <h3 class="px-2 pb-1 text-xs font-medium text-slate-500 dark:text-slate-400">{{ $goal }}</h3>
@@ -137,7 +115,7 @@
         <div class="sticky bottom-0 z-10 flex flex-wrap items-center gap-3 rounded-lg border border-slate-200 bg-white/95 px-4 py-2 text-sm shadow-lg backdrop-blur dark:border-white/10 dark:bg-slate-950/95" data-decision-bar>
             @php($preview = $this->batchPreview)
             <span class="tabular-nums text-slate-700 dark:text-slate-200">已选 {{ $this->drafts->count() }} / {{ $this->awaitingDecision->count() }}</span>
-            <span class="text-xs text-slate-500 dark:text-slate-400" data-batch-preview>{{ $this->drafts->isEmpty() ? '确认你所有已选的（全貌和待决策页、任何筛选下选的），没选的不动。' : '这批会：'.$preview->summary() }}</span>
+            <span class="text-xs text-slate-500 dark:text-slate-400" data-batch-preview>{{ $this->drafts->isEmpty() ? '选了的只是草稿，点「确认这一批」才生效；没选的就是先不定。' : '这批会：'.$preview->summary() }}</span>
             <x-filament::button size="sm" class="ml-auto" wire:click="confirmAllDrafts" wire:confirm="{{ $this->mentions->plain(implode(PHP_EOL, ['这批会：'.$preview->summary(), '', ...$preview->examples, $this->drafts->count() > count($preview->examples) ? '…' : ''])) }}" :disabled="$this->drafts->isEmpty()">确认这一批</x-filament::button>
         </div>
     @endif

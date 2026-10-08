@@ -2,8 +2,6 @@
 
 namespace App\Support;
 
-use App\Models\Project;
-use App\Models\Requirement;
 use Illuminate\Support\HtmlString;
 use Illuminate\Support\Str;
 
@@ -19,11 +17,6 @@ final readonly class RequirementMentions
      * @param  array<int, string>  $titles  requirement number => title
      */
     public function __construct(private array $titles) {}
-
-    public static function for(Project $project): self
-    {
-        return new self(Requirement::withoutGlobalScopes()->where('project_id', $project->id)->pluck('title', 'number')->all());
-    }
 
     public function plain(?string $text): string
     {

@@ -63,17 +63,6 @@ final readonly class RequirementTimeline
         return $this->entries === [];
     }
 
-    public function current(): ?TimelineEntry
-    {
-        foreach ($this->entries as $entry) {
-            if ($entry->current) {
-                return $entry;
-            }
-        }
-
-        return null;
-    }
-
     /**
      * The code's behaviour, when it was recorded as differing from the saying in force.
      */

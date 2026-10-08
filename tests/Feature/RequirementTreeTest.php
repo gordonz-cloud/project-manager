@@ -3,7 +3,6 @@
 use App\Data\Requirements\DeliveryStatus;
 use App\Data\Requirements\RequirementTreeNode;
 use App\Enums\FeatureStatus;
-use App\Enums\RequirementDecider;
 use App\Enums\RequirementKind;
 use App\Enums\RequirementStatus;
 use App\Enums\TestLastResult;
@@ -150,33 +149,24 @@ it('stores a proposal that supersedes a decided rule as a conflict and voids the
         ->toBe(['old_status' => '冲突', 'new_status' => '已定']);
 });
 
-it('records who must decide a proposal and rejects it elsewhere [T49]', function () {
+it('refuses the removed 老板 keys and stores where 现在 comes from [T49]', function (string $removed, string $message) {
     $project = Project::factory()->create(['slug' => 'rq']);
-    saveRequirements(['project' => 'rq', 'nodes' => [
-        ['ref' => 'g', 'kind' => '目标', 'title' => 'G', 'status' => '已定'],
-        ['parent_ref' => 'g', 'kind' => '规则', 'title' => '待定：选哪个', 'decider' => '老板'],
-    ]])->assertSuccessful();
+    saveRequirements(['project' => 'rq', 'nodes' => [['kind' => '目标', 'title' => 'G', 'status' => '已定']]])->assertSuccessful();
+    $decision = ['now' => 'Shows a range', 'change' => 'Show the market price', 'options' => [['key' => 'A', 'label' => '按新要求改', 'outcome' => 'accept', 'consequence' => '游客看到市场价']]];
 
-    expect(requirementNumbered($project, 2)->decider)->toBe(RequirementDecider::Boss);
+    saveRequirements(['project' => 'rq', 'nodes' => [['parent' => 1, 'kind' => '规则', 'title' => 'R', ...match ($removed) {
+        'decider' => ['decider' => '老板'],
+        'why_boss' => ['decision' => [...$decision, 'why_boss' => 'x']],
+        'record_as' => ['decision' => [...$decision, 'options' => [[...$decision['options'][0], 'record_as' => '老板', 'record_date' => '2026-10-06']]]],
+    }]]])->expectsOutputToContain($message)->assertFailed();
+    saveRequirements(['project' => 'rq', 'nodes' => [['parent' => 1, 'kind' => '规则', 'title' => 'R', 'decision' => [...$decision, 'now_source' => '首页文档 v1.1 2026-10-06']]]])->assertSuccessful();
 
-    saveRequirements(['project' => 'rq', 'nodes' => [['number' => 2, 'decider' => '老王']]])->expectsOutputToContain('#2: decider "老王" is not one of Gordon/老板')->assertFailed();
-    saveRequirements(['project' => 'rq', 'nodes' => [['number' => 1, 'decider' => 'Gordon']]])->expectsOutputToContain('#1: decider only applies to a 提议 or 冲突')->assertFailed();
-    saveRequirements(['project' => 'rq', 'nodes' => [['number' => 2, 'status' => '已定', 'decider' => 'Gordon']]])->expectsOutputToContain('#2: decider only applies')->assertFailed();
-
-    expect(requirementNumbered($project, 2)->decider)->toBe(RequirementDecider::Boss);
-});
-
-it('clears who must decide once the node is decided or voided [T50]', function (string $status) {
-    $project = Project::factory()->create(['slug' => 'rq']);
-    saveRequirements(['project' => 'rq', 'nodes' => [
-        ['ref' => 'g', 'kind' => '目标', 'title' => 'G', 'status' => '已定'],
-        ['parent_ref' => 'g', 'kind' => '规则', 'title' => 'R', 'decider' => 'Gordon'],
-    ]])->assertSuccessful();
-
-    saveRequirements(['project' => 'rq', 'nodes' => [['number' => 2, 'status' => $status, 'decided_by' => 'Gordon']]])->assertSuccessful();
-
-    expect(requirementNumbered($project, 2)->only(['decider', 'decided_by']))->toBe(['decider' => null, 'decided_by' => 'Gordon']);
-})->with(['已定', '作废']);
+    expect(requirementNumbered($project, 2)->decision->nowSource)->toBe('首页文档 v1.1 2026-10-06');
+})->with([
+    'who decides' => ['decider', 'decider 已移除'],
+    'why the boss' => ['why_boss', 'decision.why_boss 已移除'],
+    'recorded as the boss' => ['record_as', 'decision.options[0].record_as 已移除'],
+]);
 
 it('derives delivery from linked features and tests and rolls it up through decided children [T44]', function () {
     $project = Project::factory()->create();
@@ -259,7 +249,7 @@ it('shows the overview tree with rollups and the unfiled legacy list [T44]', fun
 
     Livewire::test(RequirementTree::class)
         ->assertOk()
-        ->assertSeeInOrder(['Members buy by tier', '1 待决策', 'Tier rule', '待决策 · 等我', '未归类（1'])
+        ->assertSeeInOrder(['Members buy by tier', '1 待决策', 'Tier rule', '待决策', '未归类（1'])
         ->assertDontSee('Old flat requirement')
         ->toggle('showUnfiled')
         ->assertSee('Old flat requirement');
@@ -268,16 +258,26 @@ it('shows the overview tree with rollups and the unfiled legacy list [T44]', fun
 it('lists what waits on a decision with the rule it would replace and what it touches [T45]', function () {
     $project = requirementTreePage();
     $goal = Requirement::factory()->create(['project_id' => $project->id, 'number' => 1, 'kind' => RequirementKind::Goal, 'status' => RequirementStatus::Decided, 'title' => 'Checkout goal']);
-    $old = Requirement::factory()->create(['project_id' => $project->id, 'number' => 2, 'parent_id' => $goal->id, 'kind' => RequirementKind::Rule, 'status' => RequirementStatus::Decided, 'title' => 'Free shipping over 50']);
+    $old = Requirement::factory()->create(['project_id' => $project->id, 'number' => 2, 'parent_id' => $goal->id, 'kind' => RequirementKind::Rule, 'status' => RequirementStatus::Decided, 'title' => 'Free shipping over 50',
+        'source' => '老板文档 docs/product/S7-cart-checkout/spec.md v0.9 §3.7（Haorui，2026-09-01）']);
     $old->linkedFeatures()->attach(Feature::factory()->create(['project_id' => $project->id, 'number' => 9, 'title' => 'Shipping calculator']));
     Requirement::factory()->create(['project_id' => $project->id, 'number' => 3, 'parent_id' => $goal->id, 'kind' => RequirementKind::Rule, 'status' => RequirementStatus::Conflict,
-        'supersedes_id' => $old->id, 'title' => 'Free shipping over 80', 'source' => 'boss doc v2', 'rationale' => 'margin']);
+        'supersedes_id' => $old->id, 'title' => 'Free shipping over 80', 'source' => '老板文档 docs/product/S7-cart-checkout/spec.md v1.0 第 7 项（Haorui，2026-10-06）', 'rationale' => 'margin']);
     Requirement::factory()->create(['project_id' => $project->id, 'number' => 4, 'parent_id' => $goal->id, 'kind' => RequirementKind::Rule, 'status' => RequirementStatus::Decided, 'title' => 'Settled rule']);
 
     Livewire::withQueryParams(['tab' => 'pending', 'selectedNumber' => 3])->test(RequirementTree::class)
         ->assertSeeInOrder(['待决策', '（1）'])
-        ->assertSeeInOrder(['Checkout goal', 'Free shipping over 80', 'Free shipping over 80', '为什么', 'margin', '来源：boss doc v2', '需要你决定', '现在', 'Free shipping over 50', '要改成', 'Free shipping over 80', 'A. 改成新说法', 'B. 保持现状', '做到哪了', 'Shipping calculator · '])
-        ->assertDontSee('Settled rule');
+        ->assertSeeInOrder([
+            'Checkout goal', 'Free shipping over 80', 'Free shipping over 80', '待决策',
+            '要定的事：', '要不要把现行规则改成新说法？',
+            '现在', 'Free shipping over 50', '出处：老板文档 S7-cart-checkout spec v0.9 2026-09-01',
+            '新要求', 'Free shipping over 80', '出处：老板文档 S7-cart-checkout spec v1.0 2026-10-06',
+            '改成新说法', '：现行规则作废，按新说法做', '保持现在', '以后做', '✎ 自己写', '历史',
+        ])
+        ->assertDontSee('Settled rule')
+        ->assertDontSee('margin')
+        ->assertDontSee('Shipping calculator')
+        ->assertDontSee('做到哪了');
 });
 
 it('groups recent revisions and commits by rule, newest first [T46]', function () {
@@ -300,39 +300,18 @@ it('shows a selected requirement with why, source, history, features, tests and 
     $requirement->tests()->attach(Test::factory()->create(['project_id' => $project->id, 'number' => 12, 'last_result' => TestLastResult::Passed]));
     Commit::factory()->create(['project_id' => $project->id, 'feature_id' => $feature->id, 'subject' => 'Add tier gate']);
 
+    $requirement->tests()->attach(Test::factory()->create(['project_id' => $project->id, 'number' => 13, 'title' => 'Tier gate fails', 'last_result' => TestLastResult::Failed]));
+
     Livewire::withQueryParams(['selectedNumber' => 1])->test(RequirementTree::class)
-        ->assertSeeInOrder(['Members buy by tier', '完成', 'Gordon 拍板 2026-10-02', '来龙去脉', '2026-10-02', '你拍板', '现在生效', 'Members buy by tier', '当时写的理由', 'protect channel price', '来源：S5 spec v1.0', '做到哪了', 'Tier gate · 完成', '· 通过', '历史', '新建 → 已定', 'Add tier gate']);
-});
+        ->assertSeeInOrder(['Members buy by tier', '待做', 'protect channel price', '出处：S5 spec v1.0', '做到哪了：1 个功能 · 2 个测试：1 通过，1 失败', 'Tier gate · 完成', 'Tier gate fails · 失败', '更早的说法（1）', '2026-10-02', '你拍板', '现在生效', '历史', '新建 → 已定', 'Add tier gate'])
+        ->assertDontSee('要定的事')
+        ->assertDontSee('来源：');
 
-it('filters pending decisions by stage: mine, to send to the boss, waiting for the boss, conflicts first [T51]', function () {
-    $project = requirementTreePage();
-    $goal = Requirement::factory()->create(['project_id' => $project->id, 'number' => 1, 'kind' => RequirementKind::Goal, 'status' => RequirementStatus::Decided, 'title' => 'G']);
-    $opinion = ['key' => 'A', 'label' => '同意', 'by' => 'Gordon', 'at' => '2026-10-07'];
-    $pending = fn (int $number, string $title, array $attributes = []) => Requirement::factory()->create([
-        'project_id' => $project->id, 'number' => $number, 'parent_id' => $goal->id, 'kind' => RequirementKind::Rule, 'status' => RequirementStatus::Proposed, 'title' => $title, ...$attributes,
-    ]);
-    $pending(2, 'Boss without opinion', ['decider' => RequirementDecider::Boss]);
-    $pending(3, 'Boss to send', ['decider' => RequirementDecider::Boss, 'decision_opinion' => $opinion]);
-    $pending(4, 'Boss conflict to send', ['decider' => RequirementDecider::Boss, 'decision_opinion' => $opinion, 'status' => RequirementStatus::Conflict, 'supersedes_id' => $goal->id]);
-    $pending(5, 'Sent to boss', ['decider' => RequirementDecider::Boss, 'decision_opinion' => $opinion, 'sent_to_boss_at' => now()]);
-    $pending(6, 'Gordon proposal', ['decider' => RequirementDecider::Gordon]);
-    $pending(7, 'Nobody yet');
+    $requirement->tests()->detach(Test::where('number', 13)->value('id'));
+    $requirement->update(['source' => null]);
 
-    Livewire::withQueryParams(['tab' => 'pending'])->test(RequirementTree::class)
-        ->assertSeeInOrder(['等我 3', '待发老板 2', '等老板回复 1'])
-        ->assertSeeInOrder(['Boss without opinion', 'Gordon proposal', 'Nobody yet'])
-        ->assertDontSee('Boss to send')
-        ->assertDontSee('Sent to boss');
-
-    // After a call() the haystack is the JSON response with Chinese escaped, so each filter is opened fresh.
-    Livewire::withQueryParams(['tab' => 'pending', 'waitingOn' => 'to_send'])->test(RequirementTree::class)
-        ->assertSeeInOrder(['Boss conflict to send', 'Boss to send'])
-        ->assertDontSee('Gordon proposal')
-        ->assertDontSee('Sent to boss');
-
-    Livewire::withQueryParams(['tab' => 'pending', 'waitingOn' => 'awaiting_boss'])->test(RequirementTree::class)
-        ->assertSee('Sent to boss')
-        ->assertDontSee('Boss to send');
+    Livewire::withQueryParams(['selectedNumber' => 1])->test(RequirementTree::class)
+        ->assertSeeInOrder(['出处：Gordon 拍板 2026-10-02', '做到哪了：1 个功能 · 1 个测试全过']);
 });
 
 it('puts groups under sub-goals and rules under groups [T52]', function (array $nodes, ?string $message) {
@@ -438,16 +417,18 @@ it('shows groups in the tree, dependencies in the detail and groups in the pendi
     $later = $node(4, $group, RequirementKind::Rule, 'Add to cart needs tier');
     $first = $node(5, $group, RequirementKind::Rule, 'Tier is known at login', RequirementStatus::Proposed);
     $later->dependsOn()->attach($first);
+    $node(6, $group, RequirementKind::Rule, 'Checkout needs cart')->dependsOn()->attach($later);
 
     Livewire::test(RequirementTree::class, ['expanded' => [$sub->id => true, $group->id => true]])
         ->assertSeeInOrder(['Members buy by tier', '子目标', 'Direct visibility', '分组', 'Cart rules', 'Tier is known at login', 'Add to cart needs tier'])
         ->assertDontSee('依赖');
 
     Livewire::withQueryParams(['selectedNumber' => 4])->test(RequirementTree::class)
-        ->assertSeeInOrder(['Add to cart needs tier', '依赖', 'Tier is known at login']);
+        ->assertSeeInOrder(['Add to cart needs tier', '依赖：', 'Tier is known at login', '被依赖：', 'Checkout needs cart']);
 
-    Livewire::withQueryParams(['selectedNumber' => 5])->test(RequirementTree::class)
-        ->assertSeeInOrder(['被依赖', 'Add to cart needs tier']);
+    Livewire::withQueryParams(['selectedNumber' => 6])->test(RequirementTree::class)
+        ->assertSee('依赖：')
+        ->assertDontSee('被依赖：');
 
     Livewire::withQueryParams(['tab' => 'pending', 'selectedNumber' => 5])->test(RequirementTree::class)
         ->assertSeeInOrder(['Members buy by tier', 'Tier is known at login', 'Members buy', '›', 'Direct visib', '›', 'Cart rules', 'Tier is known at login']);

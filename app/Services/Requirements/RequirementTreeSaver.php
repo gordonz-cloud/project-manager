@@ -5,7 +5,6 @@ namespace App\Services\Requirements;
 use App\Data\Requirements\RequirementDecision;
 use App\Data\Requirements\RequirementTimeline;
 use App\Data\Requirements\RequirementTreeSaveResult;
-use App\Enums\RequirementDecider;
 use App\Enums\RequirementKind;
 use App\Enums\RequirementStatus;
 use App\Models\Feature;
@@ -22,7 +21,7 @@ use InvalidArgumentException;
  * levels must nest (目标 → 子目标 → 分组 → 规则), dependencies (prerequisites) must not loop, a proposal that supersedes a 已定 rule is a 冲突, changing a 已定 rule
  * needs a reason, and deciding a 冲突 voids the rule it replaces. Revisions are written by Requirement itself.
  *
- * @phpstan-type NodeInput array{number: int, parent?: int|null, supersedes?: int|null, kind?: string, title?: string, rationale?: string|null, source?: string|null, status?: string, decided_by?: string|null, decided_at?: string|null, decider?: string|null, reason?: string|null, features?: list<int>, tests?: list<int>, depends_on?: list<int>, depends_on_refs?: list<string>, position?: int|null, decision?: array<string, mixed>|null, timeline?: list<array<string, mixed>>|null}
+ * @phpstan-type NodeInput array{number: int, parent?: int|null, supersedes?: int|null, kind?: string, title?: string, rationale?: string|null, source?: string|null, status?: string, decided_by?: string|null, decided_at?: string|null, reason?: string|null, features?: list<int>, tests?: list<int>, depends_on?: list<int>, depends_on_refs?: list<string>, position?: int|null, decision?: array<string, mixed>|null, timeline?: list<array<string, mixed>>|null}
  * @phpstan-type NodeState array{kind: RequirementKind|null, status: RequirementStatus|null, parent: int|null, supersedes: int|null}
  */
 class RequirementTreeSaver
@@ -30,7 +29,7 @@ class RequirementTreeSaver
     /** Longer titles are saved but warned about: the panel shows two lines. */
     private const TITLE_WARNING_LENGTH = 60;
 
-    private const TEXT_FIELDS = ['kind', 'title', 'rationale', 'source', 'status', 'decided_by', 'decided_at', 'decider', 'reason'];
+    private const TEXT_FIELDS = ['kind', 'title', 'rationale', 'source', 'status', 'decided_by', 'decided_at', 'reason'];
 
     /**
      * @param  array<mixed>  $input  untrusted JSON nodes
@@ -262,6 +261,10 @@ class RequirementTreeSaver
                 throw new InvalidArgumentException("Node at index {$index}: number/parent/supersedes/position must be integers, decision an object, timeline a list, ref/parent_ref strings (parent_ref not with parent), features/tests/depends_on lists of integers, depends_on_refs a list of strings, text fields strings.");
             }
 
+            if (array_key_exists('decider', $node)) {
+                throw new InvalidArgumentException("Node at index {$index}: decider 已移除（不再分老板定，全部 Gordon 定），去掉这个键。");
+            }
+
             /** @var array{number?: int, ref?: string, parent_ref?: string, parent?: int|null} $node */
             $nodes[] = $node;
         }
@@ -282,7 +285,7 @@ class RequirementTreeSaver
     {
         $columns = [];
 
-        foreach (['kind', 'title', 'rationale', 'source', 'status', 'decided_by', 'decided_at', 'decider', 'position', 'decision', 'timeline'] as $key) {
+        foreach (['kind', 'title', 'rationale', 'source', 'status', 'decided_by', 'decided_at', 'position', 'decision', 'timeline'] as $key) {
             if (array_key_exists($key, $node)) {
                 $columns[$key] = $node[$key] === '' ? null : $node[$key];
             }
@@ -368,16 +371,6 @@ class RequirementTreeSaver
 
         if (filled($node['decided_at'] ?? null) && ! preg_match('/^\d{4}-\d{2}-\d{2}$/', $node['decided_at'])) {
             $errors[] = "#{$number}: decided_at must be YYYY-MM-DD.";
-        }
-
-        if (filled($node['decider'] ?? null)) {
-            $status = RequirementStatus::tryFrom($node['status'] ?? '') ?? $stored->status ?? RequirementStatus::Proposed;
-
-            if (RequirementDecider::tryFrom($node['decider']) === null) {
-                $errors[] = "#{$number}: decider \"{$node['decider']}\" is not one of ".implode('/', array_column(RequirementDecider::cases(), 'value')).'.';
-            } elseif (! $status->awaitsDecision()) {
-                $errors[] = "#{$number}: decider only applies to a 提议 or 冲突, this node is {$status->value}.";
-            }
         }
 
         if (isset($node['timeline'])) {

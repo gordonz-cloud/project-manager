@@ -3,7 +3,6 @@
 namespace App\Models;
 
 use App\Data\Requirements\RequirementDecision;
-use App\Enums\RequirementDecider;
 use App\Enums\RequirementKind;
 use App\Enums\RequirementStatus;
 use App\Models\Concerns\BelongsToProject;
@@ -40,42 +39,24 @@ use LogicException;
  * @property int|null $supersedes_id
  * @property string|null $acceptance
  * @property RequirementStatus $status
- * @property RequirementDecider|null $decider
  * @property string|null $version
  * @property int|null $position
  * @property RequirementDecision|null $decision
- * @property array{key: string, label: string, by: string, at: string}|null $decision_opinion Gordon's opinion on a question for 老板
- * @property Carbon|null $sent_to_boss_at when the question went to 老板
  * @property list<array<string, mixed>>|null $timeline everything said about it over time (see RequirementTimeline)
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at
  */
-#[Fillable(['number', 'parent_id', 'kind', 'title', 'rationale', 'source', 'decided_by', 'decided_at', 'supersedes_id', 'acceptance', 'status', 'decider', 'version', 'position', 'decision', 'decision_opinion', 'sent_to_boss_at', 'timeline'])]
+#[Fillable(['number', 'parent_id', 'kind', 'title', 'rationale', 'source', 'decided_by', 'decided_at', 'supersedes_id', 'acceptance', 'status', 'version', 'position', 'decision', 'timeline'])]
 class Requirement extends Model
 {
     /** @use HasFactory<RequirementFactory> */
     use BelongsToProject, HasFactory, HasProjectSequence;
-
-    /** Waits on Gordon: his to decide, or 老板's but Gordon has not given his opinion yet. */
-    public const STAGE_MINE = 'me';
-
-    /** 老板's, with Gordon's opinion, not sent yet. */
-    public const STAGE_TO_SEND = 'to_send';
-
-    /** Sent to 老板, waiting for the reply. */
-    public const STAGE_AWAITING_BOSS = 'awaiting_boss';
 
     /** Why the statement or status changed; written into the revision of the next save, then cleared. */
     public ?string $revisionReason = null;
 
     protected static function booted(): void
     {
-        static::saving(function (self $requirement): void {
-            if (! $requirement->status->awaitsDecision()) {
-                $requirement->decider = null;
-            }
-        });
-
         static::created(function (self $requirement): void {
             $requirement->recordRevision(isNew: true);
         });
@@ -102,11 +83,8 @@ class Requirement extends Model
         return [
             'status' => RequirementStatus::class,
             'kind' => RequirementKind::class,
-            'decider' => RequirementDecider::class,
             'decided_at' => 'date',
             'decision' => RequirementDecision::class,
-            'decision_opinion' => 'array',
-            'sent_to_boss_at' => 'datetime',
             'timeline' => 'array',
         ];
     }
@@ -168,19 +146,6 @@ class Requirement extends Model
     }
 
     /**
-     * Where an open decision stands (one of the STAGE_ constants); null once it is decided or voided.
-     */
-    public function decisionStage(): ?string
-    {
-        return match (true) {
-            ! $this->status->awaitsDecision() => null,
-            $this->decider !== RequirementDecider::Boss || $this->decision_opinion === null => self::STAGE_MINE,
-            $this->sent_to_boss_at === null => self::STAGE_TO_SEND,
-            default => self::STAGE_AWAITING_BOSS,
-        };
-    }
-
-    /**
      * What the question is about, for a rule worded from Gordon's own answer: the title without its status prefix
      * (冲突：/待定：…), the question part (给不给…, 要不要…) and question marks, at most 16 Chinese characters wide.
      */
@@ -193,7 +158,34 @@ class Requirement extends Model
     }
 
     /**
-     * What Gordon is asked: the written decision, or the plain two-way choice when none was written.
+     * Where 现在 comes from: the replaced rule's source for a 冲突, else decision.now_source; null when no document says
+     * it (it is just what the code does).
+     */
+    public function nowSource(): ?string
+    {
+        return self::briefSource($this->status === RequirementStatus::Conflict ? $this->supersedes?->source : null)
+            ?? self::briefSource($this->decision?->nowSource);
+    }
+
+    /**
+     * A source as the panel shows it: document, version and date, without file paths, section marks or code references
+     * (the stored source keeps them for whoever traces it).
+     */
+    public static function briefSource(?string $source): ?string
+    {
+        $brief = (string) preg_replace(
+            ['/现状（代码[^）]*）/u', '/\.ai\/rules\/[\w-]+\.md\s?§?/u', '/(?:app|resources|database|tests)\/\S+/u', '/docs\/product\/(?:_shared\/)?/u', '/([\w-]+)\/([\w-]+)\.md/u', '/([\w-]+)\.md/u',
+                '/§\s?[\d.一二三四五六七八九十]+(?:\s?#\d+)?/u', '/第\s?\d+\s?项/u', '/验收\s?\d+/u', '/(?<![\w-])[A-RT-Z]\d+(?:-\d+)?(?![\w-])/u',
+                '/（[^（）]*?(\d{4}-\d{2}-\d{2})）/u', '/\s*、(?:\s*、)+/u', '/、\s*(?=\d{4}-|）|；|$)/u', '/\s+([、，；）])/u', '/（\s*）/u', '/ {2,}/u'],
+            ['代码现状', '项目规则 ', '', '', '$1 $2', '$1', '', '', '', '', ' $1', '、', '', '$1', '', ' '],
+            (string) $source,
+        );
+
+        return trim($brief, ' 、，') ?: null;
+    }
+
+    /**
+     * What Gordon is asked: the written decision, or the plain question when none was written.
      */
     public function decisionOrFallback(): RequirementDecision
     {

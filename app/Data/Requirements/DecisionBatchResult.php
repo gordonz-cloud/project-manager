@@ -2,25 +2,20 @@
 
 namespace App\Data\Requirements;
 
+use App\Enums\RequirementStatus;
 use App\Models\RequirementDecisionDraft;
 use Illuminate\Support\Collection;
 
 /**
- * What a batch of drafts does (shown before confirming) or did (after), by kind of choice.
+ * What a batch of drafts does (shown before confirming) or did (after), by the status each node ends up in.
  */
 final readonly class DecisionBatchResult
 {
     /**
-     * @param  list<string>  $examples  a few drafts in words, e.g. "「游客价格位只显示…」 意见 A 老板文档已批"
+     * @param  array<string, int>  $byStatus  status value => count, e.g. ['已定' => 2, '作废' => 1]
+     * @param  list<string>  $examples  a few drafts in words, e.g. "「游客价格位只显示…」 保持现在"
      */
-    public function __construct(
-        public int $decidedByMe = 0,
-        public int $decidedByBoss = 0,
-        public int $opinions = 0,
-        public int $forwarded = 0,
-        public int $skipped = 0,
-        public array $examples = [],
-    ) {}
+    public function __construct(public array $byStatus = [], public array $examples = []) {}
 
     /**
      * @param  Collection<int, RequirementDecisionDraft>  $drafts  with their requirement loaded
@@ -28,28 +23,20 @@ final readonly class DecisionBatchResult
     public static function of(Collection $drafts): self
     {
         return new self(
-            decidedByMe: $drafts->filter(fn (RequirementDecisionDraft $draft): bool => $draft->isOwnDecision())->count(),
-            decidedByBoss: $drafts->filter(fn (RequirementDecisionDraft $draft): bool => $draft->isBossReply())->count(),
-            opinions: $drafts->filter(fn (RequirementDecisionDraft $draft): bool => $draft->isOpinion())->count(),
-            forwarded: $drafts->where('choice', RequirementDecisionDraft::ASK_BOSS)->count(),
-            skipped: $drafts->where('choice', RequirementDecisionDraft::SKIP)->count(),
+            byStatus: $drafts->countBy(fn (RequirementDecisionDraft $draft): string => $draft->choice === RequirementDecisionDraft::CUSTOM
+                ? RequirementStatus::Decided->value
+                : ($draft->requirement->decisionOrFallback()->option($draft->choice)?->outcome->resultingStatus()->value ?? '选项已不在'))->all(),
             examples: array_values($drafts->take(3)->map(fn (RequirementDecisionDraft $draft): string => $draft->summary())->all()),
         );
     }
 
-    public function decided(): int
-    {
-        return $this->decidedByMe + $this->decidedByBoss;
-    }
-
     public function summary(): string
     {
+        $labels = [RequirementStatus::Decided->value => '定下', RequirementStatus::Later->value => '以后做', RequirementStatus::Void->value => '作废'];
+
         return implode(' · ', array_filter([
-            "定下 {$this->decided()} 条（你拍板 {$this->decidedByMe}，按老板回复 {$this->decidedByBoss}）",
-            "加入问老板清单 {$this->opinions} 条",
-            $this->forwarded ? "转老板 {$this->forwarded} 条" : null,
-            $this->skipped ? "先不定 {$this->skipped} 条" : null,
-            $this->decided() ? '定下的规则将从待做开始（原来挂的功能和测试记为受影响）' : null,
+            ...array_map(fn (string $status, int $count): string => ($labels[$status] ?? $status)." {$count} 条", array_keys($this->byStatus), $this->byStatus),
+            isset($this->byStatus[RequirementStatus::Decided->value]) ? '定下的规则从待做开始（原来挂的功能和测试记为受影响）' : null,
         ]));
     }
 }

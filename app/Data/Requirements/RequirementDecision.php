@@ -3,7 +3,6 @@
 namespace App\Data\Requirements;
 
 use App\Enums\DecisionOutcome;
-use App\Enums\RequirementDecider;
 use App\Enums\RequirementStatus;
 use App\Models\Requirement;
 use App\Models\RequirementDecisionDraft;
@@ -12,12 +11,24 @@ use Illuminate\Contracts\Database\Eloquent\CastsAttributes;
 use Illuminate\Database\Eloquent\Model;
 
 /**
- * What a 提议/冲突 asks, in plain words: how things are now and why, what would change, the difference, the risk,
- * and the answers to pick from. Stored as JSON on requirements.decision; requirements:save validates it with errors().
+ * What a 提议/冲突 asks, in plain words: the question (difference), how things are now and which document that comes
+ * from (now, now_source), what the new requirement wants (change), a warning (risk) and the answers to pick from.
+ * Stored as JSON on requirements.decision; requirements:save validates it with errors().
  */
 final readonly class RequirementDecision implements Castable
 {
-    private const TEXT_KEYS = ['now', 'change', 'difference', 'risk', 'impact', 'why_boss'];
+    /** Choice key of 保持现在, offered when no option keeps things as they are. */
+    public const KEEP = 'keep';
+
+    /** Choice key of 以后做, offered when no option puts it off. */
+    public const LATER = 'later';
+
+    private const TEXT_KEYS = ['now', 'change', 'difference', 'risk', 'impact', 'now_source'];
+
+    /** Keys of the old 老板 flow: requirements:save says they are gone instead of storing them. */
+    private const REMOVED_KEYS = ['why_boss'];
+
+    private const REMOVED_OPTION_KEYS = ['record_as', 'record_date'];
 
     /**
      * @param  list<DecisionOption>  $options
@@ -29,11 +40,11 @@ final readonly class RequirementDecision implements Castable
         public ?string $difference = null,
         public ?string $risk = null,
         public ?string $impact = null,
-        public ?string $whyBoss = null,
+        public ?string $nowSource = null,
     ) {}
 
     /**
-     * The two plain answers every pending node has when nobody wrote a decision for it yet.
+     * The plain question every pending node has when nobody wrote a decision for it yet.
      */
     public static function fallbackFor(Requirement $requirement): self
     {
@@ -41,20 +52,16 @@ final readonly class RequirementDecision implements Castable
             return new self(
                 now: $requirement->supersedes->title ?? '（现行规则已不在）',
                 change: $requirement->title,
-                options: [
-                    new DecisionOption('A', '改成新说法', DecisionOutcome::Accept, '现行规则作废，按新说法做'),
-                    new DecisionOption('B', '保持现状', DecisionOutcome::KeepCurrent, '这条改动作废，现行规则不变'),
-                ],
+                options: [new DecisionOption('A', '改成新说法', DecisionOutcome::Accept, '现行规则作废，按新说法做')],
+                difference: '要不要把现行规则改成新说法？',
             );
         }
 
         return new self(
             now: '还没有这条规则',
             change: $requirement->title,
-            options: [
-                new DecisionOption('A', '同意', DecisionOutcome::Accept, '成为已定规则，进待做'),
-                new DecisionOption('B', '不要', DecisionOutcome::Reject, '这条作废'),
-            ],
+            options: [new DecisionOption('A', '同意', DecisionOutcome::Accept, '成为已定规则，进待做')],
+            difference: '要不要加这条规则？',
         );
     }
 
@@ -73,13 +80,11 @@ final readonly class RequirementDecision implements Castable
                 consequence: $option['consequence'],
                 resultTitle: $option['result_title'] ?? null,
                 recommended: $option['recommended'] ?? false,
-                recordAs: isset($option['record_as']) ? RequirementDecider::from($option['record_as']) : null,
-                recordDate: $option['record_date'] ?? null,
             ), $data['options'])),
             difference: $data['difference'] ?? null,
             risk: $data['risk'] ?? null,
             impact: $data['impact'] ?? null,
-            whyBoss: $data['why_boss'] ?? null,
+            nowSource: $data['now_source'] ?? null,
         );
     }
 
@@ -91,13 +96,13 @@ final readonly class RequirementDecision implements Castable
     public static function errors(mixed $raw): array
     {
         if (! is_array($raw) || array_is_list($raw)) {
-            return ['decision must be an object {now, change, difference?, risk?, impact?, why_boss?, options}.'];
+            return ['decision must be an object {now, change, difference?, risk?, impact?, now_source?, options}.'];
         }
 
         $errors = [];
 
         foreach (array_diff(array_keys($raw), [...self::TEXT_KEYS, 'options']) as $key) {
-            $errors[] = "decision has unknown key \"{$key}\".";
+            $errors[] = in_array($key, self::REMOVED_KEYS, true) ? "decision.{$key} 已移除（不再分老板定，全部 Gordon 定）。" : "decision has unknown key \"{$key}\".";
         }
 
         foreach (self::TEXT_KEYS as $key) {
@@ -114,8 +119,8 @@ final readonly class RequirementDecision implements Castable
 
         $options = $raw['options'] ?? null;
 
-        if (! is_array($options) || ! array_is_list($options) || count($options) < 2) {
-            return [...$errors, 'decision.options must be a list of at least two options.'];
+        if (! is_array($options) || ! array_is_list($options) || $options === []) {
+            return [...$errors, 'decision.options must be a list of at least one option (保持现在 and 以后做 are always offered).'];
         }
 
         $keys = [];
@@ -137,55 +142,24 @@ final readonly class RequirementDecision implements Castable
     }
 
     /**
-     * Whether $text tells what 现在 already tells: one contains the other, they share at least two runs of 8+ characters,
-     * or 现在 already names a rule number (#N) that $text cites.
+     * The answers on the card: the written options, plus 保持现在 and 以后做 when none of them already does that.
+     *
+     * @return list<DecisionOption>
      */
-    public function retells(string $text): bool
+    public function choices(): array
     {
-        preg_match_all('/#\d+/', $text, $citedRules);
+        $offers = fn (DecisionOutcome ...$outcomes): bool => array_filter($this->options, fn (DecisionOption $option): bool => in_array($option->outcome, $outcomes, true)) !== [];
 
-        foreach ($citedRules[0] as $rule) {
-            if (preg_match('/'.preg_quote($rule, '/').'(?!\d)/', $this->now)) {
-                return true;
-            }
-        }
-
-        $isContained = str_contains($text, $this->now) || (mb_strlen($text) >= 8 && str_contains($this->now, $text));
-
-        return $isContained || $this->sharedRuns($text) >= 2;
-    }
-
-    /**
-     * Number of separate stretches of 现在, each 8+ characters long, that also appear in $text.
-     */
-    private function sharedRuns(string $text, int $minimum = 8): int
-    {
-        $length = mb_strlen($this->now);
-        $runs = 0;
-
-        for ($start = 0; $start + $minimum <= $length;) {
-            if (! str_contains($text, mb_substr($this->now, $start, $minimum))) {
-                $start++;
-
-                continue;
-            }
-
-            $end = $start + $minimum;
-
-            while ($end < $length && str_contains($text, mb_substr($this->now, $start, $end - $start + 1))) {
-                $end++;
-            }
-
-            $runs++;
-            $start = $end;
-        }
-
-        return $runs;
+        return [
+            ...$this->options,
+            ...($offers(DecisionOutcome::KeepCurrent, DecisionOutcome::Reject) ? [] : [new DecisionOption(self::KEEP, '保持现在', DecisionOutcome::KeepCurrent, '不改，照现在的做')]),
+            ...($offers(DecisionOutcome::Later) ? [] : [new DecisionOption(self::LATER, '以后做', DecisionOutcome::Later, '这期不做，将来再看')]),
+        ];
     }
 
     public function option(string $key): ?DecisionOption
     {
-        foreach ($this->options as $option) {
+        foreach ($this->choices() as $option) {
             if ($option->key === $key) {
                 return $option;
             }
@@ -212,12 +186,12 @@ final readonly class RequirementDecision implements Castable
     {
         return array_filter([
             'now' => $this->now,
+            'now_source' => $this->nowSource,
             'change' => $this->change,
             'difference' => $this->difference,
             'risk' => $this->risk,
             'options' => array_map(fn (DecisionOption $option): array => $option->toArray(), $this->options),
             'impact' => $this->impact,
-            'why_boss' => $this->whyBoss,
         ], fn (mixed $value): bool => $value !== null);
     }
 
@@ -262,15 +236,9 @@ final readonly class RequirementDecision implements Castable
             $errors[] = "{$at}.recommended must be true or false.";
         }
 
-        if (isset($option['record_as']) && (! is_string($option['record_as']) || RequirementDecider::tryFrom($option['record_as']) === null)) {
-            $errors[] = "{$at}.record_as must be one of ".implode('/', array_column(RequirementDecider::cases(), 'value')).'.';
-        }
-
-        if (isset($option['record_date']) && (! is_string($option['record_date']) || ! preg_match('/^\d{4}-\d{2}-\d{2}$/', $option['record_date']))) {
-            $errors[] = "{$at}.record_date must be YYYY-MM-DD.";
-        }
-
-        return array_merge($errors, array_map(fn (string $key): string => "{$at} has unknown key \"{$key}\".", array_values(array_diff(array_keys($option), ['key', 'label', 'outcome', 'consequence', 'result_title', 'recommended', 'record_as', 'record_date']))));
+        return array_merge($errors, array_map(fn (string $key): string => in_array($key, self::REMOVED_OPTION_KEYS, true)
+            ? "{$at}.{$key} 已移除（拍板一律记 Gordon）。"
+            : "{$at} has unknown key \"{$key}\".", array_values(array_diff(array_keys($option), ['key', 'label', 'outcome', 'consequence', 'result_title', 'recommended']))));
     }
 
     /**

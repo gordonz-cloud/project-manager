@@ -9,6 +9,7 @@ use App\Data\Requirements\RequirementRollup;
 use App\Data\Requirements\RequirementTimeline;
 use App\Data\Requirements\RequirementTreeNode;
 use App\Enums\NavigationGroup;
+use App\Enums\TestLastResult;
 use App\Models\Feature;
 use App\Models\Project;
 use App\Models\Requirement;
@@ -47,9 +48,6 @@ class RequirementTree extends Page
     /** @var array<string, string> tab key => label */
     public const TABS = ['overview' => '全貌', 'pending' => '待决策', 'todo' => '待做', 'changes' => '最近变化'];
 
-    /** @var array<string, string> 待决策 filter key => label */
-    public const WAITING_ON = [Requirement::STAGE_MINE => '等我', Requirement::STAGE_TO_SEND => '待发老板', Requirement::STAGE_AWAITING_BOSS => '等老板回复'];
-
     protected string $view = 'filament.pages.requirement-tree';
 
     protected static ?string $slug = 'requirement-tree';
@@ -70,11 +68,6 @@ class RequirementTree extends Page
     public array $expanded = [];
 
     public bool $showUnfiled = false;
-
-    #[Url]
-    public string $waitingOn = Requirement::STAGE_MINE;
-
-    public bool $showBossQuestions = false;
 
     private ?RequirementTreeService $requirementTreeService = null;
 
@@ -111,11 +104,6 @@ class RequirementTree extends Page
         $this->dispatch('reveal-selected');
     }
 
-    public function setWaitingOn(string $waitingOn): void
-    {
-        $this->waitingOn = isset(self::WAITING_ON[$waitingOn]) ? $waitingOn : Requirement::STAGE_MINE;
-    }
-
     public function choose(int $requirementId, string $choice, ?string $customText = null): void
     {
         $requirement = $this->awaitingDecision->firstWhere('id', $requirementId);
@@ -134,13 +122,13 @@ class RequirementTree extends Page
     }
 
     /**
-     * A 自己写 box: text drafts $choice (custom, opinion:custom or boss:custom), emptying it drops that draft.
+     * A 自己写 box: text drafts it as Gordon's own wording, emptying it drops that draft.
      */
-    public function writeCustom(int $requirementId, string $text, string $choice = RequirementDecisionDraft::CUSTOM): void
+    public function writeCustom(int $requirementId, string $text): void
     {
         if (trim($text) !== '') {
-            $this->choose($requirementId, $choice, $text);
-        } elseif ($this->drafts->get($requirementId)?->choice === $choice) {
+            $this->choose($requirementId, RequirementDecisionDraft::CUSTOM, $text);
+        } elseif ($this->drafts->get($requirementId)?->choice === RequirementDecisionDraft::CUSTOM) {
             $this->clearChoice($requirementId);
         }
     }
@@ -155,7 +143,7 @@ class RequirementTree extends Page
     }
 
     /**
-     * Applies every draft of this user, wherever it was picked (全貌 or 待决策, any filter), then reads the page again.
+     * Applies every draft of this user, wherever it was picked (全貌 or 待决策), then reads the page again.
      */
     public function confirmAllDrafts(): void
     {
@@ -167,7 +155,7 @@ class RequirementTree extends Page
             return;
         }
 
-        unset($this->tree, $this->awaitingDecision, $this->pendingByGoal, $this->drafts, $this->batchPreview, $this->bossQuestions, $this->nodesById, $this->total, $this->selectedRequirement);
+        unset($this->tree, $this->awaitingDecision, $this->pendingByGoal, $this->drafts, $this->batchPreview, $this->nodesById, $this->total, $this->selectedRequirement);
         Notification::make()->title($result->summary())->success()->send();
     }
 
@@ -179,16 +167,6 @@ class RequirementTree extends Page
         $this->requirementDecisions()->startNow($this->project, $this->selectedRequirement ?? throw new LogicException('Nothing selected.'));
         unset($this->tree, $this->awaitingDecision, $this->pendingByGoal, $this->nodesById, $this->total, $this->selectedRequirement);
         Notification::make()->title('已改回提议，进待决策')->success()->send();
-    }
-
-    /**
-     * Gordon sent the list: those questions now wait for the boss's reply.
-     */
-    public function markSentToBoss(): void
-    {
-        $sent = $this->requirementDecisions()->markSentToBoss($this->project);
-        unset($this->awaitingDecision, $this->pendingByGoal, $this->bossQuestions, $this->selectedRequirement);
-        Notification::make()->title("已标记 {$sent} 条发给老板")->success()->send();
     }
 
     public function timelineOf(Requirement $requirement): RequirementTimeline
@@ -212,11 +190,6 @@ class RequirementTree extends Page
     public function batchPreview(): DecisionBatchResult
     {
         return $this->requirementDecisions()->preview($this->user(), $this->awaitingDecision);
-    }
-
-    public function toggleBossQuestions(): void
-    {
-        $this->showBossQuestions = ! $this->showBossQuestions;
     }
 
     public function selectNode(int $number): void
@@ -304,7 +277,7 @@ class RequirementTree extends Page
     }
 
     /**
-     * The 待决策 list under the current filter (等我 includes nodes nobody assigned yet), grouped by goal in tree order;
+     * The 待决策 list grouped by goal in tree order;
      * within a goal 冲突 first, then tree order.
      *
      * @return array<string, list<Requirement>> goal title => requirements
@@ -315,7 +288,7 @@ class RequirementTree extends Page
         $goalPosition = array_flip(array_keys($this->nodesById));
         $groups = [];
 
-        foreach ($this->awaitingDecision->filter(fn (Requirement $requirement): bool => $this->isWaitingOn($requirement, $this->waitingOn)) as $requirement) {
+        foreach ($this->awaitingDecision as $requirement) {
             $goal = $this->goalOf($requirement);
             $groups[$goal->id] ??= ['goal' => $goal, 'items' => []];
             $groups[$goal->id]['items'][] = $requirement;
@@ -324,16 +297,6 @@ class RequirementTree extends Page
         uasort($groups, fn (array $a, array $b): int => ($goalPosition[$a['goal']->id] ?? PHP_INT_MAX) <=> ($goalPosition[$b['goal']->id] ?? PHP_INT_MAX));
 
         return collect($groups)->mapWithKeys(fn (array $group): array => [$group['goal']->title => $group['items']])->all();
-    }
-
-    public function waitingOnCount(string $waitingOn): int
-    {
-        return $this->awaitingDecision->filter(fn (Requirement $requirement): bool => $this->isWaitingOn($requirement, $waitingOn))->count();
-    }
-
-    private function isWaitingOn(Requirement $requirement, string $waitingOn): bool
-    {
-        return $requirement->decisionStage() === $waitingOn;
     }
 
     /**
@@ -357,20 +320,6 @@ class RequirementTree extends Page
     public function isDecidable(Requirement $requirement): bool
     {
         return $this->awaitingDecision->contains('id', $requirement->id);
-    }
-
-    /**
-     * Whether the rationale mostly repeats the 现在 of the decision shown above it, so the panel folds it away.
-     */
-    public function repeatsDecision(Requirement $requirement): bool
-    {
-        return $requirement->decision !== null && $this->isDecidable($requirement) && $requirement->decision->retells((string) $requirement->rationale);
-    }
-
-    #[Computed]
-    public function bossQuestions(): string
-    {
-        return $this->requirementDecisions()->bossQuestions($this->project);
     }
 
     /**
@@ -419,6 +368,22 @@ class RequirementTree extends Page
         }
 
         return $path;
+    }
+
+    /**
+     * 做到哪了 in one line: "2 个功能 · 5 个测试全过", "1 个测试：1 失败", or 还没做.
+     */
+    public function builtSummary(Requirement $requirement): string
+    {
+        $tests = $requirement->tests;
+        $results = $tests->every(fn (Test $test): bool => $test->last_result === TestLastResult::Passed)
+            ? '全过'
+            : '：'.$tests->countBy(fn (Test $test): string => $test->last_result->value)->map(fn (int $count, string $result): string => "{$count} {$result}")->implode('，');
+
+        return implode(' · ', array_filter([
+            $requirement->linkedFeatures->isEmpty() ? null : "{$requirement->linkedFeatures->count()} 个功能",
+            $tests->isEmpty() ? null : "{$tests->count()} 个测试{$results}",
+        ])) ?: '还没做';
     }
 
     public function progressOf(Requirement $requirement): ?RequirementProgress

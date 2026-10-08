@@ -13,10 +13,10 @@ use LogicException;
  * Saves requirement-tree nodes from a JSON file. Omit "number" to create (the server assigns it; use "ref"/"parent_ref"
  * to link new nodes), give "number" to update an existing node:
  * {"project": "sg", "nodes": [{"number"?, "ref"?, "parent"?, "parent_ref"?, "kind", "title", "rationale", "source", "status",
- * "decided_by", "decided_at", "supersedes"?, "decider"? (Gordon|老板, only on 提议/冲突), "reason"?, "features": [feature numbers], "tests": [test numbers],
+ * "decided_by", "decided_at", "supersedes"?, "reason"?, "features": [feature numbers], "tests": [test numbers],
  * "depends_on"?: [requirement numbers it needs to hold], "depends_on_refs"?: [refs in this payload], "position"?: order among siblings,
- * "decision"?: {now, change, difference?, risk?, impact?, why_boss?, options: [{key, label, outcome: accept|reject|later|keep_current|custom, consequence, result_title?, recommended?}]}
- * (what Gordon is asked on the 待决策 page; see RequirementDecision),
+ * "decision"?: {now, now_source?, change, difference?, risk?, impact?, options: [{key, label, outcome: accept|reject|later|keep_current|custom, consequence, result_title?, recommended?}]}
+ * (what Gordon is asked on the 待决策 page; 保持现在 and 以后做 are always offered; see RequirementDecision),
  * "timeline"?: [{date, who, where?, said, current?, conflict_with?, related?}] (everything said about it; see RequirementTimeline)}]}.
  * Passing depends_on or depends_on_refs replaces the node's dependencies; omitting both leaves them alone.
  */
