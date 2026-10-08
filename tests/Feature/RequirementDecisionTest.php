@@ -184,8 +184,8 @@ it('applies every kind of answer in one confirmed batch, with history, and clear
         ->and($kept->revisions()->first()->reason)->toBe('Keep 50：Nothing changes')
         ->and($rejected->fresh()->only(['status', 'title']))->toBe(['status' => RequirementStatus::Void, 'title' => 'Rule 5'])
         ->and($rejected->revisions()->first()->reason)->toBe('不要：这条作废')
-        ->and($custom->fresh()->only(['status', 'title']))->toBe(['status' => RequirementStatus::Decided, 'title' => 'Write it my way'])
-        ->and($custom->revisions()->first()->reason)->toBe('Gordon 自己写')
+        ->and($custom->fresh()->only(['status', 'title']))->toBe(['status' => RequirementStatus::Decided, 'title' => 'Rule 6：Write it my way'])
+        ->and($custom->revisions()->first()->reason)->toBe('Gordon 自己写：Write it my way')
         ->and($forwarded->fresh()->only(['status', 'decider']))->toBe(['status' => RequirementStatus::Proposed, 'decider' => RequirementDecider::Boss])
         ->and($skipped->fresh()->status)->toBe(RequirementStatus::Proposed)
         ->and(RequirementDecisionDraft::count())->toBe(0);
@@ -618,3 +618,20 @@ it('shows the timeline above the decision, newest first, with conflicts and code
     expect(substr_count($html, '⚠ 和'))->toBe(1)
         ->and($html)->not->toContain('>为什么<');
 });
+
+it('words a rule decided in Gordon\'s own words as topic plus his words, unchanged [T76]', function (string $title, string $topic) {
+    [$project, $user, $goal] = decisionDesk();
+    $question = decisionRule($goal, 2, RequirementStatus::Conflict, ['title' => $title, 'supersedes_id' => decisionRule($goal, 3, RequirementStatus::Decided)->id]);
+
+    expect($question->topic())->toBe($topic);
+
+    app(RequirementDecisions::class)->choose($question, $user, 'custom', '只给会员，全站统一，详情页也要统一');
+    app(RequirementDecisions::class)->confirm($project, $user, collect([$question]));
+
+    expect($question->fresh()->title)->toBe("{$topic}：只给会员，全站统一，详情页也要统一")
+        ->and($question->revisions()->first()->reason)->toBe('Gordon 自己写：只给会员，全站统一，详情页也要统一');
+})->with([
+    'conflict asking whether' => ['冲突：商品卡剩余件数给不给访客看？', '商品卡剩余件数'],
+    'open question' => ['待定：Factory Direct 解锁看哪个公会等级?', 'Factory Direct 解锁看哪个公会等'],
+    'long plain title' => ['首页公会专属区只给会员看，没货就隐藏，不放占位卡片', '首页公会专属区只给会员看，没货就'],
+]);

@@ -216,7 +216,7 @@ class RequirementDecisions
         };
 
         if ($option === null) {
-            [$status, $title, $picked, $reason] = [RequirementStatus::Decided, $draft->custom_text, '自己写', "{$decider->value} 自己写"];
+            [$status, $title, $picked, $reason] = [RequirementStatus::Decided, "{$requirement->topic()}：{$draft->custom_text}", '自己写', "{$decider->value} 自己写：{$draft->custom_text}"];
         } else {
             $status = $option->outcome->resultingStatus();
             $title = $status === RequirementStatus::Decided ? $option->resultTitle : null;

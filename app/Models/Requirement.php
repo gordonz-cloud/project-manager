@@ -181,6 +181,18 @@ class Requirement extends Model
     }
 
     /**
+     * What the question is about, for a rule worded from Gordon's own answer: the title without its status prefix
+     * (冲突：/待定：…), the question part (给不给…, 要不要…) and question marks, at most 16 Chinese characters wide.
+     */
+    public function topic(): string
+    {
+        $topic = (string) preg_replace('/^(?:冲突|待定|待老板定|待评估|第二版待评估|提议)[：:]\s*/u', '', $this->title);
+        $topic = (string) preg_replace('/(?:给不给|要不要|能不能|是不是|是否|怎么|如何|谁来).*$/u', '', $topic);
+
+        return mb_strimwidth(trim(str_replace(['？', '?'], '', $topic)), 0, 32);
+    }
+
+    /**
      * What Gordon is asked: the written decision, or the plain two-way choice when none was written.
      */
     public function decisionOrFallback(): RequirementDecision
