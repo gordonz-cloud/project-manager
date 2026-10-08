@@ -94,3 +94,21 @@ test('fails clearly when the project has no repo_path [T22]', function () {
 
     $this->artisan('commits:sync', ['project-slug' => 'no-repo'])->assertFailed();
 });
+
+test('syncs commits that only live on a remote-tracking branch [T21]', function () {
+    $repo = makeCommitTestRepo();
+    $git = fn (array $args) => (new Process(['git', '-C', $repo, ...$args]))->mustRun();
+
+    $git(['checkout', '-q', '-b', 'side']);
+    file_put_contents($repo.'/f', 'side');
+    $git(['commit', '-q', '-am', 'Pushed elsewhere']);
+    $git(['update-ref', 'refs/remotes/origin/development', 'HEAD']);
+    $git(['checkout', '-q', '-']);
+    $git(['branch', '-q', '-D', 'side']);
+
+    $project = Project::factory()->create(['slug' => 'sg', 'repo_path' => $repo]);
+
+    $this->artisan('commits:sync', ['project-slug' => 'sg'])->assertSuccessful();
+
+    expect(Commit::where('project_id', $project->id)->pluck('subject'))->toContain('Pushed elsewhere');
+});

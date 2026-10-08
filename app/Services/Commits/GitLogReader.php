@@ -26,6 +26,9 @@ class GitLogReader
             '-C',
             $project->repo_path,
             'log',
+            // HEAD plus every remote-tracking branch: work pushed to another branch (e.g. development while the checkout sits on main) still syncs.
+            'HEAD',
+            '--remotes',
             '--format=%H%x1f%an%x1f%aI%x1f%s%x1f%b%x1e',
         ];
 
