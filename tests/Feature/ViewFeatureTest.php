@@ -11,7 +11,7 @@ use App\Models\User;
 use Filament\Facades\Filament;
 use Livewire\Livewire;
 
-test('the feature list rows link to the view page', function () {
+test('the feature list rows link to the view page [T103]', function () {
     $user = User::factory()->create();
     $project = Project::factory()->create();
     $project->users()->attach($user);
@@ -24,7 +24,7 @@ test('the feature list rows link to the view page', function () {
         ->assertSeeHtml('href="'.FeatureResource::getUrl('view', ['record' => $feature]).'"');
 });
 
-test('the view page renders the feature id, title, and use case goal', function () {
+test('the view page renders the feature id, title, and use case goal [T11]', function () {
     $user = User::factory()->create();
     $project = Project::factory()->create();
     $project->users()->attach($user);
@@ -44,7 +44,7 @@ test('the view page renders the feature id, title, and use case goal', function 
         ->assertSee('Checkout Works');
 });
 
-test('a feature outside the current tenant 404s on the view page', function () {
+test('a feature outside the current tenant 404s on the view page [T104]', function () {
     $user = User::factory()->create();
     $project = Project::factory()->create();
     $otherProject = Project::factory()->create();

@@ -3,13 +3,13 @@
 use App\Models\User;
 use Livewire\Livewire;
 
-test('profile page is displayed', function () {
+test('profile page is displayed [T86]', function () {
     $this->actingAs($user = User::factory()->create());
 
     $this->get(route('profile.edit'))->assertOk();
 });
 
-test('profile information can be updated', function () {
+test('profile information can be updated [T86]', function () {
     $user = User::factory()->create();
 
     $this->actingAs($user);
@@ -28,7 +28,7 @@ test('profile information can be updated', function () {
     expect($user->email_verified_at)->toBeNull();
 });
 
-test('email verification status is unchanged when email address is unchanged', function () {
+test('email verification status is unchanged when email address is unchanged [T86]', function () {
     $user = User::factory()->create();
 
     $this->actingAs($user);
@@ -43,7 +43,7 @@ test('email verification status is unchanged when email address is unchanged', f
     expect($user->refresh()->email_verified_at)->not->toBeNull();
 });
 
-test('user can delete their account', function () {
+test('user can delete their account [T89]', function () {
     $user = User::factory()->create();
 
     $this->actingAs($user);
@@ -60,7 +60,7 @@ test('user can delete their account', function () {
     expect(auth()->check())->toBeFalse();
 });
 
-test('correct password must be provided to delete account', function () {
+test('correct password must be provided to delete account [T90]', function () {
     $user = User::factory()->create();
 
     $this->actingAs($user);

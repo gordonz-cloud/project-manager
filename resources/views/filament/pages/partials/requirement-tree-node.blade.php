@@ -27,6 +27,7 @@
             @endif
             <span class="min-w-0 truncate {{ $requirement->kind === \App\Enums\RequirementKind::Goal ? 'font-medium' : '' }}">{{ $requirement->title }}</span>
             @include('filament.pages.partials.requirement-progress', ['requirement' => $requirement, 'progress' => $node->progress])
+            @if ($node->children === [] && $node->delivery === \App\Data\Requirements\DeliveryStatus::Failed)<span class="shrink-0 text-xs text-red-600 dark:text-red-400">✗ 验证失败</span>@endif
             @if ($node->children !== [])
                 <span class="ml-auto">@include('filament.pages.partials.requirement-rollup', ['rollup' => $node->rollup])</span>
             @endif

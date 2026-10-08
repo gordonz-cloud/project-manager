@@ -25,14 +25,14 @@ beforeEach(function () {
     [$this->login, $this->home] = RequestReply::factory()->count(2)->create(['use_case_id' => $this->useCase->id]);
 });
 
-test('request replies are listed and shown on their use case', function () {
+test('request replies are listed and shown on their use case [T8]', function () {
     Livewire::test(ListRequestReplies::class)->assertCanSeeTableRecords([$this->login, $this->home]);
 
     Livewire::test(RequestRepliesRelationManager::class, ['ownerRecord' => $this->useCase, 'pageClass' => EditUseCase::class])
         ->assertCanSeeTableRecords([$this->login, $this->home]);
 });
 
-test('a request reply shows its features', function () {
+test('a request reply shows its features [T105]', function () {
     $feature = Feature::factory()->forUseCase($this->useCase)->create();
     $feature->requestReplies()->attach($this->login);
 

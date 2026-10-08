@@ -69,29 +69,24 @@ final readonly class RequirementRollup
     {
         return [
             RequirementProgress::Pending->value => $this->pending(),
-            RequirementProgress::Todo->value => $this->count(DeliveryStatus::NotBuilt),
-            RequirementProgress::InProgress->value => $this->count(DeliveryStatus::InProgress) + $this->count(DeliveryStatus::Failed),
+            RequirementProgress::Todo->value => $this->count(DeliveryStatus::NotBuilt) + $this->count(DeliveryStatus::InProgress) + $this->count(DeliveryStatus::Failed),
             RequirementProgress::Done->value => $this->count(DeliveryStatus::Built) + $this->count(DeliveryStatus::Verified),
         ];
     }
 
     /**
-     * One status for a whole subtree: all built → 完成; some built, some not → 进行中; nothing built → 进行中 if any is
-     * being built (or failed), 待做 if all are ready to build, otherwise 待决策. Null when the subtree counts nothing.
+     * One status for a whole subtree: any open decision → 待决策; else anything not built (being built or failing
+     * included) → 待做; else 完成. Null when the subtree counts nothing.
      */
     public function progress(): ?RequirementProgress
     {
-        $done = $this->count(DeliveryStatus::Built) + $this->count(DeliveryStatus::Verified);
-        $building = $this->count(DeliveryStatus::InProgress) + $this->count(DeliveryStatus::Failed);
-        $todo = $this->count(DeliveryStatus::NotBuilt);
-        $total = $done + $building + $todo + $this->pending();
+        $counts = $this->progressCounts();
 
         return match (true) {
-            $total === 0 => null,
-            $done === $total => RequirementProgress::Done,
-            $done > 0, $building > 0 => RequirementProgress::InProgress,
-            $todo === $total => RequirementProgress::Todo,
-            default => RequirementProgress::Pending,
+            $counts[RequirementProgress::Pending->value] > 0 => RequirementProgress::Pending,
+            $counts[RequirementProgress::Todo->value] > 0 => RequirementProgress::Todo,
+            $counts[RequirementProgress::Done->value] > 0 => RequirementProgress::Done,
+            default => null,
         };
     }
 

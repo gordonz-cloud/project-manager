@@ -4,7 +4,7 @@ use App\Enums\FeatureLayer;
 use App\Models\Feature;
 use App\Models\Project;
 
-test('backfills layer and version from matching todos, lists what it cannot match, and is idempotent', function () {
+test('backfills layer and version from matching todos, lists what it cannot match, and is idempotent [T33]', function () {
     $project = Project::factory()->create(['slug' => 'sg']);
 
     $exact = Feature::factory()->create([
@@ -48,7 +48,7 @@ test('backfills layer and version from matching todos, lists what it cannot matc
     expect($exact->fresh()->layers)->toBe([FeatureLayer::Manual->value]);
 });
 
-test('a --map file applies only its high confidence entries, matched by feature number', function () {
+test('a --map file applies only its high confidence entries, matched by feature number [T106]', function () {
     $project = Project::factory()->create(['slug' => 'sg']);
 
     // First feature created gets number 1, per HasProjectSequence.

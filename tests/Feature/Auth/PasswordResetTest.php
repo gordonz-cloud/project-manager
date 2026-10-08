@@ -9,13 +9,13 @@ beforeEach(function () {
     $this->skipUnlessFortifyHas(Features::resetPasswords());
 });
 
-test('reset password link screen can be rendered', function () {
+test('reset password link screen can be rendered [T84]', function () {
     $response = $this->get(route('password.request'));
 
     $response->assertOk();
 });
 
-test('reset password link can be requested', function () {
+test('reset password link can be requested [T84]', function () {
     Notification::fake();
 
     $user = User::factory()->create();
@@ -25,7 +25,7 @@ test('reset password link can be requested', function () {
     Notification::assertSentTo($user, ResetPassword::class);
 });
 
-test('reset password screen can be rendered', function () {
+test('reset password screen can be rendered [T85]', function () {
     Notification::fake();
 
     $user = User::factory()->create();
@@ -41,7 +41,7 @@ test('reset password screen can be rendered', function () {
     });
 });
 
-test('password can be reset with valid token', function () {
+test('password can be reset with valid token [T85]', function () {
     Notification::fake();
 
     $user = User::factory()->create();

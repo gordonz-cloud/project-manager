@@ -10,7 +10,7 @@ use App\Models\User;
 use Filament\Facades\Filament;
 use Livewire\Livewire;
 
-test('model field list only shows model fields for the current tenant', function () {
+test('model field list only shows model fields for the current tenant [T12]', function () {
     $user = User::factory()->create();
     $p1 = Project::factory()->create();
     $p2 = Project::factory()->create();
@@ -27,7 +27,7 @@ test('model field list only shows model fields for the current tenant', function
         ->assertCountTableRecords(1);
 });
 
-test('model field form data model select only offers models from the current tenant', function () {
+test('model field form data model select only offers models from the current tenant [T12]', function () {
     $user = User::factory()->create();
     $p1 = Project::factory()->create();
     $p2 = Project::factory()->create();
@@ -60,7 +60,7 @@ test('model field form data model select only offers models from the current ten
         ->assertHasFormErrors(['data_model_id']);
 });
 
-test('creating a model field via the resource sets the tenant and the next number', function () {
+test('creating a model field via the resource sets the tenant and the next number [T12]', function () {
     $user = User::factory()->create();
     $p1 = Project::factory()->create();
     $p1->users()->attach($user);

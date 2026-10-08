@@ -11,7 +11,7 @@ use App\Models\RunEvent;
 use App\Models\UseCase;
 use App\Models\WorkflowRun;
 
-test('module spec and use case hierarchy connect the executable behavior chain', function () {
+test('module spec and use case hierarchy connect the executable behavior chain [T7]', function () {
     $project = Project::factory()->create();
     $spec = ModuleSpec::factory()->forProject($project)->create();
     $useCase = UseCase::factory()->forModule($spec->module)->create([
@@ -21,7 +21,7 @@ test('module spec and use case hierarchy connect the executable behavior chain',
         ->and($useCase->status)->toBe(UseCaseStatus::Ready);
 });
 
-test('runtime keeps append-only events', function () {
+test('runtime keeps append-only events [T34]', function () {
     $project = Project::factory()->create();
     $spec = ModuleSpec::factory()->forProject($project)->create();
     $useCase = UseCase::factory()->forModule($spec->module)->create();
@@ -50,7 +50,7 @@ test('runtime keeps append-only events', function () {
         ->toThrow(LogicException::class);
 });
 
-test('use cases span several modules and features stay under their use case', function () {
+test('use cases span several modules and features stay under their use case [T7] [T100]', function () {
     $project = Project::factory()->create();
     $billing = ModuleSpec::factory()->forProject($project)->create();
     $shipping = ModuleSpec::factory()->forProject($project)->create();
@@ -70,7 +70,7 @@ test('use cases span several modules and features stay under their use case', fu
         ->toThrow(LogicException::class);
 });
 
-test('a workflow run stays inside its use case', function () {
+test('a workflow run stays inside its use case [T34]', function () {
     $project = Project::factory()->create();
     $spec = ModuleSpec::factory()->forProject($project)->create();
     $useCase = UseCase::factory()->forModule($spec->module)->create();
@@ -90,7 +90,7 @@ test('a workflow run stays inside its use case', function () {
         ->toThrow(LogicException::class, 'workflow use case');
 });
 
-test('saving a feature under a use case keeps its own requirement', function () {
+test('saving a feature under a use case keeps its own requirement [T102]', function () {
     $project = Project::factory()->create();
     $spec = ModuleSpec::factory()->forProject($project)->create();
     $useCase = UseCase::factory()->forModule($spec->module)->create();

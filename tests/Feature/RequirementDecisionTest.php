@@ -103,7 +103,7 @@ it('stores a decision with the node and rejects one of the wrong shape [T58]', f
     'unknown key' => [[...shippingDecision(), 'colour' => 'red'], 'unknown key "colour"'],
 ]);
 
-it('shows one status per node and rolls them up as 待决策 / 待做 / 进行中 / 完成 [T59]', function () {
+it('shows one status per node and rolls them up as 待决策 / 待做 / 完成 [T59]', function () {
     [$project, , $goal] = decisionDesk();
     $built = Feature::factory()->create(['project_id' => $project->id, 'status' => FeatureStatus::Done]);
     $building = Feature::factory()->create(['project_id' => $project->id, 'status' => FeatureStatus::InDevelopment]);
@@ -116,15 +116,17 @@ it('shows one status per node and rolls them up as 待决策 / 待做 / 进行�
     $tree = app(RequirementTreeService::class)->tree($project);
     $progress = collect(RequirementTreeNode::flattened($tree))->mapWithKeys(fn (RequirementTreeNode $node): array => [$node->requirement->number => $node->progress])->all();
 
-    expect($progress)->toBe([1 => RequirementProgress::InProgress, 2 => RequirementProgress::Pending, 3 => RequirementProgress::Todo, 4 => RequirementProgress::InProgress, 5 => RequirementProgress::Done, 6 => RequirementProgress::Dropped])
-        ->and(RequirementProgress::of(RequirementStatus::Decided, DeliveryStatus::Failed))->toBe(RequirementProgress::InProgress)
+    expect($progress)->toBe([1 => RequirementProgress::Pending, 2 => RequirementProgress::Pending, 3 => RequirementProgress::Todo, 4 => RequirementProgress::Todo, 5 => RequirementProgress::Done, 6 => RequirementProgress::Dropped])
+        ->and(RequirementProgress::of(RequirementStatus::Decided, DeliveryStatus::Failed))->toBe(RequirementProgress::Todo)
+        ->and(RequirementProgress::of(RequirementStatus::Decided, DeliveryStatus::InProgress))->toBe(RequirementProgress::Todo)
         ->and(RequirementProgress::of(RequirementStatus::Decided, DeliveryStatus::Verified))->toBe(RequirementProgress::Done)
-        ->and(RequirementTreeNode::total($tree)->progressCounts())->toBe(['待决策' => 1, '待做' => 1, '进行中' => 1, '完成' => 1]);
+        ->and(RequirementTreeNode::total($tree)->progressCounts())->toBe(['待决策' => 1, '待做' => 2, '完成' => 1]);
 
     Livewire::test(RequirementTree::class)
-        ->assertSee('title="1 待决策 · 1 待做 · 1 进行中 · 1 完成"', false)
+        ->assertSee('title="1 待决策 · 2 待做 · 1 完成"', false)
+        ->assertDontSee('进行中')
         ->assertSeeHtmlInOrder(['1<span class="hidden @xl:inline"> 待决策</span>', '1<span class="hidden @xl:inline"> 完成</span>'])
-        ->assertSeeInOrder(['Rule 2', '待决策 · 等我', 'Rule 3', '待做', 'Rule 4', '进行中', 'Rule 5', '完成', 'Rule 6', '放弃']);
+        ->assertSeeInOrder(['Checkout', '待决策（1）', 'Rule 2', '待决策 · 等我', 'Rule 3', '待做', 'Rule 4', '待做', 'Rule 5', '完成', 'Rule 6', '放弃']);
 });
 
 it('keeps a pick as a draft that survives reopening the page and counts it [T60]', function () {
@@ -293,7 +295,7 @@ it('lists decided rules not built yet in dependency order [T64]', function () {
     decisionRule($goal, 6, RequirementStatus::Proposed, ['title' => 'Still a proposal']);
 
     Livewire::withQueryParams(['tab' => 'todo'])->test(RequirementTree::class)
-        ->assertSeeInOrder(['待做（3）', 'Validate the card', 'Charge the card', '进行中', 'Send receipt'])
+        ->assertSeeInOrder(['待做（3）', 'Validate the card', 'Charge the card', 'Send receipt'])
         ->assertDontSee('Already shipped')
         ->assertDontSee('Still a proposal');
 });
@@ -357,7 +359,7 @@ it('never asks to decide a 分组: no card, no count, not on the boss list, and 
 
     Livewire::withQueryParams(['selectedNumber' => 3])->test(RequirementTree::class)
         ->assertSeeInOrder(['等我 1', '待发老板 1', '待决策（2）'])
-        ->assertSeeInOrder(['Pending group', '含 2 待决策']);
+        ->assertSeeInOrder(['Pending group', '待决策（2）']);
 
     Livewire::withQueryParams(['tab' => 'pending'])->test(RequirementTree::class)
         ->assertSee('Rule for me')
@@ -472,27 +474,32 @@ it('sums a parent up from everything under it, open decisions included [T73]', f
     expect((new RequirementRollup($delivered, $pending))->progress())->toBe($expected);
 })->with([
     'all built' => [['已验证' => 2, '已实现' => 1], 0, RequirementProgress::Done],
-    'built and a decision still open' => [['已验证' => 3], 1, RequirementProgress::InProgress],
-    'built and not built' => [['已验证' => 1, '未实现' => 1], 0, RequirementProgress::InProgress],
+    'built and a decision still open' => [['已验证' => 3], 1, RequirementProgress::Pending],
+    'built and not built' => [['已验证' => 1, '未实现' => 1], 0, RequirementProgress::Todo],
+    'built and being built' => [['已验证' => 1, '实现中' => 1], 0, RequirementProgress::Todo],
     'nothing built, all ready' => [['未实现' => 2], 0, RequirementProgress::Todo],
     'all open decisions' => [[], 2, RequirementProgress::Pending],
     'ready and open, nothing built' => [['未实现' => 1], 1, RequirementProgress::Pending],
-    'failed, nothing built' => [['验证失败' => 1, '未实现' => 1], 0, RequirementProgress::InProgress],
+    'failed' => [['验证失败' => 1, '已验证' => 1], 0, RequirementProgress::Todo],
     'nothing counted' => [[], 0, null],
 ]);
 
-it('shows a sub-goal with a built rule and an open one as in progress, not done [T73]', function () {
+it('shows a sub-goal with a built rule and an open one as 待决策, not done [T73]', function () {
     [$project, , $goal] = decisionDesk();
     $sub = Requirement::factory()->create(['project_id' => $project->id, 'number' => 2, 'parent_id' => $goal->id, 'kind' => RequirementKind::SubGoal, 'status' => RequirementStatus::Decided, 'title' => 'Members only']);
     decisionRule($sub, 3, RequirementStatus::Decided)->linkedFeatures()->attach(Feature::factory()->create(['project_id' => $project->id, 'status' => FeatureStatus::Done]));
     decisionRule($sub, 4, RequirementStatus::Proposed);
     decisionRule($sub, 5, RequirementStatus::Void);
+    decisionRule($sub, 6, RequirementStatus::Decided, ['title' => 'Failing rule'])->tests()->attach(Test::factory()->create(['project_id' => $project->id, 'last_result' => TestLastResult::Failed]));
+
+    Livewire::withQueryParams(['selectedNumber' => 6])->test(RequirementTree::class)
+        ->assertSeeInOrder(['Members only', '待决策（1）', '✗ 1', 'Failing rule', '待做', '✗ 验证失败']);
 
     $progress = collect(RequirementTreeNode::flattened(app(RequirementTreeService::class)->tree($project)))
         ->mapWithKeys(fn (RequirementTreeNode $node): array => [$node->requirement->number => $node->progress])->all();
 
-    expect($progress[2])->toBe(RequirementProgress::InProgress)
-        ->and($progress[1])->toBe(RequirementProgress::InProgress);
+    expect($progress[2])->toBe(RequirementProgress::Pending)
+        ->and($progress[1])->toBe(RequirementProgress::Pending);
 });
 
 it('starts a newly decided rule from 待做, records a document-approved pick as the boss, and shows the old rule as superseded [T74]', function () {

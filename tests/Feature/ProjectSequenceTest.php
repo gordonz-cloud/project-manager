@@ -5,7 +5,7 @@ use App\Models\Feature;
 use App\Models\ModelField;
 use App\Models\Project;
 
-test('feature numbers increment per project', function () {
+test('feature numbers increment per project [T9]', function () {
     $projectA = Project::factory()->create();
     $projectB = Project::factory()->create();
 
@@ -26,7 +26,7 @@ test('feature number is not overwritten when explicitly provided', function () {
     expect($feature->number)->toBe(7);
 });
 
-test('model field numbers increment per project', function () {
+test('model field numbers increment per project [T12]', function () {
     $projectA = Project::factory()->create();
     $projectB = Project::factory()->create();
     $dataModel = DataModel::factory()->create(['project_id' => $projectA->id]);

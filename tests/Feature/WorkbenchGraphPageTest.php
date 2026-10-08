@@ -72,7 +72,7 @@ test('workbench graph page uses the expected navigation contract', function () {
         ->and(WorkbenchGraph::getNavigationSort())->toBe(0);
 });
 
-test('the tree starts at use case groups, then use cases, then their modules and features', function () {
+test('the tree starts at use case groups, then use cases, then their modules and features [T26]', function () {
     $records = workbenchContext();
 
     $page = Livewire::test(WorkbenchGraph::class)
@@ -102,7 +102,7 @@ test('the tree starts at use case groups, then use cases, then their modules and
     $page->assertSeeInOrder(['Checkout group', 'Trace goal']);
 });
 
-test('the tree shows business names only, never table or column names', function () {
+test('the tree shows business names only, never table or column names [T26]', function () {
     workbenchContext();
 
     Livewire::test(WorkbenchGraph::class)
@@ -111,7 +111,7 @@ test('the tree shows business names only, never table or column names', function
         ->assertDontSee(['module_use_cases', 'use_case_id', 'data_model_feature', '未建立']);
 });
 
-test('search filters the tree and opens the branches that match', function () {
+test('search filters the tree and opens the branches that match [T115]', function () {
     $records = workbenchContext();
     UseCase::factory()->create(['use_case_group_id' => $records['group']->id, 'goal' => 'Unrelated goal']);
 
@@ -124,7 +124,7 @@ test('search filters the tree and opens the branches that match', function () {
         ->assertDontSee('Unrelated goal');
 });
 
-test('toggling a row opens its children', function () {
+test('toggling a row opens its children [T26]', function () {
     $records = workbenchContext();
     $useCasePath = "use_case_group:{$records['group']->id}>use_case:{$records['useCase']->id}";
 
@@ -135,7 +135,7 @@ test('toggling a row opens its children', function () {
         ->assertSee('Trace feature');
 });
 
-test('the detail panel shows one rendered text block and no relation lists', function () {
+test('the detail panel shows one rendered text block and no relation lists [T116]', function () {
     $records = workbenchContext();
 
     Livewire::test(WorkbenchGraph::class)
@@ -147,7 +147,7 @@ test('the detail panel shows one rendered text block and no relation lists', fun
         ->assertSee('Feature entry text');
 });
 
-test('the selected node survives a reload through the url and opens its branch', function () {
+test('the selected node survives a reload through the url and opens its branch [T117]', function () {
     $records = workbenchContext();
     $featureKey = "feature:{$records['feature']->id}";
 
@@ -158,7 +158,7 @@ test('the selected node survives a reload through the url and opens its branch',
         ->assertSee('Feature entry text');
 });
 
-test('features without a use case sit in their own bucket', function () {
+test('features without a use case sit in their own bucket [T26]', function () {
     $records = workbenchContext();
     Feature::factory()->create(['project_id' => $records['project']->id, 'use_case_id' => null, 'title' => 'Loose feature']);
 
@@ -168,7 +168,7 @@ test('features without a use case sit in their own bucket', function () {
         ->and(end($tree)->children[0]->label)->toBe('Loose feature');
 });
 
-test('use cases within a group order by distinct data model count, ties by name', function () {
+test('use cases within a group order by distinct data model count, ties by name [T26]', function () {
     $records = workbenchContext(); // 'Trace goal' has 1 model via its feature
 
     // Zero-model use case: no features at all.
@@ -198,7 +198,7 @@ test('use cases within a group order by distinct data model count, ties by name'
         ->and($useCases->firstWhere('label', 'Two models')->badge)->toEndWith('2 Model');
 });
 
-test('records from another project cannot be selected', function () {
+test('records from another project cannot be selected [T118]', function () {
     $records = workbenchContext();
     $otherFeature = Feature::factory()->create(['project_id' => Project::factory()->create()->id]);
 
@@ -211,7 +211,7 @@ test('records from another project cannot be selected', function () {
         ->assertSet('selectedKey', "use_case:{$records['useCase']->id}");
 });
 
-test('the edit slide-over saves the selected record', function () {
+test('the edit slide-over saves the selected record [T30]', function () {
     $records = workbenchContext();
 
     Livewire::test(WorkbenchGraph::class)
@@ -223,7 +223,7 @@ test('the edit slide-over saves the selected record', function () {
     expect($records['group']->fresh()->name)->toBe('Renamed group');
 });
 
-test('markdown in specs is escaped', function () {
+test('markdown in specs is escaped [T116]', function () {
     $records = workbenchContext();
     $records['useCaseSpec']->update(['content' => "<script>alert('xss')</script>"]);
 
@@ -232,7 +232,7 @@ test('markdown in specs is escaped', function () {
         ->assertDontSeeHtml("<script>alert('xss')</script>");
 });
 
-test('entries under features carry their use case number', function () {
+test('entries under features carry their use case number [T26]', function () {
     $records = workbenchContext();
     $login = $records['requestReply'];
     $entry = fn (string $path): RequestReply => RequestReply::factory()->create(['use_case_id' => $records['useCase']->id, 'method' => 'GET', 'entry' => $path]);
@@ -250,7 +250,7 @@ test('entries under features carry their use case number', function () {
     ]);
 });
 
-test('feature detail renders its flowchart as mermaid, then the pseudocode', function () {
+test('feature detail renders its flowchart as mermaid, then the pseudocode [T28]', function () {
     $records = workbenchContext();
     Flowchart::factory()->create([
         'feature_id' => $records['feature']->id,
@@ -269,7 +269,7 @@ test('feature detail renders its flowchart as mermaid, then the pseudocode', fun
         ->assertDontSeeHtml('data-flowchart');
 });
 
-test('the flowchart has a fullscreen toggle button', function () {
+test('the flowchart has a fullscreen toggle button [T121]', function () {
     $records = workbenchContext();
     Flowchart::factory()->create([
         'feature_id' => $records['feature']->id,
@@ -282,7 +282,7 @@ test('the flowchart has a fullscreen toggle button', function () {
         ->assertSeeHtml('data-flowchart-fullscreen-toggle');
 });
 
-test('the feature has a flowchart leaf that renders the same chart when selected', function () {
+test('the feature has a flowchart leaf that renders the same chart when selected [T119]', function () {
     $records = workbenchContext();
     Flowchart::factory()->create([
         'feature_id' => $records['feature']->id,
@@ -302,7 +302,7 @@ test('the feature has a flowchart leaf that renders the same chart when selected
         ->assertSeeHtmlInOrder(['data-flowchart', 'data-pseudocode', 'app/Http/TraceController.php::store']);
 });
 
-test('the feature shows a grey "无流程图" leaf when it has no flowchart', function () {
+test('the feature shows a grey "无流程图" leaf when it has no flowchart [T119]', function () {
     $records = workbenchContext();
 
     $feature = collect(Livewire::test(WorkbenchGraph::class)->instance()->tree[0]->children[0]->children)
@@ -313,7 +313,7 @@ test('the feature shows a grey "无流程图" leaf when it has no flowchart', fu
         ->and($feature->children[0]->isFolder)->toBeTrue();
 });
 
-test('a use case is green only when all its features and their data models are finished', function () {
+test('a use case is green only when all its features and their data models are finished [T27]', function () {
     $records = workbenchContext(); // 'Trace goal': 1 Done feature, 1 Existing model → complete
 
     $tree = Livewire::test(WorkbenchGraph::class)->instance()->tree;
@@ -331,7 +331,7 @@ test('a use case is green only when all its features and their data models are f
         ->and($traceGoal->badge)->toBe('功能 1/2 · 1 Model');
 });
 
-test('a use case turns amber when a used data model is still 计划中, and shows how many need building', function () {
+test('a use case turns amber when a used data model is still 计划中, and shows how many need building [T27]', function () {
     $records = workbenchContext();
     $planned = DataModel::factory()->create(['project_id' => $records['project']->id, 'status' => DataModelStatus::Planned]);
     $records['feature']->dataModels()->attach($planned);
@@ -343,7 +343,7 @@ test('a use case turns amber when a used data model is still 计划中, and show
         ->and($traceGoal->badge)->toBe('功能 1/1 · Model 1 待建 · 2 Model');
 });
 
-test('作废 features are excluded from the total and never block green', function () {
+test('作废 features are excluded from the total and never block green [T27]', function () {
     $records = workbenchContext();
     Feature::factory()->forUseCase($records['useCase'])->create(['status' => FeatureStatus::Void]);
 
@@ -354,7 +354,7 @@ test('作废 features are excluded from the total and never block green', functi
         ->and($traceGoal->badge)->toBe('功能 1/1 · 1 Model');
 });
 
-test('a feature with a stale flowchart is amber, and its flowchart leaf names how many nodes', function () {
+test('a feature with a stale flowchart is amber, and its flowchart leaf names how many nodes [T113]', function () {
     $records = workbenchContext(); // Done feature, otherwise complete
 
     Flowchart::factory()->create([
@@ -376,7 +376,7 @@ test('a feature with a stale flowchart is amber, and its flowchart leaf names ho
         ->and($traceGoal->badge)->toBe('功能 0/1 · 1 Model');
 });
 
-test('a group rolls up the progress of every use case inside it', function () {
+test('a group rolls up the progress of every use case inside it [T27]', function () {
     $records = workbenchContext(); // group has 'Trace goal': 功能 1/1, 1 Model, complete
     $unfinished = UseCase::factory()->create(['use_case_group_id' => $records['group']->id, 'goal' => 'Unfinished goal']);
     Feature::factory()->forUseCase($unfinished)->create(['status' => FeatureStatus::Todo]);
@@ -389,7 +389,7 @@ test('a group rolls up the progress of every use case inside it', function () {
         ->and($group->badge)->toBe('2 Use Case · 功能 1/2');
 });
 
-test('a module spec dot is green when active, amber when draft, and never grey', function () {
+test('a module spec dot is green when active, amber when draft, and never grey [T114]', function () {
     $records = workbenchContext();
 
     $module = collect(Livewire::test(WorkbenchGraph::class)->instance()->tree[0]->children[0]->children)->keyBy('label')['模块']->children[0];
@@ -405,7 +405,7 @@ test('a module spec dot is green when active, amber when draft, and never grey',
     expect($draftSpec->tone)->toBe('warning');
 });
 
-test('the rendered tree never shows a dot tone other than success or warning', function () {
+test('the rendered tree never shows a dot tone other than success or warning [T114]', function () {
     $records = workbenchContext();
     $records['moduleSpec']->update(['status' => 'draft']);
     Feature::factory()->forUseCase($records['useCase'])->create(['status' => FeatureStatus::Uncertain]);
@@ -427,7 +427,7 @@ function collectTones(array $nodes): Collection
     return collect($nodes)->flatMap(fn ($node) => collect([$node->tone])->filter()->merge(collectTones($node->children)));
 }
 
-test('feature and data model rows show a status pill colored by meaning', function () {
+test('feature and data model rows show a status pill colored by meaning [T114]', function () {
     $records = workbenchContext();
 
     $tree = Livewire::test(WorkbenchGraph::class)->instance()->tree;
@@ -444,7 +444,7 @@ test('feature and data model rows show a status pill colored by meaning', functi
         ->and($dataModel->tone)->toBe('success');
 });
 
-test('the recent commits card shows at most 50 newest commits, excluding other projects', function () {
+test('the recent commits card shows at most 50 newest commits, excluding other projects [T122]', function () {
     $records = workbenchContext();
 
     Commit::factory()->count(55)->create([
@@ -473,7 +473,7 @@ test('the recent commits card shows at most 50 newest commits, excluding other p
         ->and(collect($commits)->pluck('subject'))->not->toContain('Other project commit');
 });
 
-test('clicking a commit linked to a feature selects that feature', function () {
+test('clicking a commit linked to a feature selects that feature [T29]', function () {
     $records = workbenchContext();
 
     $commit = Commit::factory()->create([

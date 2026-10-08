@@ -8,7 +8,7 @@ use App\Services\Requirements\RequirementDependencies;
 use App\Services\Requirements\RequirementVersionOptions;
 use Illuminate\Validation\ValidationException;
 
-test('module and requirement dependency validation preserve their form messages', function () {
+test('module and requirement dependency validation preserve their form messages [T4] [T31]', function () {
     $project = Project::factory()->create();
     $moduleA = Module::factory()->create(['project_id' => $project->id]);
     $moduleB = Module::factory()->create(['project_id' => $project->id]);

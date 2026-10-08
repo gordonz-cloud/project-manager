@@ -9,7 +9,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
 
-test('login page is reachable', function () {
+test('login page is reachable [T76]', function () {
     $this->get('/admin/login')->assertOk();
 });
 
@@ -17,7 +17,7 @@ test('admin panel uses the full content width', function () {
     expect(Filament::getPanel('admin')->getMaxContentWidth())->toBe(Width::Full);
 });
 
-test('a user cannot access a project they do not belong to', function () {
+test('a user cannot access a project they do not belong to [T2]', function () {
     $user = User::factory()->create();
     $p1 = Project::factory()->create(['slug' => 'p1']);
     $p2 = Project::factory()->create(['slug' => 'p2']);
@@ -32,7 +32,7 @@ test('a user cannot access a project they do not belong to', function () {
         ->assertOk();
 });
 
-test('BelongsToProject scopes records to the current tenant and fills project_id on create', function () {
+test('BelongsToProject scopes records to the current tenant and fills project_id on create [T2]', function () {
     Schema::create('project_scoped_widgets', function (Blueprint $table) {
         $table->id();
         $table->foreignId('project_id')->nullable()->constrained('projects');

@@ -9,7 +9,7 @@ use App\Models\User;
 use Filament\Facades\Filament;
 use Livewire\Livewire;
 
-test('requirement list only shows requirements for the current tenant', function () {
+test('requirement list only shows requirements for the current tenant [T2]', function () {
     $user = User::factory()->create();
     $p1 = Project::factory()->create();
     $p2 = Project::factory()->create();
@@ -26,7 +26,7 @@ test('requirement list only shows requirements for the current tenant', function
         ->assertCountTableRecords(1);
 });
 
-test('requirement form module select only offers modules from the current tenant', function () {
+test('requirement form module select only offers modules from the current tenant [T97]', function () {
     $user = User::factory()->create();
     $p1 = Project::factory()->create();
     $p2 = Project::factory()->create();
@@ -49,7 +49,7 @@ test('requirement form module select only offers modules from the current tenant
     expect($options)->not->toHaveKey($p2Module->id);
 });
 
-test('the requirement list groups by module without asking Filament to sort a many-to-many', function () {
+test('the requirement list groups by module without asking Filament to sort a many-to-many [T97]', function () {
     $user = User::factory()->create();
     $project = Project::factory()->create();
     $project->users()->attach($user);

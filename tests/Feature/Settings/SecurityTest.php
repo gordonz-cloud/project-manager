@@ -6,7 +6,7 @@ use Livewire\Livewire;
 
 beforeEach(function () {});
 
-test('security settings page can be rendered', function () {
+test('security settings page can be rendered [T87]', function () {
     $user = User::factory()->create();
 
     $response = $this->actingAs($user)
@@ -15,7 +15,7 @@ test('security settings page can be rendered', function () {
     $response->assertOk();
 });
 
-test('security settings page renders without two factor when feature is disabled', function () {
+test('security settings page renders without two factor when feature is disabled [T87]', function () {
     config(['fortify.features' => []]);
 
     $user = User::factory()->create();
@@ -31,7 +31,7 @@ test('security settings page renders without two factor when feature is disabled
 
 test('two factor authentication disabled when confirmation abandoned between requests', function () {});
 
-test('password can be updated', function () {
+test('password can be updated [T87]', function () {
     $user = User::factory()->create([
         'password' => Hash::make('password'),
     ]);
@@ -49,7 +49,7 @@ test('password can be updated', function () {
     expect(Hash::check('new-password', $user->refresh()->password))->toBeTrue();
 });
 
-test('correct password must be provided to update password', function () {
+test('correct password must be provided to update password [T88]', function () {
     $user = User::factory()->create([
         'password' => Hash::make('password'),
     ]);

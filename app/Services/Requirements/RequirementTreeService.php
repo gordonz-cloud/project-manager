@@ -61,7 +61,7 @@ class RequirementTreeService
 
     /**
      * Decided rules that are not built yet, in the order to build them: the tree's order, where every level puts what
-     * is depended on first. 进行中 ones stay in the list so nobody starts the next before finishing them.
+     * is depended on first. Rules already being built stay in the list (they are 待做 until built).
      *
      * @param  list<RequirementTreeNode>  $tree
      * @return list<RequirementTreeNode>
@@ -70,7 +70,7 @@ class RequirementTreeService
     {
         return array_values(array_filter(
             RequirementTreeNode::flattened($tree),
-            fn (RequirementTreeNode $node): bool => $node->children === [] && in_array($node->progress, [RequirementProgress::Todo, RequirementProgress::InProgress], true),
+            fn (RequirementTreeNode $node): bool => $node->children === [] && $node->progress === RequirementProgress::Todo,
         ));
     }
 

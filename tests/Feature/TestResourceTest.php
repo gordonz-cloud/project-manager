@@ -10,7 +10,7 @@ use App\Models\User;
 use Filament\Facades\Filament;
 use Livewire\Livewire;
 
-test('the test list groups by feature without asking Filament to sort a many-to-many', function () {
+test('the test list groups by feature without asking Filament to sort a many-to-many [T125]', function () {
     $user = User::factory()->create();
     $project = Project::factory()->create();
     $project->users()->attach($user);
@@ -32,7 +32,7 @@ test('the test list groups by feature without asking Filament to sort a many-to-
         ->assertSee('（未挂功能）');
 });
 
-test('the test list can be narrowed to one module, reached through its features', function () {
+test('the test list can be narrowed to one module, reached through its features [T125]', function () {
     $user = User::factory()->create();
     $project = Project::factory()->create();
     $project->users()->attach($user);

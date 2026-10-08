@@ -37,7 +37,7 @@ function flatTree(array $nodes): array
     return $flat;
 }
 
-it('refuses a parent that would make a cycle or lives in another project', function () {
+it('refuses a parent that would make a cycle or lives in another project [T18]', function () {
     $root = Test::factory()->create(['number' => 1]);
     $child = Test::factory()->create(['project_id' => $root->project_id, 'number' => 2, 'parent_id' => $root->id]);
 
@@ -47,7 +47,7 @@ it('refuses a parent that would make a cycle or lives in another project', funct
     expect(fn () => $child->update(['parent_id' => $stranger->id]))->toThrow(LogicException::class, 'same project');
 });
 
-it('assigns numbers to new nodes, links them by parent_ref, updates by number, and syncs feature tags', function () {
+it('assigns numbers to new nodes, links them by parent_ref, updates by number, and syncs feature tags [T17]', function () {
     $project = Project::factory()->create(['slug' => 'tt']);
     $feature = Feature::factory()->create(['project_id' => $project->id, 'number' => 5]);
 
@@ -71,7 +71,7 @@ it('assigns numbers to new nodes, links them by parent_ref, updates by number, a
     expect($root->features()->count())->toBe(0);
 });
 
-it('never reuses a number across saves and prints the mapping as JSON', function () {
+it('never reuses a number across saves and prints the mapping as JSON [T17]', function () {
     $project = Project::factory()->create(['slug' => 'tt']);
     Test::factory()->create(['project_id' => $project->id, 'number' => 7]);
 
@@ -82,7 +82,7 @@ it('never reuses a number across saves and prints the mapping as JSON', function
     expect(Test::where('project_id', $project->id)->orderBy('number')->pluck('number')->all())->toBe([7, 8, 9]);
 });
 
-it('rejects a bad tree and writes nothing', function (array $nodes, string $message) {
+it('rejects a bad tree and writes nothing [T18]', function (array $nodes, string $message) {
     Project::factory()->create(['slug' => 'tt']);
 
     saveTests(['project' => 'tt', 'nodes' => $nodes])->expectsOutputToContain($message)->assertFailed();
@@ -97,7 +97,7 @@ it('rejects a bad tree and writes nothing', function (array $nodes, string $mess
     'bad enum' => [[['action' => 'a', 'result' => 'PASS']], 'result "PASS"'],
 ]);
 
-it('derives blocked below a failed node without storing it, and rolls up subtree counts', function () {
+it('derives blocked below a failed node without storing it, and rolls up subtree counts [T20]', function () {
     $project = Project::factory()->create();
     $make = fn (int $number, ?Test $parent, TestLastResult $result, ?TestAuto $auto = TestAuto::Yes): Test => Test::factory()->create([
         'project_id' => $project->id, 'number' => $number, 'parent_id' => $parent?->id, 'last_result' => $result, 'auto' => $auto,
@@ -130,7 +130,7 @@ function testTreePage(): Project
     return $project;
 }
 
-it('renders the tree, filters to matches with their ancestor path, and lists uncovered features', function () {
+it('renders the tree, filters to matches with their ancestor path, and lists uncovered features [T19]', function () {
     $project = testTreePage();
     $covered = Feature::factory()->create(['project_id' => $project->id, 'number' => 1, 'title' => 'Covered feature']);
     Feature::factory()->create(['project_id' => $project->id, 'number' => 2, 'title' => 'Lonely feature']);
@@ -158,7 +158,7 @@ it('renders the tree, filters to matches with their ancestor path, and lists unc
         ->assertSeeInOrder(['Root step', 'Middle step', 'Broken leaf']);
 });
 
-it('groups nodes by business area as real subtrees: other-area ancestors muted once, shared chains merged, counts area-only', function () {
+it('groups nodes by business area as real subtrees: other-area ancestors muted once, shared chains merged, counts area-only [T123]', function () {
     $project = Project::factory()->create();
     $make = fn (int $number, ?Test $parent, ?string $module, TestLastResult $result = TestLastResult::Passed, ?string $location = 'tests/X.php'): Test => Test::factory()->create([
         'project_id' => $project->id, 'number' => $number, 'parent_id' => $parent?->id, 'module' => $module,
@@ -196,7 +196,7 @@ it('groups nodes by business area as real subtrees: other-area ancestors muted o
         ->and($muted($areas['账户']->nodes))->toBe([]);
 });
 
-it('renders other-area ancestors as muted, open, clickable rows without breadcrumb lines', function () {
+it('renders other-area ancestors as muted, open, clickable rows without breadcrumb lines [T123]', function () {
     $project = testTreePage();
     $login = Test::factory()->create(['project_id' => $project->id, 'number' => 1, 'module' => '账户', 'title' => 'Log in']);
     $open = Test::factory()->create(['project_id' => $project->id, 'number' => 2, 'parent_id' => $login->id, 'module' => '结账', 'title' => 'Open cart']);
@@ -212,7 +212,7 @@ it('renders other-area ancestors as muted, open, clickable rows without breadcru
         ->assertSeeHtml('data-test-marker>[T1]<');
 });
 
-it('keeps number and expected out of rows and shows the expected field in the detail', function () {
+it('keeps number and expected out of rows and shows the expected field in the detail [T124]', function () {
     $project = testTreePage();
     $root = Test::factory()->create(['project_id' => $project->id, 'number' => 41, 'module' => '结账', 'title' => 'Pay now', 'expected' => 'Order row created', 'last_result' => TestLastResult::Failed]);
     Test::factory()->create(['project_id' => $project->id, 'number' => 42, 'parent_id' => $root->id, 'module' => '结账', 'title' => 'Refund', 'expected' => 'Money back', 'last_result' => TestLastResult::Passed]);

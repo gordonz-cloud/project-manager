@@ -42,7 +42,7 @@ function skippedCase(string $name): string
     return "<testcase name=\"{$name}\" file=\"tests/Feature/SampleTest.php::{$name}\" assertions=\"0\" time=\"0.01\"><skipped/></testcase>";
 }
 
-it('writes passed, failed, and skipped results onto claimed nodes and fills empty file/name', function () {
+it('writes passed, failed, and skipped results onto claimed nodes and fills empty file/name [T126]', function () {
     $project = Project::factory()->create(['slug' => 'tt']);
     $passNode = Test::factory()->create(['project_id' => $project->id, 'number' => 1, 'last_result' => TestLastResult::NotRun]);
     $failNode = Test::factory()->create(['project_id' => $project->id, 'number' => 2, 'last_result' => TestLastResult::NotRun]);
@@ -61,7 +61,7 @@ it('writes passed, failed, and skipped results onto claimed nodes and fills empt
         ->and($skipNode->fresh()->last_result)->toBe(TestLastResult::Skipped);
 });
 
-it('marks a node failed when any claiming testcase fails, even if others pass', function () {
+it('marks a node failed when any claiming testcase fails, even if others pass [T127]', function () {
     $project = Project::factory()->create(['slug' => 'tt']);
     $node = Test::factory()->create(['project_id' => $project->id, 'number' => 1, 'last_result' => TestLastResult::NotRun]);
 
@@ -70,7 +70,7 @@ it('marks a node failed when any claiming testcase fails, even if others pass', 
     expect($node->fresh()->last_result)->toBe(TestLastResult::Failed);
 });
 
-it('does not reset a node the run did not claim', function () {
+it('does not reset a node the run did not claim [T128]', function () {
     $project = Project::factory()->create(['slug' => 'tt']);
     $node = Test::factory()->create(['project_id' => $project->id, 'number' => 1, 'last_result' => TestLastResult::Passed]);
 
@@ -79,7 +79,7 @@ it('does not reset a node the run did not claim', function () {
     expect($node->fresh()->last_result)->toBe(TestLastResult::Passed);
 });
 
-it('resets the stale result of an unclaimed node on a full run, only in that project', function () {
+it('resets the stale result of an unclaimed node on a full run, only in that project [T129]', function () {
     $project = Project::factory()->create(['slug' => 'tt']);
     $other = Project::factory()->create(['slug' => 'other']);
     $claimed = Test::factory()->create(['project_id' => $project->id, 'number' => 1, 'last_result' => TestLastResult::NotRun]);
@@ -95,7 +95,7 @@ it('resets the stale result of an unclaimed node on a full run, only in that pro
         ->and($otherProject->fresh()->last_result)->toBe(TestLastResult::Passed);
 });
 
-it('reports unknown claimed numbers, unclaimed testcases, and auto nodes missing a test', function () {
+it('reports unknown claimed numbers, unclaimed testcases, and auto nodes missing a test [T130]', function () {
     $project = Project::factory()->create(['slug' => 'tt']);
     Test::factory()->create(['project_id' => $project->id, 'number' => 1, 'title' => 'Covered', 'auto' => TestAuto::Yes]);
     Test::factory()->create(['project_id' => $project->id, 'number' => 9, 'title' => 'Not covered', 'auto' => TestAuto::Yes]);
@@ -110,7 +110,7 @@ it('reports unknown claimed numbers, unclaimed testcases, and auto nodes missing
         ->assertSuccessful();
 });
 
-it('fails for an unknown project or missing file', function () {
+it('fails for an unknown project or missing file [T131]', function () {
     importJunit('does-not-exist', [passingCase('a [T1]')])->assertFailed();
 
     Project::factory()->create(['slug' => 'tt']);

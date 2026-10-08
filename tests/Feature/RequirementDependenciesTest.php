@@ -8,7 +8,7 @@ use App\Models\User;
 use Filament\Facades\Filament;
 use Livewire\Livewire;
 
-test('a requirement cannot depend on something that already depends on it, transitively', function () {
+test('a requirement cannot depend on something that already depends on it, transitively [T31]', function () {
     $project = Project::factory()->create();
     $a = Requirement::factory()->create(['project_id' => $project->id]);
     $b = Requirement::factory()->create(['project_id' => $project->id]);
@@ -21,7 +21,7 @@ test('a requirement cannot depend on something that already depends on it, trans
     expect(Requirement::wouldCycle($a->id, $c->id))->toBeFalse();
 });
 
-test('build order puts a requirement after the ones it depends on, even across module order', function () {
+test('build order puts a requirement after the ones it depends on, even across module order [T32]', function () {
     $project = Project::factory()->create();
     $orders = Module::factory()->create(['project_id' => $project->id, 'name' => '订单']);
     $panel = Module::factory()->create(['project_id' => $project->id, 'name' => '经营面板']);
@@ -45,7 +45,7 @@ test('build order puts a requirement after the ones it depends on, even across m
     expect(array_search($overview->id, $order))->toBeLessThan(array_search($ordersPull->id, $order));
 });
 
-test('without requirement dependencies the build order still follows module order then id', function () {
+test('without requirement dependencies the build order still follows module order then id [T32]', function () {
     $project = Project::factory()->create();
     $orders = Module::factory()->create(['project_id' => $project->id, 'name' => '订单']);
     $panel = Module::factory()->create(['project_id' => $project->id, 'name' => '经营面板']);
@@ -60,7 +60,7 @@ test('without requirement dependencies the build order still follows module orde
         ->toBe([$ordersRequirement->id, $panelRequirement->id]);
 });
 
-test('the dependency select on a requirement\'s form excludes itself and other projects', function () {
+test('the dependency select on a requirement\'s form excludes itself and other projects [T97]', function () {
     $user = User::factory()->create();
     $project = Project::factory()->create();
     $project->users()->attach($user);

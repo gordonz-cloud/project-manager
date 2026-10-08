@@ -11,7 +11,7 @@ use App\Models\User;
 use Filament\Facades\Filament;
 use Livewire\Livewire;
 
-test('creating a feature assigns the current tenant and the first sequence number', function () {
+test('creating a feature assigns the current tenant and the first sequence number [T9]', function () {
     $user = User::factory()->create();
     $p1 = Project::factory()->create();
     $p1->users()->attach($user);
@@ -38,7 +38,7 @@ test('creating a feature assigns the current tenant and the first sequence numbe
     expect($feature->use_case_id)->toBe($useCase->id);
 });
 
-test('the feature list groups by each feature\'s own module', function () {
+test('the feature list groups by each feature\'s own module [T103]', function () {
     $user = User::factory()->create();
     $project = Project::factory()->create();
     $project->users()->attach($user);
@@ -62,7 +62,7 @@ test('the feature list groups by each feature\'s own module', function () {
         ->assertSee('结账');
 });
 
-test('the feature list still renders when a layer is not a FeatureLayer value', function () {
+test('the feature list still renders when a layer is not a FeatureLayer value [T103]', function () {
     $user = User::factory()->create();
     $project = Project::factory()->create();
     $project->users()->attach($user);

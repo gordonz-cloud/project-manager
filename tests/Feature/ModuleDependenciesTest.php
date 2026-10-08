@@ -8,7 +8,7 @@ use App\Models\User;
 use Filament\Facades\Filament;
 use Livewire\Livewire;
 
-test('a module cannot depend on something that already depends on it, directly', function () {
+test('a module cannot depend on something that already depends on it, directly [T4]', function () {
     $project = Project::factory()->create();
     $a = Module::factory()->create(['project_id' => $project->id]);
     $b = Module::factory()->create(['project_id' => $project->id]);
@@ -17,7 +17,7 @@ test('a module cannot depend on something that already depends on it, directly',
     expect(Module::wouldCycle($b->id, $a->id))->toBeTrue();
 });
 
-test('a module cannot depend on something that already depends on it, transitively', function () {
+test('a module cannot depend on something that already depends on it, transitively [T4]', function () {
     $project = Project::factory()->create();
     $a = Module::factory()->create(['project_id' => $project->id]);
     $b = Module::factory()->create(['project_id' => $project->id]);
@@ -28,7 +28,7 @@ test('a module cannot depend on something that already depends on it, transitive
     expect(Module::wouldCycle($c->id, $a->id))->toBeTrue();
 });
 
-test('a module can depend on something unrelated', function () {
+test('a module can depend on something unrelated [T93]', function () {
     $project = Project::factory()->create();
     $a = Module::factory()->create(['project_id' => $project->id]);
     $b = Module::factory()->create(['project_id' => $project->id]);
@@ -36,7 +36,7 @@ test('a module can depend on something unrelated', function () {
     expect(Module::wouldCycle($a->id, $b->id))->toBeFalse();
 });
 
-test('build order respects dependencies', function () {
+test('build order respects dependencies [T5]', function () {
     $project = Project::factory()->create();
     $member = Module::factory()->create(['project_id' => $project->id, 'name' => '会员']);
     $membershipRole = Module::factory()->create(['project_id' => $project->id, 'name' => '会籍角色']);
@@ -51,7 +51,7 @@ test('build order respects dependencies', function () {
     expect(array_search('结账', $order))->toBeLessThan(array_search('奖励', $order));
 });
 
-test('requirement build order follows its furthest-built module', function () {
+test('requirement build order follows its furthest-built module [T32]', function () {
     $project = Project::factory()->create();
     $member = Module::factory()->create(['project_id' => $project->id, 'name' => '会员']);
     $membershipRole = Module::factory()->create(['project_id' => $project->id, 'name' => '会籍角色']);
@@ -67,7 +67,7 @@ test('requirement build order follows its furthest-built module', function () {
     expect(array_search($memberRequirement->id, $order))->toBeLessThan(array_search($roleRequirement->id, $order));
 });
 
-test('the dependency select on a module\'s form excludes itself', function () {
+test('the dependency select on a module\'s form excludes itself [T93]', function () {
     $user = User::factory()->create();
     $project = Project::factory()->create();
     $project->users()->attach($user);

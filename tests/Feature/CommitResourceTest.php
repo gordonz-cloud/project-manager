@@ -7,7 +7,7 @@ use App\Models\User;
 use Filament\Facades\Filament;
 use Livewire\Livewire;
 
-test('a project does not see another project\'s commits', function () {
+test('a project does not see another project\'s commits [T25]', function () {
     $user = User::factory()->create();
     $p1 = Project::factory()->create(['slug' => 'p1']);
     $p2 = Project::factory()->create(['slug' => 'p2']);

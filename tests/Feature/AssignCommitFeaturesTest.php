@@ -5,7 +5,7 @@ use App\Models\Feature;
 use App\Models\Project;
 use Illuminate\Support\Facades\File;
 
-it('hangs commits on features by hash prefix and never moves one that already hangs somewhere', function () {
+it('hangs commits on features by hash prefix and never moves one that already hangs somewhere [T23] [T133]', function () {
     $project = Project::factory()->create(['slug' => 'sg']);
     $refund = Feature::factory()->create(['project_id' => $project->id, 'number' => 15]);
     $checkout = Feature::factory()->create(['project_id' => $project->id, 'number' => 19]);

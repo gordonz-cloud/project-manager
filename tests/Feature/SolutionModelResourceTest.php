@@ -57,7 +57,7 @@ function solutionModelContext(): array
     );
 }
 
-test('solution model resources list their tenant records', function () {
+test('solution model resources list their tenant records [T2]', function () {
     $records = solutionModelContext();
 
     Livewire::test(ListModuleSpecs::class)->assertCanSeeTableRecords([$records['spec']]);
@@ -65,7 +65,7 @@ test('solution model resources list their tenant records', function () {
     Livewire::test(ListWorkflowRuns::class)->assertCanSeeTableRecords([$records['run']]);
 });
 
-test('a module spec can be created for a module once', function () {
+test('a module spec can be created for a module once [T3]', function () {
     $user = User::factory()->create();
     $project = Project::factory()->create();
     $project->users()->attach($user);
@@ -91,7 +91,7 @@ test('a module spec can be created for a module once', function () {
     expect(ModuleSpec::query()->where('module_id', $module->id)->count())->toBe(1);
 });
 
-test('creating a module requires its spec content', function () {
+test('creating a module requires its spec content [T3]', function () {
     $user = User::factory()->create();
     $project = Project::factory()->create();
     $project->users()->attach($user);
@@ -113,7 +113,7 @@ test('creating a module requires its spec content', function () {
         ->toBe('Owns the order lifecycle.');
 });
 
-test('solution model relation managers render the linked records', function () {
+test('solution model relation managers render the linked records [T34] [T94]', function () {
     $records = solutionModelContext();
 
     Livewire::test(UseCasesRelationManager::class, [
@@ -127,7 +127,7 @@ test('solution model relation managers render the linked records', function () {
     ])->assertCanSeeTableRecords([$records['event']]);
 });
 
-test('owner-derived relation managers create records with the owner context', function () {
+test('owner-derived relation managers create records with the owner context [T94] [T99]', function () {
     $records = solutionModelContext();
 
     Livewire::test(UseCasesRelationManager::class, [
@@ -167,7 +167,7 @@ test('owner-derived relation managers create records with the owner context', fu
     expect($feature->use_case_id)->toBe($records['useCase']->id);
 });
 
-test('use case groups are listed per project and can be created', function () {
+test('use case groups are listed per project and can be created [T6]', function () {
     $records = solutionModelContext();
     $otherGroup = UseCaseGroup::factory()->create(['name' => 'Other tenant group']);
 

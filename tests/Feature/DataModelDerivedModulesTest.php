@@ -6,7 +6,7 @@ use App\Models\Module;
 use App\Models\Project;
 use App\Models\Requirement;
 
-test('a model derives its modules from features → requirement → modules', function () {
+test('a model derives its modules from features → requirement → modules [T13]', function () {
     $project = Project::factory()->create();
 
     $module = Module::factory()->create(['project_id' => $project->id]);

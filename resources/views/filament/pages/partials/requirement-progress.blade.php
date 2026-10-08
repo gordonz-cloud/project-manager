@@ -3,7 +3,7 @@
     @php
         $label = match (true) {
             $progress !== \App\Data\Requirements\RequirementProgress::Pending => $progress->value,
-            ($this->nodesById[$requirement->id]->children ?? []) !== [] => '含 '.$this->nodesById[$requirement->id]->rollup->pending().' 待决策',
+            ($this->nodesById[$requirement->id]->children ?? []) !== [] => '待决策（'.$this->nodesById[$requirement->id]->rollup->pending().'）',
             default => '待决策 · '.(\App\Filament\Pages\RequirementTree::WAITING_ON[$requirement->decisionStage()] ?? '等我'),
         };
     @endphp

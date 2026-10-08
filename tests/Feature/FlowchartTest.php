@@ -23,7 +23,7 @@ function chartOf(array $chart): Flowchart
     return new Flowchart(['chart' => $chart]);
 }
 
-test('the model refuses a malformed chart', function (array $chart, string $message) {
+test('the model refuses a malformed chart [T15]', function (array $chart, string $message) {
     expect(fn () => Flowchart::factory()->create(['chart' => $chart]))
         ->toThrow(LogicException::class, $message);
 })->with([
@@ -34,14 +34,14 @@ test('the model refuses a malformed chart', function (array $chart, string $mess
     'no nodes' => [['edges' => []], 'expected'],
 ]);
 
-test('a valid chart saves under its feature project', function () {
+test('a valid chart saves under its feature project [T14]', function () {
     $flowchart = Flowchart::factory()->create();
 
     expect($flowchart->project_id)->toBe($flowchart->feature->project_id)
         ->and($flowchart->feature->flowchart->is($flowchart))->toBeTrue();
 });
 
-test('mermaid maps shapes, renumbers ids and escapes labels', function () {
+test('mermaid maps shapes, renumbers ids and escapes labels [T120]', function () {
     $mermaid = FlowchartMermaid::fromFlowchart(chartOf(['nodes' => [
         ['id' => 'end', 'label' => 'Start "here"', 'shape' => 'start'],
         ['id' => 'b', 'label' => 'ok? <yes>', 'shape' => 'decision', 'file' => 'app/A.php', 'function' => 'store'],
@@ -59,7 +59,7 @@ test('mermaid maps shapes, renumbers ids and escapes labels', function () {
     ]))->not->toContain('app/A.php');
 });
 
-test('mermaid node text shows a two-line code ref for file and/or function, label only otherwise', function (array $node, string $expected) {
+test('mermaid node text shows a two-line code ref for file and/or function, label only otherwise [T120]', function (array $node, string $expected) {
     $mermaid = FlowchartMermaid::fromFlowchart(chartOf(['nodes' => [
         ['id' => 'a', 'label' => '下单', 'shape' => 'step', ...$node],
     ], 'edges' => []]));
@@ -73,7 +73,7 @@ test('mermaid node text shows a two-line code ref for file and/or function, labe
     'neither' => [[], '下单'],
 ]);
 
-test('mermaid tooltips carry file::function per node id', function () {
+test('mermaid tooltips carry file::function per node id [T120]', function () {
     expect(FlowchartMermaid::tooltips(chartOf(['nodes' => [
         ['id' => 'a', 'label' => 'A', 'shape' => 'start'],
         ['id' => 'b', 'label' => 'B', 'shape' => 'step', 'file' => 'app/A.php', 'function' => 'store'],
@@ -102,7 +102,7 @@ function ruleChart(): array
     ];
 }
 
-test('the model accepts a chart that follows the drawing rules', function () {
+test('the model accepts a chart that follows the drawing rules [T14]', function () {
     $long = ruleChart();
     $long['nodes'][0]['label'] = str_repeat('入', 40);
     $long['nodes'][2]['label'] = str_repeat('字', 40);
@@ -116,7 +116,7 @@ test('the model accepts a chart that follows the drawing rules', function () {
         ->and(Flowchart::chartError($parallel))->toBeNull();
 });
 
-test('the model accepts two start nodes converging into shared logic', function () {
+test('the model accepts two start nodes converging into shared logic [T14]', function () {
     $chart = ruleChart();
     $chart['nodes'][] = ['id' => 's2', 'label' => 'POST /member/orders', 'shape' => 'start'];
     $chart['edges'][] = ['from' => 's2', 'to' => 'd'];
@@ -124,7 +124,7 @@ test('the model accepts two start nodes converging into shared logic', function 
     expect(Flowchart::chartError($chart))->toBeNull();
 });
 
-test('the model refuses a chart that breaks a drawing rule', function (Closure $break, string $message) {
+test('the model refuses a chart that breaks a drawing rule [T15]', function (Closure $break, string $message) {
     $chart = ruleChart();
     $break($chart);
 
@@ -156,7 +156,7 @@ test('the model refuses a chart that breaks a drawing rule', function (Closure $
     }, '从 start 走不到'],
 ]);
 
-test('mermaid renders multiple start nodes converging into shared logic', function () {
+test('mermaid renders multiple start nodes converging into shared logic [T120]', function () {
     $mermaid = FlowchartMermaid::fromFlowchart(chartOf(['nodes' => [
         ['id' => 's1', 'label' => 'GET /orders', 'shape' => 'start'],
         ['id' => 's2', 'label' => 'POST /orders', 'shape' => 'start'],
@@ -176,7 +176,7 @@ test('mermaid renders multiple start nodes converging into shared logic', functi
     ]));
 });
 
-test('mermaid styles only failure edges red', function () {
+test('mermaid styles only failure edges red [T120]', function () {
     $mermaid = FlowchartMermaid::fromFlowchart(chartOf(['nodes' => [
         ['id' => 'a', 'label' => 'A', 'shape' => 'step'],
         ['id' => 'b', 'label' => 'B', 'shape' => 'step'],
@@ -190,7 +190,7 @@ test('mermaid styles only failure edges red', function () {
         ->toEndWith('linkStyle 1 stroke:#dc2626,color:#dc2626');
 });
 
-test('flowcharts:save upserts a feature flowchart and rejects a bad chart', function () {
+test('flowcharts:save upserts a feature flowchart and rejects a bad chart [T14]', function () {
     $project = Project::factory()->create(['slug' => 'fc']);
     $feature = Feature::factory()->create(['project_id' => $project->id, 'number' => 7]);
     $file = tempnam(sys_get_temp_dir(), 'flowchart');
@@ -209,7 +209,7 @@ test('flowcharts:save upserts a feature flowchart and rejects a bad chart', func
     unlink($file);
 });
 
-test('flowcharts:check verifies files and functions in the repo', function (array $node, string $expected, bool $passes) {
+test('flowcharts:check verifies files and functions in the repo [T16]', function (array $node, string $expected, bool $passes) {
     $project = Project::factory()->create(['slug' => 'fc', 'repo_path' => base_path('tests/Fixtures/repo')]);
     $feature = Feature::factory()->create(['project_id' => $project->id, 'number' => 1, 'status' => FeatureStatus::Done]);
     Flowchart::factory()->create(['feature_id' => $feature->id, 'chart' => ['nodes' => [['id' => 'a', 'label' => 'A', 'shape' => 'start', ...$node], ['id' => 'z', 'label' => 'Z', 'shape' => 'end']], 'edges' => [['from' => 'a', 'to' => 'z']]]]);
@@ -224,7 +224,7 @@ test('flowcharts:check verifies files and functions in the repo', function (arra
     'missing file' => [['file' => 'app/Gone.php', 'function' => 'store'], '文件不存在', false],
 ]);
 
-test('flowcharts:check records which nodes are stale, empty when all are found', function () {
+test('flowcharts:check records which nodes are stale, empty when all are found [T109]', function () {
     $project = Project::factory()->create(['slug' => 'fc', 'repo_path' => base_path('tests/Fixtures/repo')]);
     $feature = Feature::factory()->create(['project_id' => $project->id, 'number' => 1, 'status' => FeatureStatus::Done]);
     $flowchart = Flowchart::factory()->create(['feature_id' => $feature->id, 'chart' => [
@@ -251,7 +251,7 @@ test('flowcharts:check records which nodes are stale, empty when all are found',
     expect($flowchart->fresh()->stale_nodes)->toBe([]);
 });
 
-test('flowcharts:check skips a planned feature\'s missing files, checks it once done', function () {
+test('flowcharts:check skips a planned feature\'s missing files, checks it once done [T110]', function () {
     $project = Project::factory()->create(['slug' => 'fc', 'repo_path' => base_path('tests/Fixtures/repo')]);
     $feature = Feature::factory()->create(['project_id' => $project->id, 'number' => 1, 'status' => FeatureStatus::Todo]);
     $flowchart = Flowchart::factory()->create(['feature_id' => $feature->id, 'chart' => [
@@ -334,7 +334,7 @@ test('the migration turns a call tree into a flowchart with failure branch and p
         ]));
 });
 
-test('the feature form edits the flowchart as JSON and refuses a malformed chart', function () {
+test('the feature form edits the flowchart as JSON and refuses a malformed chart [T108]', function () {
     $user = User::factory()->create();
     $feature = Feature::factory()->forUseCase(UseCase::factory()->create())->create();
     $feature->project->users()->attach($user);

@@ -38,7 +38,7 @@ function makeCommitTestRepo(): string
     return $repo;
 }
 
-test('syncs commits from git log, auto-assigns by feature reference, and stays idempotent', function () {
+test('syncs commits from git log, auto-assigns by feature reference, and stays idempotent [T21]', function () {
     $project = Project::factory()->create(['slug' => 'sg', 'repo_path' => makeCommitTestRepo()]);
 
     $feature12 = Feature::factory()->create(['project_id' => $project->id, 'number' => 12, 'status' => FeatureStatus::Todo]);
@@ -77,7 +77,7 @@ test('syncs commits from git log, auto-assigns by feature reference, and stays i
     expect($unassigned->fresh()->feature_id)->toBe($feature7->id);
 });
 
-test('scopes commits to their project', function () {
+test('scopes commits to their project [T21]', function () {
     $project1 = Project::factory()->create(['slug' => 'p1', 'repo_path' => makeCommitTestRepo()]);
     Project::factory()->create(['slug' => 'p2']);
 
@@ -89,7 +89,7 @@ test('scopes commits to their project', function () {
         ->and(Commit::withoutGlobalScopes()->where('project_id', '!=', $project1->id)->count())->toBe(0);
 });
 
-test('fails clearly when the project has no repo_path', function () {
+test('fails clearly when the project has no repo_path [T22]', function () {
     Project::factory()->create(['slug' => 'no-repo', 'repo_path' => null]);
 
     $this->artisan('commits:sync', ['project-slug' => 'no-repo'])->assertFailed();

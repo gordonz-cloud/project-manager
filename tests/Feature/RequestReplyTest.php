@@ -5,7 +5,7 @@ use App\Models\Feature;
 use App\Models\RequestReply;
 use App\Services\RequestReplies\FeatureEntryParser;
 
-test('a feature links only request replies of its own project', function () {
+test('a feature links only request replies of its own project [T10]', function () {
     $requestReply = RequestReply::factory()->create();
     $own = Feature::factory()->create(['project_id' => $requestReply->project_id]);
     $foreign = Feature::factory()->create();
