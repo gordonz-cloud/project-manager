@@ -222,7 +222,7 @@ it('lists decided rules not built yet in dependency order [T64]', function () {
         ->assertDontSee('Still a proposal');
 });
 
-it('lists pending nodes by goal and shows only what the decision needs, each piece once [T65]', function () {
+it('shows pending nodes in tree order and shows only what the decision needs, each piece once [T65]', function () {
     [$project, , $goal] = decisionDesk();
     $old = decisionRule($goal, 2, RequirementStatus::Decided, ['title' => 'Free shipping over 50', 'decided_by' => '老板', 'decided_at' => '2026-10-05', 'source' => '老板文档 docs/product/S7-cart/spec.md v0.9 §3.7（Haorui，2026-09-01）']);
     $old->linkedFeatures()->attach(Feature::factory()->create(['project_id' => $project->id, 'number' => 9, 'title' => 'Shipping calculator']));
@@ -233,7 +233,7 @@ it('lists pending nodes by goal and shows only what the decision needs, each pie
     decisionRule($goal, 5, RequirementStatus::Conflict, ['supersedes_id' => $old->id, 'title' => 'Free shipping for everyone']);
 
     $html = Livewire::withQueryParams(['tab' => 'pending', 'selectedNumber' => 4])->test(RequirementTree::class)
-        ->assertSeeInOrder(['Checkout', '改规则', 'Free shipping over 80', '改规则', 'Free shipping for everyone', 'Gift wrap for members'])
+        ->assertSeeInOrder(['Checkout', 'Gift wrap for members', '改规则', 'Free shipping over 80', '改规则', 'Free shipping for everyone'])
         ->assertSeeInOrder([
             'Checkout', 'Free shipping over 80', '待决策',
             '要定的事：', 'Should orders between 50 and 80 pay shipping?',
@@ -398,15 +398,58 @@ it('keeps the selected node in view on every tab, opening its ancestors in the t
 
     $page = Livewire::withQueryParams(['tab' => 'pending', 'selectedNumber' => 4])->test(RequirementTree::class);
 
-    expect($page->html())->toMatch('/data-pending="4"\s+data-selected/');
+    expect($page->html())->toMatch('/data-requirement-number="4"\s+data-selected/');
 
     $page->call('setTab', 'overview')
         ->assertSet('expanded', [$group->id => true, $sub->id => true, $goal->id => true])
         ->assertDispatched('reveal-selected');
 
     expect(Livewire::withQueryParams(['selectedNumber' => 4])->test(RequirementTree::class)->assertSeeInOrder(['Thresholds', 'Deep pending rule'])->html())->toMatch('/data-requirement-number="4"\s+data-selected/')
-        ->and(Livewire::withQueryParams(['tab' => 'todo', 'selectedNumber' => 5])->test(RequirementTree::class)->html())->toMatch('/data-todo="5"\s+data-selected/')
+        ->and(Livewire::withQueryParams(['tab' => 'todo', 'selectedNumber' => 5])->test(RequirementTree::class)->html())->toMatch('/data-requirement-number="5"\s+data-selected/')
         ->and(Livewire::withQueryParams(['tab' => 'changes', 'selectedNumber' => 5])->test(RequirementTree::class)->html())->toMatch('/data-selected\s+class="rounded-md border p-3 border-primary-500/');
+});
+
+it('shows 待决策, 待做 and 以后做 as the 全貌 tree cut down to their nodes and the ancestors above them, opened [T173]', function () {
+    [$project, , $goal] = decisionDesk();
+    $sub = Requirement::factory()->create(['project_id' => $project->id, 'number' => 2, 'parent_id' => $goal->id, 'kind' => RequirementKind::SubGoal, 'status' => RequirementStatus::Decided, 'title' => 'Shipping']);
+    $group = Requirement::factory()->create(['project_id' => $project->id, 'number' => 3, 'parent_id' => $sub->id, 'kind' => RequirementKind::Group, 'status' => RequirementStatus::Decided, 'title' => 'Thresholds']);
+    decisionRule($group, 4, RequirementStatus::Proposed, ['title' => 'Deep pending rule']);
+    decisionRule($group, 5, RequirementStatus::Decided, ['title' => 'Deep todo rule']);
+    decisionRule($group, 6, RequirementStatus::Later, ['title' => 'Deep later rule']);
+    $payments = Requirement::factory()->create(['project_id' => $project->id, 'number' => 7, 'kind' => RequirementKind::Goal, 'status' => RequirementStatus::Decided, 'title' => 'Payments']);
+    decisionRule($payments, 8, RequirementStatus::Decided, ['title' => 'Refund rule']);
+
+    Livewire::test(RequirementTree::class)->assertDontSee('Deep pending rule');
+
+    Livewire::withQueryParams(['tab' => 'pending'])->test(RequirementTree::class)
+        ->assertSeeInOrder(['Checkout', 'Shipping', 'Thresholds', 'Deep pending rule'])
+        ->assertSeeHtml('data-requirement-number="4"')
+        ->assertDontSee(['Deep todo rule', 'Deep later rule', 'Payments', 'Refund rule']);
+
+    Livewire::withQueryParams(['tab' => 'todo'])->test(RequirementTree::class)
+        ->assertSeeInOrder(['已定还没做完的，树里从上往下按依赖顺序做。', 'Checkout', 'Shipping', 'Thresholds', 'Deep todo rule', 'Payments', 'Refund rule'])
+        ->assertDontSee(['Deep pending rule', 'Deep later rule']);
+
+    Livewire::withQueryParams(['tab' => 'later'])->test(RequirementTree::class)
+        ->assertSeeInOrder(['Checkout', 'Shipping', 'Thresholds', 'Deep later rule'])
+        ->assertDontSee(['Deep pending rule', 'Deep todo rule', 'Payments', 'Refund rule']);
+});
+
+it('marks each 待决策 node in the tree as picked or not, keeps 改规则, and drops it from the tree once confirmed [T174]', function () {
+    [, $user, $goal] = decisionDesk();
+    $old = decisionRule($goal, 2, RequirementStatus::Decided, ['title' => 'Free shipping over 50']);
+    $conflict = decisionRule($goal, 3, RequirementStatus::Conflict, ['supersedes_id' => $old->id, 'title' => 'Free shipping over 80', 'decision' => shippingDecision()]);
+    decisionRule($goal, 4, RequirementStatus::Proposed, ['title' => 'Gift wrap']);
+    app(RequirementDecisions::class)->choose($conflict, $user, 'A');
+
+    $page = Livewire::withQueryParams(['tab' => 'pending'])->test(RequirementTree::class)
+        ->assertSeeHtmlInOrder(['Checkout', 'data-drafted="yes"', '改规则', 'Free shipping over 80', 'data-drafted="no"', 'Gift wrap', '已选 1 / 2']);
+
+    expect(substr_count($page->html(), 'data-drafted='))->toBe(2);
+
+    $page->call('confirmAllDrafts')
+        ->assertDontSeeHtml('data-requirement-number="3"')
+        ->assertSeeHtml('data-requirement-number="4"');
 });
 
 it('sums a parent up from everything under it, open decisions included [T73]', function (array $delivered, int $pending, ?RequirementProgress $expected) {

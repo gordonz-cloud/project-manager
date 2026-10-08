@@ -70,6 +70,28 @@ final readonly class RequirementTreeNode
     }
 
     /**
+     * The same tree cut down to the nodes in $keep and their ancestors; each node keeps its own status and rollup.
+     *
+     * @param  list<self>  $nodes
+     * @param  array<int, mixed>  $keep  keyed by requirement id
+     * @return list<self>
+     */
+    public static function keeping(array $nodes, array $keep): array
+    {
+        $kept = [];
+
+        foreach ($nodes as $node) {
+            $children = self::keeping($node->children, $keep);
+
+            if ($children !== [] || isset($keep[$node->requirement->id])) {
+                $kept[] = new self($node->requirement, $node->delivery, $children, $node->rollup, $node->progress);
+            }
+        }
+
+        return $kept;
+    }
+
+    /**
      * @param  list<self>  $nodes
      */
     public static function total(array $nodes): RequirementRollup

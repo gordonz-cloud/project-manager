@@ -1,6 +1,7 @@
 @php
     $requirement = $node->requirement;
-    $isOpen = $node->children !== [] && ($this->expanded[$requirement->id] ?? $depth === 0);
+    $isOpen = $node->children !== [] && ($this->expanded[$requirement->id] ?? ($depth === 0 || $this->tab !== 'overview'));
+    $isDrafted = $this->tab === 'pending' && $this->isDecidable($requirement) ? $this->drafts->has($requirement->id) : null;
     $isSelected = $this->selectedNumber === $requirement->number;
     $isVoid = $requirement->status === \App\Enums\RequirementStatus::Void;
 @endphp
@@ -22,7 +23,11 @@
             @if ($isSelected) data-selected @endif
             class="@container flex min-h-8 min-w-0 flex-1 cursor-pointer items-center gap-2 rounded-md px-2 py-1 text-left text-sm transition {{ $isSelected ? 'bg-slate-900 text-white dark:bg-white dark:text-slate-950' : 'hover:bg-slate-50 dark:hover:bg-white/5' }} {{ $isVoid && ! $isSelected ? 'text-slate-400 line-through dark:text-slate-500' : '' }}"
         >
-            @if ($requirement->kind && $requirement->kind !== \App\Enums\RequirementKind::Rule)
+            @if ($isDrafted !== null)
+                <span class="size-2.5 shrink-0 rounded-full border border-primary-500 {{ $isDrafted ? 'bg-primary-500' : '' }}" title="{{ $isDrafted ? '已选' : '未选' }}" data-drafted="{{ $isDrafted ? 'yes' : 'no' }}"></span>
+                @if ($requirement->status === \App\Enums\RequirementStatus::Conflict)<span class="shrink-0 rounded bg-amber-100 px-1 text-xs text-amber-800 dark:bg-amber-500/20 dark:text-amber-300">改规则</span>@endif
+            @endif
+            @if ($requirement->kind &&$requirement->kind !== \App\Enums\RequirementKind::Rule)
                 <span class="shrink-0 text-xs opacity-60">{{ $requirement->kind->value }}</span>
             @endif
             <span class="min-w-0 truncate {{ $requirement->kind === \App\Enums\RequirementKind::Goal ? 'font-medium' : '' }}">{{ $requirement->title }}</span>

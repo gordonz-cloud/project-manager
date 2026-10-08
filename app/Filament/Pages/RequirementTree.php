@@ -39,7 +39,7 @@ use LogicException;
  * @property-read list<RequirementTreeNode> $tree
  * @property-read Requirement|null $selectedRequirement
  * @property-read Collection<int, Requirement> $awaitingDecision
- * @property-read array<string, list<Requirement>> $pendingByGoal
+ * @property-read list<RequirementTreeNode> $filteredTree
  * @property-read EloquentCollection<int, RequirementDecisionDraft> $drafts
  * @property-read array<int, RequirementTreeNode> $nodesById
  */
@@ -155,7 +155,7 @@ class RequirementTree extends Page
             return;
         }
 
-        unset($this->tree, $this->awaitingDecision, $this->pendingByGoal, $this->drafts, $this->batchPreview, $this->nodesById, $this->total, $this->selectedRequirement);
+        unset($this->tree, $this->awaitingDecision, $this->filteredTree, $this->drafts, $this->batchPreview, $this->nodesById, $this->total, $this->selectedRequirement);
         Notification::make()->title($result->summary())->success()->send();
     }
 
@@ -165,7 +165,7 @@ class RequirementTree extends Page
     public function startNow(): void
     {
         $this->requirementDecisions()->startNow($this->project, $this->selectedRequirement ?? throw new LogicException('Nothing selected.'));
-        unset($this->tree, $this->awaitingDecision, $this->pendingByGoal, $this->nodesById, $this->total, $this->selectedRequirement);
+        unset($this->tree, $this->awaitingDecision, $this->filteredTree, $this->nodesById, $this->total, $this->selectedRequirement);
         Notification::make()->title('已改回提议，进待决策')->success()->send();
     }
 
@@ -277,26 +277,21 @@ class RequirementTree extends Page
     }
 
     /**
-     * The 待决策 list grouped by goal in tree order;
-     * within a goal 冲突 first, then tree order.
+     * 待决策 / 待做 / 以后做: the 全貌 tree cut down to that tab's nodes and their ancestors.
      *
-     * @return array<string, list<Requirement>> goal title => requirements
+     * @return list<RequirementTreeNode>
      */
     #[Computed]
-    public function pendingByGoal(): array
+    public function filteredTree(): array
     {
-        $goalPosition = array_flip(array_keys($this->nodesById));
-        $groups = [];
+        $ids = match ($this->tab) {
+            'pending' => $this->awaitingDecision->pluck('id')->all(),
+            'todo' => array_map(fn (RequirementTreeNode $node): int => $node->requirement->id, $this->todo),
+            'later' => array_map(fn (RequirementTreeNode $node): int => $node->requirement->id, $this->later),
+            default => [],
+        };
 
-        foreach ($this->awaitingDecision as $requirement) {
-            $goal = $this->goalOf($requirement);
-            $groups[$goal->id] ??= ['goal' => $goal, 'items' => []];
-            $groups[$goal->id]['items'][] = $requirement;
-        }
-
-        uasort($groups, fn (array $a, array $b): int => ($goalPosition[$a['goal']->id] ?? PHP_INT_MAX) <=> ($goalPosition[$b['goal']->id] ?? PHP_INT_MAX));
-
-        return collect($groups)->mapWithKeys(fn (array $group): array => [$group['goal']->title => $group['items']])->all();
+        return RequirementTreeNode::keeping($this->tree, array_flip($ids));
     }
 
     /**
@@ -347,36 +342,6 @@ class RequirementTree extends Page
     public function nodesById(): array
     {
         return collect(RequirementTreeNode::flattened($this->tree))->keyBy(fn (RequirementTreeNode $node): int => $node->requirement->id)->all();
-    }
-
-    /**
-     * The root above $requirement (itself when it is one), read from the tree already in memory.
-     */
-    private function goalOf(Requirement $requirement): Requirement
-    {
-        $goal = $requirement;
-
-        while ($goal->parent_id !== null && isset($this->nodesById[$goal->parent_id])) {
-            $goal = $this->nodesById[$goal->parent_id]->requirement;
-        }
-
-        return $goal;
-    }
-
-    /**
-     * Titles from the root down to the parent, read from the tree already in memory.
-     *
-     * @return list<string>
-     */
-    public function pathOf(Requirement $requirement): array
-    {
-        $path = [];
-
-        for ($id = $requirement->parent_id; $id !== null && isset($this->nodesById[$id]); $id = $this->nodesById[$id]->requirement->parent_id) {
-            array_unshift($path, $this->nodesById[$id]->requirement->title);
-        }
-
-        return $path;
     }
 
     /**

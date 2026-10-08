@@ -43,61 +43,14 @@
                             </div>
                         @endif
                     </div>
-                @elseif ($this->tab === 'pending')
-                    <div class="space-y-3" data-tab="pending">
-                        @forelse ($this->pendingByGoal as $goal => $items)
-                            <section wire:key="pending-goal-{{ md5($goal) }}">
-                                <h3 class="px-2 pb-1 text-xs font-medium text-slate-500 dark:text-slate-400">{{ $goal }}</h3>
-                                <ul class="space-y-0.5">
-                                    @foreach ($items as $item)
-                                        @php($isDrafted = $this->drafts->has($item->id))
-                                        <li wire:key="pending-{{ $item->id }}" role="button" wire:click="selectNode({{ $item->number }})" data-pending="{{ $item->number }}"
-                                            @if ($this->selectedNumber === $item->number) data-selected @endif
-                                            class="flex min-h-8 cursor-pointer items-center gap-2 rounded-md px-2 py-1 text-sm {{ $this->selectedNumber === $item->number ? 'bg-slate-900 text-white dark:bg-white dark:text-slate-950' : 'hover:bg-slate-50 dark:hover:bg-white/5' }}">
-                                            <span class="size-2.5 shrink-0 rounded-full border border-primary-500 {{ $isDrafted ? 'bg-primary-500' : '' }}" title="{{ $isDrafted ? '已选' : '未选' }}" data-drafted="{{ $isDrafted ? 'yes' : 'no' }}"></span>
-                                            @if ($item->status === \App\Enums\RequirementStatus::Conflict)<span class="shrink-0 rounded bg-amber-100 px-1 text-xs text-amber-800 dark:bg-amber-500/20 dark:text-amber-300">改规则</span>@endif
-                                            <span class="min-w-0 truncate">{{ $item->title }}</span>
-                                        </li>
-                                    @endforeach
-                                </ul>
-                            </section>
+                @elseif ($this->tab !== 'changes')
+                    <div data-tab="{{ $this->tab }}">
+                        @if ($this->tab === 'todo')<p class="px-1 pb-2 text-xs text-slate-500">已定还没做完的，树里从上往下按依赖顺序做。</p>@endif
+                        @forelse ($this->filteredTree as $node)
+                            @include('filament.pages.partials.requirement-tree-node', ['node' => $node, 'depth' => 0])
                         @empty
-                            <p class="px-2 py-6 text-center text-xs text-slate-400">这里没有要决定的事。</p>
+                            <p class="px-2 py-6 text-center text-xs text-slate-400">{{ ['pending' => '这里没有要决定的事。', 'todo' => '没有待做的规则。', 'later' => '没有以后做的规则。'][$this->tab] }}</p>
                         @endforelse
-                    </div>
-                @elseif ($this->tab === 'todo')
-                    <div data-tab="todo">
-                        <p class="px-1 pb-2 text-xs text-slate-500">已定、还没做完的规则，按这个顺序做（被依赖的在前）。说「动工」时从上往下拿。</p>
-                        <ol class="space-y-0.5">
-                            @forelse ($this->todo as $node)
-                                <li wire:key="todo-{{ $node->requirement->id }}" role="button" wire:click="selectNode({{ $node->requirement->number }})" data-todo="{{ $node->requirement->number }}"
-                                    @if ($this->selectedNumber === $node->requirement->number) data-selected @endif
-                                    class="flex min-h-8 cursor-pointer items-center gap-2 rounded-md px-2 py-1 text-sm {{ $this->selectedNumber === $node->requirement->number ? 'bg-slate-900 text-white dark:bg-white dark:text-slate-950' : 'hover:bg-slate-50 dark:hover:bg-white/5' }}">
-                                    <span class="w-6 shrink-0 text-right text-xs tabular-nums text-slate-400">{{ $loop->iteration }}</span>
-                                    @include('filament.pages.partials.requirement-progress', ['requirement' => $node->requirement, 'progress' => $node->progress])
-                                    <span class="min-w-0 truncate">{{ $node->requirement->title }}</span>
-                                    <span class="ml-auto shrink-0 truncate text-xs text-slate-400">{{ \Illuminate\Support\Str::limit(implode(' › ', $this->pathOf($node->requirement)), 40) }}</span>
-                                </li>
-                            @empty
-                                <li class="px-2 py-6 text-center text-xs text-slate-400">没有待做的规则。</li>
-                            @endforelse
-                        </ol>
-                    </div>
-                @elseif ($this->tab === 'later')
-                    <div data-tab="later">
-                        <p class="px-1 pb-2 text-xs text-slate-500">已定、以后再做的规则。</p>
-                        <ol class="space-y-0.5">
-                            @forelse ($this->later as $node)
-                                <li wire:key="later-{{ $node->requirement->id }}" role="button" wire:click="selectNode({{ $node->requirement->number }})" data-later="{{ $node->requirement->number }}"
-                                    @if ($this->selectedNumber === $node->requirement->number) data-selected @endif
-                                    class="flex min-h-8 cursor-pointer items-center gap-2 rounded-md px-2 py-1 text-sm {{ $this->selectedNumber === $node->requirement->number ? 'bg-slate-900 text-white dark:bg-white dark:text-slate-950' : 'hover:bg-slate-50 dark:hover:bg-white/5' }}">
-                                    <span class="min-w-0 truncate">{{ $node->requirement->title }}</span>
-                                    <span class="ml-auto shrink-0 truncate text-xs text-slate-400">{{ \Illuminate\Support\Str::limit(implode(' › ', $this->pathOf($node->requirement)), 40) }}</span>
-                                </li>
-                            @empty
-                                <li class="px-2 py-6 text-center text-xs text-slate-400">没有以后做的规则。</li>
-                            @endforelse
-                        </ol>
                     </div>
                 @else
                     <div class="space-y-3" data-tab="changes">
