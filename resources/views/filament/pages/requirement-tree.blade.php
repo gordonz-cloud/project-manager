@@ -11,7 +11,7 @@
             <div class="flex flex-wrap items-center gap-2 border-b border-slate-200 p-3 dark:border-white/10">
                 @foreach (\App\Filament\Pages\RequirementTree::TABS as $key => $label)
                     <button type="button" wire:click="setTab(@js($key))" class="rounded-md border px-2 py-1 text-xs {{ $this->tab === $key ? 'border-slate-900 bg-slate-900 text-white dark:border-white dark:bg-white dark:text-slate-950' : 'border-slate-300 text-slate-600 dark:border-white/10 dark:text-slate-300' }}">
-                        @php($count = match ($key) { 'pending' => $this->awaitingDecision->count(), 'todo' => count($this->todo), default => null })
+                        @php($count = match ($key) { 'pending' => $this->awaitingDecision->count(), 'todo' => count($this->todo), 'later' => count($this->later), default => null })
                         {{ $label.($count === null ? '' : "（{$count}）") }}
                     </button>
                 @endforeach
@@ -80,6 +80,22 @@
                                 </li>
                             @empty
                                 <li class="px-2 py-6 text-center text-xs text-slate-400">没有待做的规则。</li>
+                            @endforelse
+                        </ol>
+                    </div>
+                @elseif ($this->tab === 'later')
+                    <div data-tab="later">
+                        <p class="px-1 pb-2 text-xs text-slate-500">已定、以后再做的规则。</p>
+                        <ol class="space-y-0.5">
+                            @forelse ($this->later as $node)
+                                <li wire:key="later-{{ $node->requirement->id }}" role="button" wire:click="selectNode({{ $node->requirement->number }})" data-later="{{ $node->requirement->number }}"
+                                    @if ($this->selectedNumber === $node->requirement->number) data-selected @endif
+                                    class="flex min-h-8 cursor-pointer items-center gap-2 rounded-md px-2 py-1 text-sm {{ $this->selectedNumber === $node->requirement->number ? 'bg-slate-900 text-white dark:bg-white dark:text-slate-950' : 'hover:bg-slate-50 dark:hover:bg-white/5' }}">
+                                    <span class="min-w-0 truncate">{{ $node->requirement->title }}</span>
+                                    <span class="ml-auto shrink-0 truncate text-xs text-slate-400">{{ \Illuminate\Support\Str::limit(implode(' › ', $this->pathOf($node->requirement)), 40) }}</span>
+                                </li>
+                            @empty
+                                <li class="px-2 py-6 text-center text-xs text-slate-400">没有以后做的规则。</li>
                             @endforelse
                         </ol>
                     </div>

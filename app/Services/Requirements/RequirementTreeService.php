@@ -75,6 +75,20 @@ class RequirementTreeService
     }
 
     /**
+     * Decided rules parked for later (以后做), in tree order.
+     *
+     * @param  list<RequirementTreeNode>  $tree
+     * @return list<RequirementTreeNode>
+     */
+    public function later(array $tree): array
+    {
+        return array_values(array_filter(
+            RequirementTreeNode::flattened($tree),
+            fn (RequirementTreeNode $node): bool => $node->children === [] && $node->progress === RequirementProgress::Later,
+        ));
+    }
+
+    /**
      * Revisions and commits of the last $limit of each, grouped by requirement (at most 10 commits a group), most recently touched first.
      *
      * @return list<RequirementChangeGroup>

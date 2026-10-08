@@ -241,6 +241,27 @@ function requirementTreePage(): Project
     return $project;
 }
 
+it('shows the 以后做 tab between 待做 and 最近变化, with its count, only 以后做 nodes, and drops them once 现在要做了 [T170][T171][T172]', function () {
+    $project = requirementTreePage();
+    $goal = Requirement::factory()->create(['project_id' => $project->id, 'number' => 1, 'kind' => RequirementKind::Goal, 'status' => RequirementStatus::Decided, 'title' => 'Guild goal']);
+    $later = Requirement::factory()->create(['project_id' => $project->id, 'number' => 2, 'parent_id' => $goal->id, 'kind' => RequirementKind::Rule, 'status' => RequirementStatus::Later, 'title' => 'Guild page later']);
+    Requirement::factory()->create(['project_id' => $project->id, 'number' => 3, 'parent_id' => $goal->id, 'kind' => RequirementKind::Rule, 'status' => RequirementStatus::Decided, 'title' => 'Still todo rule']);
+
+    $tabKeys = array_keys(RequirementTree::TABS);
+    expect(array_search('later', $tabKeys, true))->toBeGreaterThan(array_search('todo', $tabKeys, true))
+        ->and(array_search('later', $tabKeys, true))->toBeLessThan(array_search('changes', $tabKeys, true));
+
+    Livewire::test(RequirementTree::class)->assertSeeInOrder(['以后做（1）']);
+
+    Livewire::withQueryParams(['tab' => 'later'])->test(RequirementTree::class)
+        ->assertSee('Guild page later')
+        ->assertDontSee('Still todo rule');
+
+    Livewire::withQueryParams(['selectedNumber' => 2])->test(RequirementTree::class)->call('startNow');
+
+    Livewire::withQueryParams(['tab' => 'later'])->test(RequirementTree::class)->assertDontSee('Guild page later');
+});
+
 it('shows the overview tree with rollups and the unfiled legacy list [T44]', function () {
     $project = requirementTreePage();
     $goal = Requirement::factory()->create(['project_id' => $project->id, 'number' => 1, 'kind' => RequirementKind::Goal, 'status' => RequirementStatus::Decided, 'title' => 'Members buy by tier']);

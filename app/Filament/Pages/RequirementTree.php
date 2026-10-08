@@ -46,7 +46,7 @@ use LogicException;
 class RequirementTree extends Page
 {
     /** @var array<string, string> tab key => label */
-    public const TABS = ['overview' => '全貌', 'pending' => '待决策', 'todo' => '待做', 'changes' => '最近变化'];
+    public const TABS = ['overview' => '全貌', 'pending' => '待决策', 'todo' => '待做', 'later' => '以后做', 'changes' => '最近变化'];
 
     protected string $view = 'filament.pages.requirement-tree';
 
@@ -329,6 +329,15 @@ class RequirementTree extends Page
     public function todo(): array
     {
         return $this->requirementTreeService()->todo($this->tree);
+    }
+
+    /**
+     * @return list<RequirementTreeNode>
+     */
+    #[Computed]
+    public function later(): array
+    {
+        return $this->requirementTreeService()->later($this->tree);
     }
 
     /**
