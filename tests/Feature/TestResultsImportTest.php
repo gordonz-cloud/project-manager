@@ -110,6 +110,28 @@ it('reports unknown claimed numbers, unclaimed testcases, and auto nodes missing
         ->assertSuccessful();
 });
 
+it('only writes nodes whose result actually changed, leaving the rest untouched [T132]', function () {
+    $project = Project::factory()->create(['slug' => 'tt']);
+    $changing = Test::factory()->create(['project_id' => $project->id, 'number' => 1, 'last_result' => TestLastResult::NotRun]);
+    $unchanged = Test::factory()->create([
+        'project_id' => $project->id,
+        'number' => 2,
+        'last_result' => TestLastResult::Passed,
+        'location' => 'tests/Feature/SampleTest.php',
+        'test_name' => 'b [T2]',
+    ]);
+    $unchangedUpdatedAt = $unchanged->updated_at;
+
+    test()->travel(1)->hours();
+
+    importJunit('tt', [passingCase('a [T1]'), passingCase('b [T2]')])
+        ->expectsOutputToContain('通过 2，失败 0，跳过 0')
+        ->assertSuccessful();
+
+    expect($changing->fresh()->last_result)->toBe(TestLastResult::Passed)
+        ->and($unchanged->fresh()->updated_at)->toEqual($unchangedUpdatedAt);
+});
+
 it('fails for an unknown project or missing file [T131]', function () {
     importJunit('does-not-exist', [passingCase('a [T1]')])->assertFailed();
 

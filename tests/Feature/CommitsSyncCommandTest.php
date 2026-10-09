@@ -61,9 +61,10 @@ test('syncs commits from git log, auto-assigns by feature reference, and stays i
         // auto-assign to feature #22.
         ->and($bySubject->get('Fix #22')->feature_id)->toBeNull();
 
-    // Idempotent: re-running does not create duplicates.
+    // Idempotent: re-running does not create duplicates, and since nothing
+    // actually changed, nothing is written back either.
     $this->artisan('commits:sync', ['project-slug' => 'sg'])
-        ->expectsOutputToContain('新增 0、更新 4、自动挂上 0、未挂 2')
+        ->expectsOutputToContain('新增 0、更新 0、自动挂上 0、未挂 2')
         ->assertSuccessful();
 
     expect(Commit::count())->toBe(4);
@@ -75,6 +76,30 @@ test('syncs commits from git log, auto-assigns by feature reference, and stays i
     $this->artisan('commits:sync', ['project-slug' => 'sg'])->assertSuccessful();
 
     expect($unassigned->fresh()->feature_id)->toBe($feature7->id);
+});
+
+test('only writes rows whose fields actually changed [T21]', function () {
+    $repo = makeCommitTestRepo();
+    Project::factory()->create(['slug' => 'sg', 'repo_path' => $repo]);
+
+    $this->artisan('commits:sync', ['project-slug' => 'sg'])->assertSuccessful();
+
+    $untouched = Commit::where('subject', 'Second commit')->first();
+    $untouchedUpdatedAt = $untouched->updated_at;
+
+    // Simulate the stored row drifting from what `git log` actually says
+    // (e.g. edited by hand) for exactly one commit; the rest stay in sync.
+    $stale = Commit::where('subject', 'Fix login bug')->first();
+    $stale->forceFill(['author' => 'Someone Else'])->save();
+
+    $this->travel(1)->hours();
+
+    $this->artisan('commits:sync', ['project-slug' => 'sg'])
+        ->expectsOutputToContain('新增 0、更新 1、自动挂上 0、未挂 4')
+        ->assertSuccessful();
+
+    expect($stale->fresh()->author)->toBe('Tester')
+        ->and($untouched->fresh()->updated_at)->toEqual($untouchedUpdatedAt);
 });
 
 test('scopes commits to their project [T21]', function () {

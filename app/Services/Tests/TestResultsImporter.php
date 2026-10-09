@@ -66,12 +66,18 @@ class TestResultsImporter
                     continue;
                 }
 
-                $test->last_result = $this->resultOf($claiming);
-                $test->location ??= $claiming[0]['file'];
-                $test->test_name ??= $claiming[0]['name'];
-                $test->save();
+                $result = $this->resultOf($claiming);
+                $attrs = array_filter([
+                    'last_result' => $result === $test->last_result ? null : $result->value,
+                    'location' => $test->location === null ? $claiming[0]['file'] : null,
+                    'test_name' => $test->test_name === null ? $claiming[0]['name'] : null,
+                ], fn ($value): bool => $value !== null);
 
-                match ($test->last_result) {
+                if ($attrs !== []) {
+                    Test::withoutGlobalScopes()->whereKey($test->id)->update($attrs);
+                }
+
+                match ($result) {
                     TestLastResult::Failed => $failed++,
                     TestLastResult::Skipped => $skipped++,
                     default => $passed++,
