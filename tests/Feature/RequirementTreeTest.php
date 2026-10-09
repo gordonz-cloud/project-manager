@@ -474,3 +474,71 @@ it('puts void nodes after the live ones of their level and leaves them out of th
 
     expect($numbers)->toBe([3, 4, 5, 1, 2]);
 });
+
+it('shows 待验收 when every feature is written and one waits in 验证中, and rolls up 待决策 > 待做 > 待验收 > 完成 [T175][T176]', function () {
+    $project = Project::factory()->create();
+    $goal = Requirement::factory()->create(['project_id' => $project->id, 'number' => 1, 'kind' => RequirementKind::Goal, 'status' => RequirementStatus::Decided]);
+    $group = fn (int $number): Requirement => Requirement::factory()->create(['project_id' => $project->id, 'number' => $number, 'parent_id' => $goal->id, 'kind' => RequirementKind::Group, 'status' => RequirementStatus::Decided]);
+    $rule = fn (Requirement $parent, int $number, array $statuses, RequirementStatus $status = RequirementStatus::Decided): Requirement => tap(
+        Requirement::factory()->create(['project_id' => $project->id, 'number' => $number, 'parent_id' => $parent->id, 'kind' => RequirementKind::Rule, 'status' => $status]),
+        fn (Requirement $rule) => $rule->linkedFeatures()->attach(array_map(fn (FeatureStatus $featureStatus): int => Feature::factory()->create(['project_id' => $project->id, 'status' => $featureStatus])->id, $statuses)),
+    );
+
+    $accepting = $group(10);
+    $rule($accepting, 11, [FeatureStatus::InVerification, FeatureStatus::Done]);
+    $rule($accepting, 12, [FeatureStatus::Done]);
+    $todo = $group(20);
+    $rule($todo, 21, [FeatureStatus::InVerification, FeatureStatus::InDevelopment]);
+    $rule($todo, 22, [FeatureStatus::InVerification]);
+    $pending = $group(30);
+    $rule($pending, 31, [FeatureStatus::Todo]);
+    $rule($pending, 32, [FeatureStatus::InVerification]);
+    $rule($pending, 33, [], RequirementStatus::Proposed);
+    $done = $group(40);
+    $rule($done, 41, [FeatureStatus::Done, FeatureStatus::Done]);
+
+    $nodes = flatRequirementTree(app(RequirementTreeService::class)->tree($project));
+    $progress = fn (array $numbers): array => array_map(fn (int $number): string => $nodes[$number]->progress->value, $numbers);
+
+    expect($progress([11, 12, 21, 22, 41]))->toBe(['待验收', '完成', '待做', '待验收', '完成'])
+        ->and($progress([10, 20, 30, 40]))->toBe(['待验收', '待做', '待决策', '完成'])
+        ->and(array_filter($nodes[1]->rollup->progressCounts()))->toBe(['待决策' => 1, '待做' => 2, '待验收' => 3, '完成' => 2]);
+});
+
+it('lists only 待验收 rules on the 待验收 tab, keeps them off 待做, and drops them once every feature is accepted [T177][T178][T179]', function () {
+    $project = requirementTreePage();
+    $goal = Requirement::factory()->create(['project_id' => $project->id, 'number' => 1, 'kind' => RequirementKind::Goal, 'status' => RequirementStatus::Decided, 'title' => 'Guild goal']);
+    $rule = fn (int $number, string $title): Requirement => Requirement::factory()->create(['project_id' => $project->id, 'number' => $number, 'parent_id' => $goal->id, 'kind' => RequirementKind::Rule, 'status' => RequirementStatus::Decided, 'title' => $title]);
+    $accepting = $rule(2, 'Accepting rule');
+    $other = $rule(3, 'Sharing rule');
+    $rule(4, 'Todo rule');
+    $feature = Feature::factory()->create(['project_id' => $project->id, 'number' => 7, 'title' => 'Join guild', 'status' => FeatureStatus::InVerification]);
+    $accepting->linkedFeatures()->attach($feature);
+    $other->linkedFeatures()->attach([$feature->id, Feature::factory()->create(['project_id' => $project->id, 'status' => FeatureStatus::Todo])->id]);
+
+    $tabKeys = array_keys(RequirementTree::TABS);
+    expect(array_search('accepting', $tabKeys, true))->toBe(array_search('todo', $tabKeys, true) + 1);
+
+    Livewire::test(RequirementTree::class)->assertSeeInOrder(['待做（2）', '待验收（1）'])->assertSee('1 待验收');
+
+    Livewire::withQueryParams(['tab' => 'accepting'])->test(RequirementTree::class)
+        ->assertSee('Accepting rule')
+        ->assertDontSee(['Sharing rule', 'Todo rule']);
+
+    Livewire::withQueryParams(['tab' => 'todo'])->test(RequirementTree::class)
+        ->assertSee(['Sharing rule', 'Todo rule'])
+        ->assertDontSee('Accepting rule');
+
+    Livewire::withQueryParams(['tab' => 'accepting', 'selectedNumber' => 2])->test(RequirementTree::class)
+        ->assertSeeHtml('data-accept-feature="7"')
+        ->assertSee('这个功能还挂在另外 1 条规则上')
+        ->call('acceptFeature', $feature->id)
+        ->assertDontSeeHtml('data-accept-feature="7"');
+
+    expect($feature->fresh()->status)->toBe(FeatureStatus::Done)
+        ->and($accepting->revisions()->first()->reason)->toBe('功能 F7「Join guild」验收通过：验证中 → 完成')
+        ->and($other->revisions()->first()->reason)->toBe('功能 F7「Join guild」验收通过：验证中 → 完成');
+
+    Livewire::withQueryParams(['tab' => 'accepting'])->test(RequirementTree::class)->assertDontSee('Accepting rule')->assertSee('没有待验收的规则。');
+    Livewire::withQueryParams(['selectedNumber' => 2])->test(RequirementTree::class)->assertSeeHtml('data-progress="完成"');
+});

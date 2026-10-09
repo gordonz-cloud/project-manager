@@ -8,6 +8,7 @@ use App\Data\Requirements\RequirementProgress;
 use App\Data\Requirements\RequirementRollup;
 use App\Data\Requirements\RequirementTimeline;
 use App\Data\Requirements\RequirementTreeNode;
+use App\Enums\FeatureStatus;
 use App\Enums\NavigationGroup;
 use App\Enums\TestLastResult;
 use App\Models\Feature;
@@ -26,7 +27,9 @@ use Filament\Notifications\Notification;
 use Filament\Pages\Page;
 use Filament\Support\Icons\Heroicon;
 use Illuminate\Database\Eloquent\Collection as EloquentCollection;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
 use InvalidArgumentException;
 use Livewire\Attributes\Computed;
 use Livewire\Attributes\Url;
@@ -46,7 +49,10 @@ use LogicException;
 class RequirementTree extends Page
 {
     /** @var array<string, string> tab key => label */
-    public const TABS = ['overview' => '全貌', 'pending' => '待决策', 'todo' => '待做', 'later' => '以后做', 'changes' => '最近变化'];
+    public const TABS = ['overview' => '全貌', 'pending' => '待决策', 'todo' => '待做', 'accepting' => '待验收', 'later' => '以后做', 'changes' => '最近变化'];
+
+    /** @var array<string, RequirementProgress> tab key => the leaves it lists */
+    public const LEAF_TABS = ['todo' => RequirementProgress::Todo, 'accepting' => RequirementProgress::AwaitingAcceptance, 'later' => RequirementProgress::Later];
 
     protected string $view = 'filament.pages.requirement-tree';
 
@@ -169,6 +175,35 @@ class RequirementTree extends Page
         Notification::make()->title('已改回提议，进待决策')->success()->send();
     }
 
+    /**
+     * Gordon looked and it works: a 验证中 feature of the selected rule becomes 完成, noted in the history of every rule it serves.
+     */
+    public function acceptFeature(int $featureId): void
+    {
+        $feature = $this->selectedRequirement?->linkedFeatures->firstWhere('id', $featureId);
+
+        if ($feature?->status !== FeatureStatus::InVerification) {
+            return;
+        }
+
+        DB::transaction(function () use ($feature): void {
+            $feature->update(['status' => FeatureStatus::Done]);
+
+            foreach ($feature->requirements as $requirement) {
+                $requirement->revisions()->create([
+                    'new_statement' => $requirement->title,
+                    'old_status' => $requirement->status->value,
+                    'new_status' => $requirement->status->value,
+                    'reason' => "功能 F{$feature->number}「{$feature->title}」验收通过：验证中 → 完成",
+                    'decided_by' => $this->user()->name,
+                ]);
+            }
+        });
+
+        unset($this->tree, $this->filteredTree, $this->nodesById, $this->total, $this->selectedRequirement, $this->recentChanges);
+        Notification::make()->title('验收通过，功能已改成完成')->success()->send();
+    }
+
     public function timelineOf(Requirement $requirement): RequirementTimeline
     {
         return app(RequirementTimelines::class)->for($requirement);
@@ -277,19 +312,16 @@ class RequirementTree extends Page
     }
 
     /**
-     * 待决策 / 待做 / 以后做: the 全貌 tree cut down to that tab's nodes and their ancestors.
+     * 待决策 / 待做 / 待验收 / 以后做: the 全貌 tree cut down to that tab's nodes and their ancestors.
      *
      * @return list<RequirementTreeNode>
      */
     #[Computed]
     public function filteredTree(): array
     {
-        $ids = match ($this->tab) {
-            'pending' => $this->awaitingDecision->pluck('id')->all(),
-            'todo' => array_map(fn (RequirementTreeNode $node): int => $node->requirement->id, $this->todo),
-            'later' => array_map(fn (RequirementTreeNode $node): int => $node->requirement->id, $this->later),
-            default => [],
-        };
+        $ids = $this->tab === 'pending'
+            ? $this->awaitingDecision->pluck('id')->all()
+            : array_map(fn (RequirementTreeNode $node): int => $node->requirement->id, $this->leavesIn($this->tab));
 
         return RequirementTreeNode::keeping($this->tree, array_flip($ids));
     }
@@ -318,21 +350,13 @@ class RequirementTree extends Page
     }
 
     /**
+     * The leaves a 待做 / 待验收 / 以后做 tab lists; none for any other tab.
+     *
      * @return list<RequirementTreeNode>
      */
-    #[Computed]
-    public function todo(): array
+    public function leavesIn(string $tab): array
     {
-        return $this->requirementTreeService()->todo($this->tree);
-    }
-
-    /**
-     * @return list<RequirementTreeNode>
-     */
-    #[Computed]
-    public function later(): array
-    {
-        return $this->requirementTreeService()->later($this->tree);
+        return isset(self::LEAF_TABS[$tab]) ? $this->requirementTreeService()->leaves($this->tree, self::LEAF_TABS[$tab]) : [];
     }
 
     /**
@@ -380,7 +404,7 @@ class RequirementTree extends Page
         return $this->selectedNumber === null ? null : Requirement::query()
             ->where('project_id', $this->project->id)
             ->where('number', $this->selectedNumber)
-            ->with(['revisions', 'linkedFeatures', 'tests', 'supersedes', 'dependsOn', 'dependents'])
+            ->with(['revisions', 'linkedFeatures' => fn (BelongsToMany $features) => $features->withCount('requirements'), 'tests', 'supersedes', 'dependsOn', 'dependents'])
             ->first();
     }
 

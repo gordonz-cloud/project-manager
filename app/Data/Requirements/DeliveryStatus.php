@@ -17,6 +17,7 @@ enum DeliveryStatus: string
     case Failed = '验证失败';
     case NotBuilt = '未实现';
     case InProgress = '实现中';
+    case AwaitingAcceptance = '待验收';
     case Built = '已实现';
     case Verified = '已验证';
 
@@ -33,6 +34,8 @@ enum DeliveryStatus: string
 
         return match (true) {
             $results->contains(TestLastResult::Failed) => self::Failed,
+            $features->contains(fn (Feature $feature): bool => $feature->status === FeatureStatus::InVerification)
+                && $features->every(fn (Feature $feature): bool => in_array($feature->status, [FeatureStatus::InVerification, FeatureStatus::Done], true)) => self::AwaitingAcceptance,
             $results->isNotEmpty() && $results->every(fn (TestLastResult $result): bool => $result === TestLastResult::Passed) => self::Verified,
             $features->isNotEmpty() && $features->every(fn (Feature $feature): bool => $feature->status === FeatureStatus::Done) => self::Built,
             $features->contains(fn (Feature $feature): bool => in_array($feature->status, [FeatureStatus::InDevelopment, FeatureStatus::InVerification, FeatureStatus::Done], true)) => self::InProgress,
@@ -63,25 +66,15 @@ enum DeliveryStatus: string
         return $least === self::NotBuilt && $isMixed ? self::InProgress : $least;
     }
 
-    public function color(): string
-    {
-        return match ($this) {
-            self::Failed => 'text-red-500',
-            self::NotBuilt => 'text-slate-400',
-            self::InProgress => 'text-amber-500',
-            self::Built => 'text-sky-500',
-            self::Verified => 'text-emerald-500',
-        };
-    }
-
     private function rank(): int
     {
         return match ($this) {
             self::Failed => -1,
             self::NotBuilt => 0,
             self::InProgress => 1,
-            self::Built => 2,
-            self::Verified => 3,
+            self::AwaitingAcceptance => 2,
+            self::Built => 3,
+            self::Verified => 4,
         };
     }
 }

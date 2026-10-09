@@ -119,7 +119,7 @@ it('shows one status per node and rolls them up as 待决策 / 待做 / 完成 [
         ->and(RequirementProgress::of(RequirementStatus::Decided, DeliveryStatus::Failed))->toBe(RequirementProgress::Todo)
         ->and(RequirementProgress::of(RequirementStatus::Decided, DeliveryStatus::InProgress))->toBe(RequirementProgress::Todo)
         ->and(RequirementProgress::of(RequirementStatus::Decided, DeliveryStatus::Verified))->toBe(RequirementProgress::Done)
-        ->and(RequirementTreeNode::total($tree)->progressCounts())->toBe(['待决策' => 1, '待做' => 2, '完成' => 1]);
+        ->and(RequirementTreeNode::total($tree)->progressCounts())->toBe(['待决策' => 1, '待做' => 2, '待验收' => 0, '完成' => 1]);
 
     Livewire::test(RequirementTree::class)
         ->assertSee('title="1 待决策 · 2 待做 · 1 完成"', false)
@@ -624,7 +624,7 @@ it('saves a rule as 以后做, shows it grey on the tree and keeps it out of the
     $progress = collect(RequirementTreeNode::flattened($tree))->mapWithKeys(fn (RequirementTreeNode $node): array => [$node->requirement->number => $node->progress])->all();
 
     expect($progress)->toBe([1 => RequirementProgress::Done, 2 => RequirementProgress::Done, 3 => RequirementProgress::Later])
-        ->and(RequirementTreeNode::total($tree)->progressCounts())->toBe(['待决策' => 0, '待做' => 0, '完成' => 1]);
+        ->and(RequirementTreeNode::total($tree)->progressCounts())->toBe(['待决策' => 0, '待做' => 0, '待验收' => 0, '完成' => 1]);
 
     Livewire::test(RequirementTree::class)->assertSeeInOrder(['Guild page later', 'data-progress="以后做"'], false)->assertDontSee('放弃');
     Livewire::withQueryParams(['tab' => 'pending'])->test(RequirementTree::class)->assertDontSee('Guild page later');

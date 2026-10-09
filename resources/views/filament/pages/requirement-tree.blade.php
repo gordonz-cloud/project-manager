@@ -11,7 +11,7 @@
             <div class="flex flex-wrap items-center gap-2 border-b border-slate-200 p-3 dark:border-white/10">
                 @foreach (\App\Filament\Pages\RequirementTree::TABS as $key => $label)
                     <button type="button" wire:click="setTab(@js($key))" class="rounded-md border px-2 py-1 text-xs {{ $this->tab === $key ? 'border-slate-900 bg-slate-900 text-white dark:border-white dark:bg-white dark:text-slate-950' : 'border-slate-300 text-slate-600 dark:border-white/10 dark:text-slate-300' }}">
-                        @php($count = match ($key) { 'pending' => $this->awaitingDecision->count(), 'todo' => count($this->todo), 'later' => count($this->later), default => null })
+                        @php($count = $key === 'pending' ? $this->awaitingDecision->count() : (isset(\App\Filament\Pages\RequirementTree::LEAF_TABS[$key]) ? count($this->leavesIn($key)) : null))
                         {{ $label.($count === null ? '' : "（{$count}）") }}
                     </button>
                 @endforeach
@@ -46,10 +46,11 @@
                 @elseif ($this->tab !== 'changes')
                     <div data-tab="{{ $this->tab }}">
                         @if ($this->tab === 'todo')<p class="px-1 pb-2 text-xs text-slate-500">已定还没做完的，树里从上往下按依赖顺序做。</p>@endif
+                        @if ($this->tab === 'accepting')<p class="px-1 pb-2 text-xs text-slate-500">功能都写完了、至少一个在验证中，等你看过点「验收通过」。</p>@endif
                         @forelse ($this->filteredTree as $node)
                             @include('filament.pages.partials.requirement-tree-node', ['node' => $node, 'depth' => 0])
                         @empty
-                            <p class="px-2 py-6 text-center text-xs text-slate-400">{{ ['pending' => '这里没有要决定的事。', 'todo' => '没有待做的规则。', 'later' => '没有以后做的规则。'][$this->tab] }}</p>
+                            <p class="px-2 py-6 text-center text-xs text-slate-400">{{ ['pending' => '这里没有要决定的事。', 'todo' => '没有待做的规则。', 'accepting' => '没有待验收的规则。', 'later' => '没有以后做的规则。'][$this->tab] }}</p>
                         @endforelse
                     </div>
                 @else
