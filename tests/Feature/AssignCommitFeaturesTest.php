@@ -12,7 +12,7 @@ it('hangs commits on features by hash prefix and never moves one that already ha
     $loose = Commit::factory()->create(['project_id' => $project->id, 'hash' => str_repeat('a', 40), 'feature_id' => null]);
     $placed = Commit::factory()->create(['project_id' => $project->id, 'hash' => str_repeat('b', 40), 'feature_id' => $refund->id]);
 
-    $file = storage_path('framework/testing/assign.json');
+    $file = storage_path('framework/testing/assign-'.getmypid().'.json');
     File::ensureDirectoryExists(dirname($file));
     File::put($file, json_encode(['project' => 'sg', 'assignments' => [
         ['hash' => 'aaaaaaaa', 'feature' => 19],

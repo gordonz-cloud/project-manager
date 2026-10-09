@@ -8,7 +8,7 @@ use Symfony\Component\Process\Process;
 
 function makeCommitTestRepo(): string
 {
-    $repo = storage_path('framework/testing/commits-sync-repo');
+    $repo = storage_path('framework/testing/commits-sync-repo-'.getmypid());
 
     (new Process(['rm', '-rf', $repo]))->run();
     (new Process(['mkdir', '-p', $repo]))->run();

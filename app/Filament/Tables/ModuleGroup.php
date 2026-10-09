@@ -46,6 +46,9 @@ class ModuleGroup
             ->getTitleFromRecordUsing($firstModuleName)
             ->orderQueryUsing(fn (Builder $query, string $direction): Builder => $query
                 ->orderBy(DB::raw($orderSql), $direction === 'desc' ? 'desc' : 'asc'))
+            ->scopeQueryByKeyUsing(fn (Builder $query, string $key): Builder => $key === self::NO_MODULE
+                ? $query->whereRaw("{$orderSql} is null")
+                : $query->whereRaw("{$orderSql} = ?", [$key]))
             ->collapsible();
     }
 }

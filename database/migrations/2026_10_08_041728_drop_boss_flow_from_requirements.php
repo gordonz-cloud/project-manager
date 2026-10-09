@@ -21,7 +21,7 @@ return new class extends Migration
     {
         Schema::table('requirements', function (Blueprint $table) {
             $table->string('decider')->nullable();
-            $table->json('decision_opinion')->nullable();
+            $table->jsonb('decision_opinion')->nullable();
             $table->timestamp('sent_to_boss_at')->nullable();
         });
     }

@@ -14,7 +14,7 @@ return new class extends Migration
             $table->string('title');
             $table->unsignedInteger('number');
             $table->string('status');
-            $table->json('triggers')->nullable();
+            $table->jsonb('triggers')->nullable();
             $table->text('entry')->nullable();
             $table->string('commit_range')->nullable();
             $table->string('latest_commit')->nullable();

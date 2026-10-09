@@ -33,6 +33,8 @@ class RequirementTreeService
             ->get();
         $dependencies = DB::table('requirement_dependencies')
             ->whereIn('requirement_id', Requirement::withoutGlobalScopes()->where('project_id', $project->id)->select('id'))
+            ->orderBy('requirement_id')
+            ->orderBy('depends_on_requirement_id')
             ->get()
             ->map(fn (object $row): array => [(int) $row->requirement_id, (int) $row->depends_on_requirement_id]);
 

@@ -13,7 +13,7 @@ return new class extends Migration
     public function up(): void
     {
         Schema::table('features', function (Blueprint $table) {
-            $table->json('layers')->nullable();
+            $table->jsonb('layers')->nullable();
         });
 
         DB::table('features')->whereNotNull('layer')->orderBy('id')->chunkById(500, function ($features) {

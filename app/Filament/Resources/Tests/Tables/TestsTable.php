@@ -24,6 +24,10 @@ class TestsTable
         // lowest-numbered feature stands for the row, and the query is
         // ordered by that same subquery so rows arrive already clustered.
         $firstFeature = fn (Test $test): string => $test->features->sortBy('number')->first()->title ?? '（未挂功能）';
+        $firstFeatureTitleSql = '(select features.title from feature_test
+            join features on features.id = feature_test.feature_id
+            where feature_test.test_id = tests.id
+            order by features.number limit 1)';
 
         return $table
             ->stackedOnMobile()
@@ -40,6 +44,9 @@ class TestsTable
                             where feature_test.test_id = tests.id)'),
                         $direction === 'desc' ? 'desc' : 'asc',
                     ))
+                    ->scopeQueryByKeyUsing(fn (Builder $query, string $key): Builder => $key === '（未挂功能）'
+                        ? $query->whereRaw("{$firstFeatureTitleSql} is null")
+                        : $query->whereRaw("{$firstFeatureTitleSql} = ?", [$key]))
                     ->collapsible(),
             ])
             ->columns([

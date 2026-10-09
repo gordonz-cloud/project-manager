@@ -528,7 +528,7 @@ it('stores a written timeline and rejects one of the wrong shape [T75]', functio
     if ($message === null) {
         $command->assertSuccessful()->run();
 
-        expect(Requirement::where('project_id', $project->id)->where('title', 'Timeline rule')->sole()->timeline)->toBe($timeline);
+        expect(Requirement::where('project_id', $project->id)->where('title', 'Timeline rule')->sole()->timeline)->toEqual($timeline);
 
         return;
     }

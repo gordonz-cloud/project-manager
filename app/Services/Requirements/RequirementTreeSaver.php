@@ -39,6 +39,8 @@ class RequirementTreeSaver
         $rawNodes = $this->parsed($input);
 
         return DB::transaction(function () use ($project, $rawNodes): RequirementTreeSaveResult {
+            // Parallel saves to one project queue here, so two of them never hand out the same new number.
+            Project::query()->whereKey($project->id)->lockForUpdate()->first();
             $existing = Requirement::withoutGlobalScopes()->where('project_id', $project->id)->get()->keyBy('number');
             $featureIds = Feature::withoutGlobalScopes()->where('project_id', $project->id)->pluck('id', 'number')->all();
             $testIds = Test::withoutGlobalScopes()->where('project_id', $project->id)->pluck('id', 'number')->all();

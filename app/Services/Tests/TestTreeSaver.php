@@ -16,7 +16,7 @@ use InvalidArgumentException;
 
 /**
  * Saves Test Matrix nodes. A node without "number" is new and gets the next number inside the transaction
- * (sqlite runs IMMEDIATE transactions, so parallel saves queue instead of reusing a number); a node with
+ * (the project row is locked first, so parallel saves queue instead of reusing a number); a node with
  * "number" updates that existing node. "ref"/"parent_ref" let new nodes in one payload point at each other.
  * Nodes left out of the payload stay as they are, so a run can send back only the results it changed.
  *
@@ -33,6 +33,8 @@ class TestTreeSaver
         $rawNodes = $this->parsed($input);
 
         return DB::transaction(function () use ($project, $rawNodes): TestTreeSaveResult {
+            // Parallel saves to one project queue here, so two of them never hand out the same new number.
+            Project::query()->whereKey($project->id)->lockForUpdate()->first();
             $existing = Test::withoutGlobalScopes()->where('project_id', $project->id)->get()->keyBy('number');
             $featureIds = Feature::withoutGlobalScopes()->where('project_id', $project->id)->pluck('id', 'number');
             /** @var list<TestNodeInput> $nodes */

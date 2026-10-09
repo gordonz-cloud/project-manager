@@ -27,7 +27,7 @@ use Filament\Notifications\Notification;
 use Filament\Pages\Page;
 use Filament\Support\Icons\Heroicon;
 use Illuminate\Database\Eloquent\Collection as EloquentCollection;
-use Illuminate\Database\Eloquent\Relations\BelongsToMany;
+use Illuminate\Database\Eloquent\Relations\Relation;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use InvalidArgumentException;
@@ -404,7 +404,7 @@ class RequirementTree extends Page
         return $this->selectedNumber === null ? null : Requirement::query()
             ->where('project_id', $this->project->id)
             ->where('number', $this->selectedNumber)
-            ->with(['revisions', 'linkedFeatures' => fn (BelongsToMany $features) => $features->withCount('requirements'), 'tests', 'supersedes', 'dependsOn', 'dependents'])
+            ->with(['revisions', 'linkedFeatures' => fn (Relation $features) => $features->withCount('requirements'), 'tests', 'supersedes', 'dependsOn', 'dependents'])
             ->first();
     }
 

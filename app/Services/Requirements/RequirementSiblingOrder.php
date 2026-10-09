@@ -10,7 +10,8 @@ use Illuminate\Support\Collection;
  * Orders every level of the requirement tree so a node comes after everything it depends on: a stable topological
  * sort, ties broken by position, then number. A dependency between nodes that are not siblings is lifted to the pair
  * of their ancestors that are (a rule in group X depending on a rule in group Y puts X after Y). requirements:save only
- * guards direct dependencies against loops, so a lifted edge that would close a loop among siblings is skipped.
+ * guards direct dependencies against loops, so a lifted edge that would close a loop among siblings is skipped (the
+ * caller passes dependencies in id order, so the older node's edge wins).
  * 作废 nodes sit after the live ones of their level and take no part in the dependency order.
  */
 final class RequirementSiblingOrder
