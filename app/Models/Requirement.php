@@ -5,6 +5,9 @@ namespace App\Models;
 use App\Data\Requirements\RequirementDecision;
 use App\Enums\RequirementKind;
 use App\Enums\RequirementStatus;
+use App\Enums\TestAuto;
+use App\Enums\TestLastResult;
+use App\Enums\TestStatus;
 use App\Models\Concerns\BelongsToProject;
 use App\Models\Concerns\HasProjectSequence;
 use Database\Factories\RequirementFactory;
@@ -337,6 +340,28 @@ class Requirement extends Model
         $memo = once(fn () => new \ArrayObject);
 
         return $memo[$project->id] ??= self::computeBuildOrder($project);
+    }
+
+    /**
+     * What DeliveryStatus needs, counted in SQL instead of loading every linked test: its live tests (过时/停用 are no
+     * evidence), how many failed, how many are automated and how many of those passed, and whether a commit works on it.
+     *
+     * @param  Builder<Requirement>  $query
+     * @return Builder<Requirement>
+     */
+    #[Scope]
+    protected function withDeliveryCounts(Builder $query): Builder
+    {
+        $live = fn (Builder $tests): Builder => $tests->whereIn('tests.status', [TestStatus::Valid, TestStatus::ToWrite]);
+        $automated = fn (Builder $tests): Builder => $live($tests)->where(fn (Builder $q) => $q->whereNull('tests.auto')->orWhere('tests.auto', '!=', TestAuto::No));
+
+        return $query->withExists('commits')->withCount([
+            'tests as live_tests_count' => $live,
+            'tests as failed_tests_count' => fn (Builder $tests): Builder => $live($tests)->where('tests.last_result', TestLastResult::Failed),
+            'tests as automated_tests_count' => $automated,
+            'tests as passed_automated_tests_count' => fn (Builder $tests): Builder => $automated($tests)->where('tests.last_result', TestLastResult::Passed),
+            'tests as passed_tests_count' => fn (Builder $tests): Builder => $live($tests)->where('tests.last_result', TestLastResult::Passed),
+        ]);
     }
 
     /**

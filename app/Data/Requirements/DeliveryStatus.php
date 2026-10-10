@@ -2,10 +2,7 @@
 
 namespace App\Data\Requirements;
 
-use App\Enums\TestAuto;
-use App\Enums\TestLastResult;
 use App\Models\Requirement;
-use App\Models\Test;
 
 /**
  * How far a requirement is delivered. Never stored: derived from its own tests, commits and acceptance,
@@ -22,21 +19,20 @@ enum DeliveryStatus: string
     /**
      * What the node's own links say; null when nothing is linked. A failing test always wins; an accepted node is done;
      * once every automated test passes it is done, or 待验收 while Gordon still has to look (needs_review, or a manual
-     * test). Expects tests (with last_result, auto) loaded and commits_exists from withExists('commits').
+     * test). Only live tests count (过时/停用 are no evidence). Expects Requirement::withDeliveryCounts().
      */
     public static function of(Requirement $requirement): ?self
     {
-        $tests = $requirement->tests;
-        $automated = $tests->reject(fn (Test $test): bool => $test->auto === TestAuto::No);
-        $needsReview = $requirement->needs_review || $automated->count() < $tests->count();
-        $passed = fn (Test $test): bool => $test->last_result === TestLastResult::Passed;
+        $count = fn (string $attribute): int => (int) $requirement->getAttribute($attribute);
+        $tests = $count('live_tests_count');
+        $needsReview = $requirement->needs_review || $count('automated_tests_count') < $tests;
 
         return match (true) {
-            $tests->contains(fn (Test $test): bool => $test->last_result === TestLastResult::Failed) => self::Failed,
+            $count('failed_tests_count') > 0 => self::Failed,
             $requirement->accepted_at !== null => self::Verified,
-            $tests->isNotEmpty() && $automated->every($passed) => $needsReview ? self::AwaitingAcceptance : self::Verified,
-            (bool) $requirement->getAttribute('commits_exists') || $tests->contains($passed) => self::InProgress,
-            $tests->isNotEmpty() => self::NotBuilt,
+            $tests > 0 && $count('passed_automated_tests_count') === $count('automated_tests_count') => $needsReview ? self::AwaitingAcceptance : self::Verified,
+            (bool) $requirement->getAttribute('commits_exists') || $count('passed_tests_count') > 0 => self::InProgress,
+            $tests > 0 => self::NotBuilt,
             default => null,
         };
     }

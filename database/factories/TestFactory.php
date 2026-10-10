@@ -23,7 +23,7 @@ class TestFactory extends Factory
         return [
             'project_id' => Project::factory(),
             'title' => fake()->sentence(3),
-            'status' => fake()->randomElement(TestStatus::cases()),
+            'status' => TestStatus::Valid,
             'last_result' => fake()->randomElement(TestLastResult::cases()),
         ];
     }

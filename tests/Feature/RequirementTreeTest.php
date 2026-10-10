@@ -6,6 +6,7 @@ use App\Enums\RequirementKind;
 use App\Enums\RequirementStatus;
 use App\Enums\TestAuto;
 use App\Enums\TestLastResult;
+use App\Enums\TestStatus;
 use App\Filament\Pages\RequirementTree;
 use App\Models\Commit;
 use App\Models\Flowchart;
@@ -172,7 +173,7 @@ it('derives delivery from the rule\'s own tests, commits and acceptance and roll
     $rule = fn (int $number, array $attributes = [], RequirementStatus $status = RequirementStatus::Decided): Requirement => Requirement::factory()->create([
         'project_id' => $project->id, 'number' => $number, 'parent_id' => $goal->id, 'kind' => RequirementKind::Rule, 'status' => $status, ...$attributes,
     ]);
-    $test = fn (TestLastResult $result, TestAuto $auto = TestAuto::Yes): int => Test::factory()->create(['project_id' => $project->id, 'last_result' => $result, 'auto' => $auto])->id;
+    $test = fn (TestLastResult $result, TestAuto $auto = TestAuto::Yes, TestStatus $status = TestStatus::Valid): int => Test::factory()->create(['project_id' => $project->id, 'last_result' => $result, 'auto' => $auto, 'status' => $status])->id;
     $commit = fn (): int => Commit::factory()->create(['project_id' => $project->id])->id;
 
     $rule(2)->tests()->attach([$test(TestLastResult::Passed), $test(TestLastResult::Passed)]);
@@ -182,16 +183,17 @@ it('derives delivery from the rule\'s own tests, commits and acceptance and roll
     $rule(6, ['accepted_at' => now()])->tests()->attach($test(TestLastResult::Failed));
     $rule(9, ['accepted_at' => now()])->tests()->attach($test(TestLastResult::NotRun));
     $rule(10)->tests()->attach([$test(TestLastResult::Passed), $test(TestLastResult::NotRun, TestAuto::No)]);
+    $rule(11)->tests()->attach([$test(TestLastResult::Passed), $test(TestLastResult::Failed, status: TestStatus::Stale), $test(TestLastResult::NotRun, status: TestStatus::Disabled)]);
     $rule(7, [], RequirementStatus::Proposed)->commits()->attach($commit());
     $rule(8, [], RequirementStatus::Conflict);
 
     $nodes = flatRequirementTree(app(RequirementTreeService::class)->tree($project));
 
-    expect(array_map(fn (RequirementTreeNode $node): string => $node->delivery->value, array_intersect_key($nodes, array_flip([2, 3, 4, 5, 6, 9, 10]))))
-        ->toBe([2 => '已验证', 3 => '待验收', 4 => '实现中', 5 => '未实现', 6 => '验证失败', 9 => '已验证', 10 => '待验收'])
+    expect(array_map(fn (RequirementTreeNode $node): string => $node->delivery->value, array_intersect_key($nodes, array_flip([2, 3, 4, 5, 6, 9, 10, 11]))))
+        ->toBe([2 => '已验证', 3 => '待验收', 4 => '实现中', 5 => '未实现', 6 => '验证失败', 9 => '已验证', 10 => '待验收', 11 => '已验证'])
         ->and($nodes[1]->delivery)->toBe(DeliveryStatus::Failed)
-        ->and($nodes[1]->rollup->delivered)->toEqualCanonicalizing(['已验证' => 2, '待验收' => 2, '实现中' => 1, '未实现' => 1, '验证失败' => 1])
-        ->and($nodes[1]->rollup->verifiedPercent())->toBe(29)
+        ->and($nodes[1]->rollup->delivered)->toEqualCanonicalizing(['已验证' => 3, '待验收' => 2, '实现中' => 1, '未实现' => 1, '验证失败' => 1])
+        ->and($nodes[1]->rollup->verifiedPercent())->toBe(38)
         ->and([$nodes[1]->rollup->proposed, $nodes[1]->rollup->conflicts])->toBe([1, 1]);
 
     expect(DeliveryStatus::combined([DeliveryStatus::Verified, DeliveryStatus::AwaitingAcceptance]))->toBe(DeliveryStatus::AwaitingAcceptance)
