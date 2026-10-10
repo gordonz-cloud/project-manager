@@ -6,7 +6,6 @@ use App\Data\Commits\CommitSyncResult;
 use App\Models\Commit;
 use App\Models\Feature;
 use App\Models\Project;
-use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 
 class SyncProjectCommits
@@ -23,7 +22,6 @@ class SyncProjectCommits
             ->get()
             ->keyBy('number');
 
-        /** @var Collection<string, array{id:int,subject:string,body:?string,author:string,committed_at:string,feature_id:?int}> $existingByHash */
         $existingByHash = Commit::withoutGlobalScopes()
             ->where('project_id', $project->id)
             ->get(['id', 'hash', 'subject', 'body', 'author', 'committed_at', 'feature_id'])
