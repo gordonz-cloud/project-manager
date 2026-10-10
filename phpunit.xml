@@ -28,6 +28,7 @@
         <env name="DB_PORT" value="54329"/>
         <env name="DB_USERNAME" value="pm"/>
         <env name="DB_PASSWORD" value="pm"/>
+        <env name="DB_SSLMODE" value="disable"/>
         <env name="DB_URL" value=""/>
         <env name="MAIL_MAILER" value="array"/>
         <env name="QUEUE_CONNECTION" value="sync"/>
