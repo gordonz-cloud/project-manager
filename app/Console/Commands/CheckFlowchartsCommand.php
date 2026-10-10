@@ -3,7 +3,6 @@
 namespace App\Console\Commands;
 
 use App\Data\Flowcharts\FlowchartStaleCheck;
-use App\Enums\FeatureStatus;
 use App\Models\Project;
 use App\Services\Flowcharts\CheckFlowchartStaleness;
 use Illuminate\Console\Command;
@@ -15,7 +14,7 @@ use Illuminate\Console\Command;
  */
 class CheckFlowchartsCommand extends Command
 {
-    protected $signature = 'flowcharts:check {project-slug} {--feature= : only this feature number}';
+    protected $signature = 'flowcharts:check {project-slug} {--feature= : only this feature number} {--requirement= : only this rule number}';
 
     protected $description = "Check a project's flowchart nodes against its repo";
 
@@ -36,22 +35,21 @@ class CheckFlowchartsCommand extends Command
         }
 
         $featureNumber = $this->option('feature') !== null ? (int) $this->option('feature') : null;
-        $results = $checkFlowchartStaleness->check($project, $featureNumber);
+        $requirementNumber = $this->option('requirement') !== null ? (int) $this->option('requirement') : null;
+        $results = $checkFlowchartStaleness->check($project, $featureNumber, $requirementNumber);
 
         $checked = $results->sum(fn (FlowchartStaleCheck $result): int => $result->checkedNodes);
         $stale = $results->sum(fn (FlowchartStaleCheck $result): int => count($result->staleNodes));
 
-        $plannedStatuses = [FeatureStatus::Todo, FeatureStatus::Uncertain];
-
         foreach ($results as $result) {
-            if (in_array($result->flowchart->feature->status, $plannedStatuses, true)) {
-                $this->line("功能 {$result->flowchart->feature->number} {$result->flowchart->feature->title}：计划中，跳过");
+            if ($checkFlowchartStaleness->isPlanned($result->flowchart)) {
+                $this->line("{$result->flowchart->ownerLabel()}：计划中，跳过");
 
                 continue;
             }
 
             foreach ($result->staleNodes as $node) {
-                $this->line("功能 {$result->flowchart->feature->number} {$result->flowchart->feature->title}：{$node['id']} {$node['label']} {$node['file']} {$node['function']} — {$node['reason']}");
+                $this->line("{$result->flowchart->ownerLabel()}：{$node['id']} {$node['label']} {$node['file']} {$node['function']} — {$node['reason']}");
             }
         }
 

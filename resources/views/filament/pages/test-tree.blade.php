@@ -88,7 +88,7 @@
                     <div class="mt-5 border-t border-slate-200 pt-3 dark:border-white/10">
                         <a href="{{ $this->featureUrl($feature) }}" class="text-sm font-medium text-slate-950 hover:underline dark:text-white">F{{ $feature->number }} {{ $feature->title }}</a>
                         @if ($feature->flowchart !== null)
-                            @include('filament.pages.partials.feature-flowchart', ['feature' => $feature])
+                            @include('filament.pages.partials.flowchart', ['flowchart' => $feature->flowchart])
                         @endif
                     </div>
                 @endforeach

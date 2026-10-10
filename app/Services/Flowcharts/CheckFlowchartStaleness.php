@@ -4,6 +4,7 @@ namespace App\Services\Flowcharts;
 
 use App\Data\Flowcharts\FlowchartStaleCheck;
 use App\Enums\FeatureStatus;
+use App\Models\Feature;
 use App\Models\Flowchart;
 use App\Models\Project;
 use Illuminate\Support\Carbon;
@@ -22,27 +23,33 @@ class CheckFlowchartStaleness
     /**
      * @return Collection<int, FlowchartStaleCheck>
      */
-    public function check(Project $project, ?int $featureNumber = null): Collection
+    public function check(Project $project, ?int $featureNumber = null, ?int $requirementNumber = null): Collection
     {
         $repoPath = (string) $project->repo_path;
 
         return Flowchart::withoutGlobalScopes()
             ->where('project_id', $project->id)
             ->when($featureNumber, fn ($query, int $number) => $query->whereHas('feature', fn ($q) => $q->where('number', $number)))
-            ->with('feature')
+            ->when($requirementNumber, fn ($query, int $number) => $query->whereHas('requirement', fn ($q) => $q->where('number', $number)))
+            ->with(['feature', 'requirement.linkedFeatures'])
             ->get()
             ->map(fn (Flowchart $flowchart): FlowchartStaleCheck => $this->checkFlowchart($flowchart, $repoPath));
     }
 
     /**
-     * A planned feature's flowchart describes code that doesn't exist yet, so its
-     * nodes' missing files/functions are expected, not drift — skip the check.
+     * A planned flowchart describes code that doesn't exist yet, so its nodes' missing
+     * files/functions are expected, not drift — skip the check. A rule's chart is planned
+     * until one of its features is under way.
      */
-    private function isPlanned(Flowchart $flowchart): bool
+    public function isPlanned(Flowchart $flowchart): bool
     {
-        $status = $flowchart->feature?->status;
+        $planned = [FeatureStatus::Todo, FeatureStatus::Uncertain];
 
-        return $status === FeatureStatus::Todo || $status === FeatureStatus::Uncertain;
+        if ($flowchart->requirement !== null) {
+            return $flowchart->requirement->linkedFeatures->every(fn (Feature $feature): bool => in_array($feature->status, $planned, true) || $feature->status === FeatureStatus::Void);
+        }
+
+        return in_array($flowchart->feature?->status, $planned, true);
     }
 
     private function checkFlowchart(Flowchart $flowchart, string $repoPath): FlowchartStaleCheck

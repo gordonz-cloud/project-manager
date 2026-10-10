@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Enums\RequirementKind;
 use App\Models\Concerns\BelongsToProject;
 use Database\Factories\FlowchartFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
@@ -12,11 +13,12 @@ use Illuminate\Support\Carbon;
 use LogicException;
 
 /**
- * A feature's flowchart: what the code does, as a chart plus numbered pseudocode.
+ * A feature's or one requirement rule's flowchart (exactly one owner): what the code does, as a chart plus numbered pseudocode.
  *
  * @property int $id
  * @property int $project_id
- * @property int $feature_id
+ * @property int|null $feature_id
+ * @property int|null $requirement_id
  * @property array{nodes: list<array{id: string, label: string, shape: string, file?: string, function?: string}>, edges: list<array{from: string, to: string, label?: string, kind?: string}>} $chart
  * @property string|null $pseudocode
  * @property Carbon|null $stale_checked_at
@@ -24,7 +26,7 @@ use LogicException;
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at
  */
-#[Fillable(['feature_id', 'chart', 'pseudocode'])]
+#[Fillable(['feature_id', 'requirement_id', 'chart', 'pseudocode'])]
 class Flowchart extends Model
 {
     /** @use HasFactory<FlowchartFactory> */
@@ -43,9 +45,19 @@ class Flowchart extends Model
                 throw new LogicException("Invalid flowchart: {$error}");
             }
 
-            $feature = Feature::withoutGlobalScopes()->find($flowchart->feature_id)
-                ?? throw new LogicException('A flowchart feature must exist.');
-            $flowchart->project_id = $feature->project_id;
+            $owner = $flowchart->feature_id !== null
+                ? Feature::withoutGlobalScopes()->find($flowchart->feature_id)
+                : Requirement::withoutGlobalScopes()->find($flowchart->requirement_id);
+
+            if ($owner === null || ($flowchart->feature_id !== null && $flowchart->requirement_id !== null)) {
+                throw new LogicException('A flowchart belongs to exactly one existing feature or requirement.');
+            }
+
+            if ($owner instanceof Requirement && $owner->kind !== RequirementKind::Rule) {
+                throw new LogicException('Only a rule (规则) has its own flowchart.');
+            }
+
+            $flowchart->project_id = $owner->project_id;
         });
     }
 
@@ -178,10 +190,28 @@ class Flowchart extends Model
     }
 
     /**
+     * Who the chart belongs to, as a reader names it: "功能 66 标题" or "规则 120 标题".
+     */
+    public function ownerLabel(): string
+    {
+        return $this->requirement !== null
+            ? "规则 {$this->requirement->number} {$this->requirement->title}"
+            : "功能 {$this->feature?->number} {$this->feature?->title}";
+    }
+
+    /**
      * @return BelongsTo<Feature, $this>
      */
     public function feature(): BelongsTo
     {
         return $this->belongsTo(Feature::class);
+    }
+
+    /**
+     * @return BelongsTo<Requirement, $this>
+     */
+    public function requirement(): BelongsTo
+    {
+        return $this->belongsTo(Requirement::class);
     }
 }

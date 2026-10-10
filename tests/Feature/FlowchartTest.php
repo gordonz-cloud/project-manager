@@ -1,11 +1,13 @@
 <?php
 
 use App\Enums\FeatureStatus;
+use App\Enums\RequirementKind;
 use App\Filament\Resources\Features\Pages\EditFeature;
 use App\Models\Feature;
 use App\Models\Flowchart;
 use App\Models\Project;
 use App\Models\RequestReply;
+use App\Models\Requirement;
 use App\Models\UseCase;
 use App\Models\User;
 use App\Support\FlowchartMermaid;
@@ -207,6 +209,54 @@ test('flowcharts:save upserts a feature flowchart and rejects a bad chart [T14]'
         ->and($feature->flowchart->pseudocode)->toBe('1. go');
 
     unlink($file);
+});
+
+test('flowcharts:save gives a rule its own flowchart and refuses a non-rule or two owners [T180]', function () {
+    $project = Project::factory()->create(['slug' => 'fc']);
+    $rule = Requirement::factory()->create(['project_id' => $project->id, 'number' => 5, 'kind' => RequirementKind::Rule]);
+    Requirement::factory()->create(['project_id' => $project->id, 'number' => 6, 'kind' => RequirementKind::Group]);
+    Feature::factory()->create(['project_id' => $project->id, 'number' => 7]);
+    $file = tempnam(sys_get_temp_dir(), 'flowchart');
+    $chart = fn (string $label) => ['nodes' => [['id' => 'a', 'label' => $label, 'shape' => 'start'], ['id' => 'z', 'label' => 'Z', 'shape' => 'end']], 'edges' => [['from' => 'a', 'to' => 'z']]];
+    $write = fn (array $owner, string $label) => file_put_contents($file, json_encode(['project' => 'fc', ...$owner, 'chart' => $chart($label), 'pseudocode' => '1. rule']));
+
+    $write(['requirement' => 5], 'A');
+    $this->artisan('flowcharts:save', ['file' => $file])->expectsOutputToContain('Requirement 5 flowchart saved')->assertSuccessful();
+    $write(['requirement' => 5], 'A2');
+    $this->artisan('flowcharts:save', ['file' => $file])->assertSuccessful();
+    $write(['requirement' => 6], 'G');
+    $this->artisan('flowcharts:save', ['file' => $file])->expectsOutputToContain('Only a rule')->assertFailed();
+    $write(['requirement' => 5, 'feature' => 7], 'B');
+    $this->artisan('flowcharts:save', ['file' => $file])->expectsOutputToContain('feature | requirement')->assertFailed();
+
+    expect($rule->flowchart()->sole()->chart['nodes'][0]['label'])->toBe('A2')
+        ->and($rule->flowchart->project_id)->toBe($project->id)
+        ->and(Flowchart::withoutGlobalScopes()->count())->toBe(1);
+
+    unlink($file);
+});
+
+test('flowcharts:check checks a rule\'s chart, skipping it while all its features are planned [T181]', function () {
+    $project = Project::factory()->create(['slug' => 'fc', 'repo_path' => base_path('tests/Fixtures/repo')]);
+    $rule = Requirement::factory()->create(['project_id' => $project->id, 'number' => 5, 'kind' => RequirementKind::Rule, 'title' => 'Orders keep a total']);
+    $feature = Feature::factory()->create(['project_id' => $project->id, 'status' => FeatureStatus::Todo]);
+    $rule->linkedFeatures()->attach($feature);
+    $flowchart = Flowchart::factory()->create(['feature_id' => null, 'requirement_id' => $rule->id, 'chart' => [
+        'nodes' => [['id' => 'a', 'label' => 'A', 'shape' => 'start', 'file' => 'app/Gone.php', 'function' => 'store'], ['id' => 'z', 'label' => 'Z', 'shape' => 'end']],
+        'edges' => [['from' => 'a', 'to' => 'z']],
+    ]]);
+
+    $this->artisan('flowcharts:check', ['project-slug' => 'fc', '--requirement' => 5])
+        ->expectsOutputToContain('规则 5 Orders keep a total：计划中，跳过')
+        ->assertSuccessful();
+
+    $feature->update(['status' => FeatureStatus::Done]);
+
+    $this->artisan('flowcharts:check', ['project-slug' => 'fc', '--requirement' => 5])
+        ->expectsOutputToContain('规则 5 Orders keep a total：a A app/Gone.php store — 文件不存在')
+        ->assertFailed();
+
+    expect($flowchart->fresh()->stale_nodes)->toBe(['a']);
 });
 
 test('flowcharts:check verifies files and functions in the repo [T16]', function (array $node, string $expected, bool $passes) {

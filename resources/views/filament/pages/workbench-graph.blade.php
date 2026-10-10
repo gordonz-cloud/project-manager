@@ -59,7 +59,7 @@
                     @endif
 
                     @if ($presenter->flowchartMermaid($record) !== null)
-                        @include('filament.pages.partials.feature-flowchart', ['feature' => $record])
+                        @include('filament.pages.partials.flowchart', ['flowchart' => $record->flowchart])
                     @endif
                 </div>
             @else

@@ -9,6 +9,7 @@ use App\Enums\TestLastResult;
 use App\Filament\Pages\RequirementTree;
 use App\Models\Commit;
 use App\Models\Feature;
+use App\Models\Flowchart;
 use App\Models\Project;
 use App\Models\Requirement;
 use App\Models\Test;
@@ -541,4 +542,35 @@ it('lists only 待验收 rules on the 待验收 tab, keeps them off 待做, and 
 
     Livewire::withQueryParams(['tab' => 'accepting'])->test(RequirementTree::class)->assertDontSee('Accepting rule')->assertSee('没有待验收的规则。');
     Livewire::withQueryParams(['selectedNumber' => 2])->test(RequirementTree::class)->assertSeeHtml('data-progress="完成"');
+});
+
+it('shows a selected rule\'s own flowchart and pseudocode in the panel [T182]', function () {
+    $project = requirementTreePage();
+    $rule = Requirement::factory()->create(['project_id' => $project->id, 'number' => 1, 'kind' => RequirementKind::Rule, 'status' => RequirementStatus::Decided]);
+    Flowchart::factory()->create(['feature_id' => null, 'requirement_id' => $rule->id, 'pseudocode' => '1. rule holds', 'chart' => [
+        'nodes' => [['id' => 'a', 'label' => 'Rule start', 'shape' => 'start'], ['id' => 'z', 'label' => 'Rule done', 'shape' => 'end']],
+        'edges' => [['from' => 'a', 'to' => 'z']],
+    ]]);
+
+    Livewire::withQueryParams(['selectedNumber' => 1])->test(RequirementTree::class)
+        ->assertSeeHtml('data-rule-flowchart')
+        ->assertSeeHtml('Rule start')
+        ->assertSee('1. rule holds')
+        ->assertDontSeeHtml('data-rule-flowchart-fallback');
+});
+
+it('shows a chartless rule\'s feature flowcharts, saying it has none of its own [T183]', function () {
+    $project = requirementTreePage();
+    $rule = Requirement::factory()->create(['project_id' => $project->id, 'number' => 1, 'kind' => RequirementKind::Rule, 'status' => RequirementStatus::Decided]);
+    $feature = Feature::factory()->create(['project_id' => $project->id, 'number' => 9, 'title' => 'Checkout']);
+    $rule->linkedFeatures()->attach($feature);
+    Flowchart::factory()->create(['feature_id' => $feature->id, 'chart' => [
+        'nodes' => [['id' => 'a', 'label' => 'Feature start', 'shape' => 'start'], ['id' => 'z', 'label' => 'Feature done', 'shape' => 'end']],
+        'edges' => [['from' => 'a', 'to' => 'z']],
+    ]]);
+
+    Livewire::withQueryParams(['selectedNumber' => 1])->test(RequirementTree::class)
+        ->assertSee('这条规则还没有自己的流程图，下面是它挂的功能的图')
+        ->assertSee('F9 Checkout')
+        ->assertSeeHtml('Feature start');
 });

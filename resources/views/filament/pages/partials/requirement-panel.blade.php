@@ -114,6 +114,25 @@
         </section>
     @endif
 
+    @if ($requirement->kind === \App\Enums\RequirementKind::Rule)
+        {{-- The rule's own chart; until it has one, the charts of the features that make it hold, flagged as such. --}}
+        <section class="mt-4" data-rule-flowchart>
+            @if ($requirement->flowchart !== null)
+                <h3 class="text-xs font-medium text-slate-500">流程图</h3>
+                @include('filament.pages.partials.flowchart', ['flowchart' => $requirement->flowchart])
+            @else
+                @php($featureCharts = $requirement->linkedFeatures->filter(fn ($feature) => $feature->flowchart !== null))
+                <p class="text-xs text-slate-500" data-rule-flowchart-fallback>这条规则还没有自己的流程图{{ $featureCharts->isEmpty() ? '' : '，下面是它挂的功能的图' }}</p>
+                @foreach ($featureCharts as $feature)
+                    <details class="mt-2" wire:key="rule-feature-chart-{{ $feature->id }}" @if ($loop->first) open @endif>
+                        <summary class="cursor-pointer text-xs text-slate-700 dark:text-slate-300">F{{ $feature->number }} {{ $feature->title }}</summary>
+                        @include('filament.pages.partials.flowchart', ['flowchart' => $feature->flowchart])
+                    </details>
+                @endforeach
+            @endif
+        </section>
+    @endif
+
     <div class="mt-4 space-y-2">
         @unless ($timeline->isEmpty())
             <details data-timeline>

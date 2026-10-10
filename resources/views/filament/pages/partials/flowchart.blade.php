@@ -1,4 +1,4 @@
-@php($mermaid = \App\Support\FlowchartMermaid::fromFlowchart($feature->flowchart))
+@php($mermaid = \App\Support\FlowchartMermaid::fromFlowchart($flowchart))
     <div
         x-data="{
             fullscreen: false,
@@ -38,11 +38,11 @@
             @mouseup.window="onUp"
         >
             <div
-                wire:key="flowchart-{{ $feature->getKey() }}-{{ md5($mermaid) }}"
+                wire:key="flowchart-{{ $flowchart->getKey() }}-{{ md5($mermaid) }}"
                 wire:ignore
                 data-flowchart
                 data-source="{{ $mermaid }}"
-                data-tooltips="{{ json_encode(\App\Support\FlowchartMermaid::tooltips($feature->flowchart)) }}"
+                data-tooltips="{{ json_encode(\App\Support\FlowchartMermaid::tooltips($flowchart)) }}"
                 :style="fullscreen ? `transform: translate(${tx}px, ${ty}px) scale(${scale}); transform-origin: center center; height: 100%; display: flex; align-items: center; justify-content: center;` : ''"
                 class="[&_svg]:max-w-full [&_svg]:max-h-full"
                 x-init="
@@ -59,6 +59,6 @@
             ></div>
         </div>
     </div>
-    @if (filled($feature->flowchart->pseudocode))
-        <pre class="mt-4 overflow-x-auto whitespace-pre-wrap rounded-md bg-slate-50 p-3 font-mono text-xs leading-5 text-slate-700 dark:bg-white/5 dark:text-slate-300" data-pseudocode>{{ $feature->flowchart->pseudocode }}</pre>
+    @if (filled($flowchart->pseudocode))
+        <pre class="mt-4 overflow-x-auto whitespace-pre-wrap rounded-md bg-slate-50 p-3 font-mono text-xs leading-5 text-slate-700 dark:bg-white/5 dark:text-slate-300" data-pseudocode>{{ $flowchart->pseudocode }}</pre>
     @endif

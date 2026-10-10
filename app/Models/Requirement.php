@@ -116,6 +116,16 @@ class Requirement extends Model
     }
 
     /**
+     * The rule's own flowchart: only the stretch of logic that makes this one rule hold.
+     *
+     * @return HasOne<Flowchart, $this>
+     */
+    public function flowchart(): HasOne
+    {
+        return $this->hasOne(Flowchart::class);
+    }
+
+    /**
      * The decided rule that replaced this one (it is 作废 because of it).
      *
      * @return HasOne<Requirement, $this>
