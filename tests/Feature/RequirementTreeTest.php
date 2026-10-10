@@ -557,4 +557,6 @@ it('shows a selected rule\'s own flowchart and pseudocode in the panel [T182]', 
         ->assertSeeHtml('Rule start')
         ->assertSee('1. rule holds')
         ->assertSeeHtml('data-flowchart-fullscreen-toggle');
+
+    expect($this->get(RequirementTree::getUrl(['selectedNumber' => 1]))->assertOk()->getContent())->toMatch('/<script[^>]+src="[^"]*mermaid[^"]*\\.js"/');
 });
