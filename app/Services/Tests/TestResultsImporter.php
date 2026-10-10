@@ -5,6 +5,7 @@ namespace App\Services\Tests;
 use App\Data\Tests\TestResultsImportResult;
 use App\Enums\TestAuto;
 use App\Enums\TestLastResult;
+use App\Enums\TestStatus;
 use App\Models\Project;
 use App\Models\Test;
 use Illuminate\Database\Eloquent\Collection;
@@ -121,7 +122,7 @@ class TestResultsImporter
     }
 
     /**
-     * Auto-covered nodes no testcase in this run claimed.
+     * Live auto-covered nodes no testcase in this run claimed; 过时/停用 nodes are retired, not gaps.
      *
      * @param  Collection<int, Test>  $tree  keyed by number
      * @param  list<int>  $claimedNumbers
@@ -130,7 +131,7 @@ class TestResultsImporter
     private function missingTests(Collection $tree, array $claimedNumbers): array
     {
         return array_values($tree
-            ->reject(fn (Test $test): bool => $test->auto !== TestAuto::Yes || in_array($test->number, $claimedNumbers, true))
+            ->reject(fn (Test $test): bool => $test->auto !== TestAuto::Yes || in_array($test->status, [TestStatus::Stale, TestStatus::Disabled], true) || in_array($test->number, $claimedNumbers, true))
             ->map(fn (Test $test): string => "T{$test->number} {$test->title}")
             ->all());
     }

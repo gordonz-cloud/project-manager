@@ -2,6 +2,7 @@
 
 use App\Enums\TestAuto;
 use App\Enums\TestLastResult;
+use App\Enums\TestStatus;
 use App\Models\Project;
 use App\Models\Test;
 use Illuminate\Testing\PendingCommand;
@@ -99,6 +100,7 @@ it('reports unknown claimed numbers, unclaimed testcases, and auto nodes missing
     $project = Project::factory()->create(['slug' => 'tt']);
     Test::factory()->create(['project_id' => $project->id, 'number' => 1, 'title' => 'Covered', 'auto' => TestAuto::Yes]);
     Test::factory()->create(['project_id' => $project->id, 'number' => 9, 'title' => 'Not covered', 'auto' => TestAuto::Yes]);
+    Test::factory()->create(['project_id' => $project->id, 'number' => 10, 'title' => 'Retired page', 'auto' => TestAuto::Yes, 'status' => TestStatus::Stale]);
 
     importJunit('tt', [passingCase('a [T1]'), passingCase('a [T404]'), passingCase('no marker here')])
         ->expectsOutputToContain('代码有、树上没有（编号）（1）')
@@ -107,6 +109,7 @@ it('reports unknown claimed numbers, unclaimed testcases, and auto nodes missing
         ->expectsOutputToContain('no marker here')
         ->expectsOutputToContain('缺测试')
         ->expectsOutputToContain('T9 Not covered')
+        ->doesntExpectOutputToContain('Retired page')
         ->assertSuccessful();
 });
 
