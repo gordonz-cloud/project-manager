@@ -14,7 +14,7 @@ use Illuminate\Console\Command;
  */
 class CheckFlowchartsCommand extends Command
 {
-    protected $signature = 'flowcharts:check {project-slug} {--feature= : only this feature number} {--requirement= : only this rule number}';
+    protected $signature = 'flowcharts:check {project-slug} {--requirement= : only this rule number}';
 
     protected $description = "Check a project's flowchart nodes against its repo";
 
@@ -34,22 +34,21 @@ class CheckFlowchartsCommand extends Command
             return self::FAILURE;
         }
 
-        $featureNumber = $this->option('feature') !== null ? (int) $this->option('feature') : null;
         $requirementNumber = $this->option('requirement') !== null ? (int) $this->option('requirement') : null;
-        $results = $checkFlowchartStaleness->check($project, $featureNumber, $requirementNumber);
+        $results = $checkFlowchartStaleness->check($project, $requirementNumber);
 
         $checked = $results->sum(fn (FlowchartStaleCheck $result): int => $result->checkedNodes);
         $stale = $results->sum(fn (FlowchartStaleCheck $result): int => count($result->staleNodes));
 
         foreach ($results as $result) {
             if ($checkFlowchartStaleness->isPlanned($result->flowchart)) {
-                $this->line("{$result->flowchart->ownerLabel()}：计划中，跳过");
+                $this->line("规则 {$result->flowchart->requirement->number} {$result->flowchart->requirement->title}：计划中，跳过");
 
                 continue;
             }
 
             foreach ($result->staleNodes as $node) {
-                $this->line("{$result->flowchart->ownerLabel()}：{$node['id']} {$node['label']} {$node['file']} {$node['function']} — {$node['reason']}");
+                $this->line("规则 {$result->flowchart->requirement->number} {$result->flowchart->requirement->title}：{$node['id']} {$node['label']} {$node['file']} {$node['function']} — {$node['reason']}");
             }
         }
 

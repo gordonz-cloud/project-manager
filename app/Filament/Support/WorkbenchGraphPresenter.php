@@ -32,7 +32,6 @@ use App\Models\UseCaseGroup;
 use App\Models\UseCaseSpec;
 use App\Models\WorkflowRun;
 use App\Services\Workbench\WorkbenchGraphService;
-use App\Support\FlowchartMermaid;
 use BackedEnum;
 use Filament\Resources\Resource as FilamentResource;
 use Filament\Support\Contracts\HasLabel;
@@ -347,14 +346,6 @@ class WorkbenchGraphPresenter
                 badge: $feature->module?->name,
                 statusBadge: $this->statusLabel($feature),
                 children: array_values(array_filter([
-                    $feature->flowchart === null
-                        ? new WorkbenchTreeNode(key: "{$key}#no-flowchart", label: '无流程图', icon: 'heroicon-m-share', isFolder: true)
-                        : new WorkbenchTreeNode(
-                            key: "flowchart:{$feature->id}",
-                            label: $feature->flowchart->isStale() ? '流程图 · '.count($feature->flowchart->stale_nodes).' 处过时' : '流程图',
-                            icon: 'heroicon-m-share',
-                            tone: $feature->flowchart->isStale() ? 'warning' : null,
-                        ),
                     WorkbenchTreeNode::folder($key, 'entries', '入口', 'heroicon-m-arrow-right-circle', array_values($feature->requestReplies->map(
                         fn (RequestReply $requestReply): WorkbenchTreeNode => $this->leaf($requestReply, ltrim(($entryNumbers[$requestReply->id] ?? '').' '.$requestReply->label()), 'heroicon-m-arrow-right-circle'),
                     )->all())),
@@ -365,16 +356,6 @@ class WorkbenchGraphPresenter
         }
 
         return $nodes;
-    }
-
-    /**
-     * The selected feature's flowchart as Mermaid source, or null when it has none.
-     */
-    public function flowchartMermaid(Model $record): ?string
-    {
-        return $record instanceof Feature && $record->flowchart !== null
-            ? FlowchartMermaid::fromFlowchart($record->flowchart)
-            : null;
     }
 
     /**
@@ -462,6 +443,6 @@ class WorkbenchGraphPresenter
 
     private function featureIsDone(Feature $feature): bool
     {
-        return ($feature->status === FeatureStatus::Done && ! $feature->hasStaleFlowchart()) || $feature->status === FeatureStatus::Void;
+        return $feature->status === FeatureStatus::Done || $feature->status === FeatureStatus::Void;
     }
 }

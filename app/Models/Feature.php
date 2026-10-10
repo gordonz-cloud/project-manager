@@ -12,7 +12,6 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
-use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Support\Carbon;
 use LogicException;
 
@@ -166,22 +165,9 @@ class Feature extends Model
         return $this->belongsToMany(RequestReply::class)->using(FeatureRequestReply::class);
     }
 
-    /**
-     * @return HasOne<Flowchart, $this>
-     */
-    public function flowchart(): HasOne
-    {
-        return $this->hasOne(Flowchart::class);
-    }
-
     public function hasRunHistory(): bool
     {
         return WorkflowRun::withoutGlobalScopes()->where('feature_id', $this->id)->exists();
-    }
-
-    public function hasStaleFlowchart(): bool
-    {
-        return $this->flowchart?->isStale() ?? false;
     }
 
     /**

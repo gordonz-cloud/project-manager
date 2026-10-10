@@ -23,15 +23,14 @@ class CheckFlowchartStaleness
     /**
      * @return Collection<int, FlowchartStaleCheck>
      */
-    public function check(Project $project, ?int $featureNumber = null, ?int $requirementNumber = null): Collection
+    public function check(Project $project, ?int $requirementNumber = null): Collection
     {
         $repoPath = (string) $project->repo_path;
 
         return Flowchart::withoutGlobalScopes()
             ->where('project_id', $project->id)
-            ->when($featureNumber, fn ($query, int $number) => $query->whereHas('feature', fn ($q) => $q->where('number', $number)))
             ->when($requirementNumber, fn ($query, int $number) => $query->whereHas('requirement', fn ($q) => $q->where('number', $number)))
-            ->with(['feature', 'requirement.linkedFeatures'])
+            ->with('requirement.linkedFeatures')
             ->get()
             ->map(fn (Flowchart $flowchart): FlowchartStaleCheck => $this->checkFlowchart($flowchart, $repoPath));
     }
@@ -43,13 +42,9 @@ class CheckFlowchartStaleness
      */
     public function isPlanned(Flowchart $flowchart): bool
     {
-        $planned = [FeatureStatus::Todo, FeatureStatus::Uncertain];
+        $notStarted = [FeatureStatus::Todo, FeatureStatus::Uncertain, FeatureStatus::Void];
 
-        if ($flowchart->requirement !== null) {
-            return $flowchart->requirement->linkedFeatures->every(fn (Feature $feature): bool => in_array($feature->status, $planned, true) || $feature->status === FeatureStatus::Void);
-        }
-
-        return in_array($flowchart->feature?->status, $planned, true);
+        return $flowchart->requirement->linkedFeatures->every(fn (Feature $feature): bool => in_array($feature->status, $notStarted, true));
     }
 
     private function checkFlowchart(Flowchart $flowchart, string $repoPath): FlowchartStaleCheck

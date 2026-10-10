@@ -10,7 +10,6 @@ use App\Filament\Pages\WorkbenchGraph;
 use App\Models\Commit;
 use App\Models\DataModel;
 use App\Models\Feature;
-use App\Models\Flowchart;
 use App\Models\ModelField;
 use App\Models\Module;
 use App\Models\ModuleSpec;
@@ -89,9 +88,8 @@ test('the tree starts at use case groups, then use cases, then their modules and
         ->and($folders['模块']->children[0]->key)->toBe("module:{$records['module']->id}")
         ->and($folders['功能']->children[0]->key)->toBe("feature:{$records['feature']->id}")
         ->and($folders['功能']->children[0]->badge)->toBe('Trace module')
-        ->and($folders['功能']->children[0]->children[0]->key)->toBe("feature:{$records['feature']->id}#no-flowchart")
-        ->and($folders['功能']->children[0]->children[1]->children[0]->key)->toBe("request_reply:{$records['requestReply']->id}")
-        ->and($folders['功能']->children[0]->children[1]->children[0]->label)->toBe('① POST /trace');
+        ->and($folders['功能']->children[0]->children[0]->children[0]->key)->toBe("request_reply:{$records['requestReply']->id}")
+        ->and($folders['功能']->children[0]->children[0]->children[0]->label)->toBe('① POST /trace');
 
     $module = $folders['模块']->children[0];
     expect(collect($module->children)->pluck('key')->all())->toBe([
@@ -241,76 +239,13 @@ test('entries under features carry their use case number [T26]', function () {
     $records['feature']->requestReplies()->attach([$home->id, $error->id]);
 
     $folders = collect(Livewire::test(WorkbenchGraph::class)->instance()->tree[0]->children[0]->children)->keyBy('label');
-    $entries = collect($folders['功能']->children[0]->children[1]->children)->mapWithKeys(fn ($node): array => [$node->key => $node->label]);
+    $entries = collect($folders['功能']->children[0]->children[0]->children)->mapWithKeys(fn ($node): array => [$node->key => $node->label]);
 
     expect($entries->all())->toBe([
         "request_reply:{$login->id}" => '① POST /trace',
         "request_reply:{$home->id}" => '② GET /home',
         "request_reply:{$error->id}" => '③ GET /error',
     ]);
-});
-
-test('feature detail renders its flowchart as mermaid, then the pseudocode [T28]', function () {
-    $records = workbenchContext();
-    Flowchart::factory()->create([
-        'feature_id' => $records['feature']->id,
-        'chart' => ['nodes' => [['id' => 'a', 'label' => '收到请求', 'shape' => 'start'], ['id' => 'b', 'label' => '返回', 'shape' => 'end']], 'edges' => [['from' => 'a', 'to' => 'b']]],
-        'pseudocode' => '1. app/Http/TraceController.php::store — 收到请求',
-    ]);
-
-    Livewire::test(WorkbenchGraph::class)
-        ->call('selectNode', "feature:{$records['feature']->id}")
-        ->assertSeeHtml('data-flowchart')
-        ->assertSeeHtml('flowchart TD')
-        ->assertSeeHtmlInOrder(['data-flowchart', 'data-pseudocode', 'app/Http/TraceController.php::store']);
-
-    Livewire::test(WorkbenchGraph::class)
-        ->call('selectNode', "request_reply:{$records['requestReply']->id}")
-        ->assertDontSeeHtml('data-flowchart');
-});
-
-test('the flowchart has a fullscreen toggle button [T121]', function () {
-    $records = workbenchContext();
-    Flowchart::factory()->create([
-        'feature_id' => $records['feature']->id,
-        'chart' => ['nodes' => [['id' => 'a', 'label' => '收到请求', 'shape' => 'start'], ['id' => 'b', 'label' => '返回', 'shape' => 'end']], 'edges' => [['from' => 'a', 'to' => 'b']]],
-        'pseudocode' => '1. app/Http/TraceController.php::store — 收到请求',
-    ]);
-
-    Livewire::test(WorkbenchGraph::class)
-        ->call('selectNode', "feature:{$records['feature']->id}")
-        ->assertSeeHtml('data-flowchart-fullscreen-toggle');
-});
-
-test('the feature has a flowchart leaf that renders the same chart when selected [T119]', function () {
-    $records = workbenchContext();
-    Flowchart::factory()->create([
-        'feature_id' => $records['feature']->id,
-        'chart' => ['nodes' => [['id' => 'a', 'label' => '收到请求', 'shape' => 'start'], ['id' => 'b', 'label' => '返回', 'shape' => 'end']], 'edges' => [['from' => 'a', 'to' => 'b']]],
-        'pseudocode' => '1. app/Http/TraceController.php::store — 收到请求',
-    ]);
-
-    $feature = collect(Livewire::test(WorkbenchGraph::class)->instance()->tree[0]->children[0]->children)
-        ->keyBy('label')['功能']->children[0];
-
-    expect($feature->children[0]->key)->toBe("flowchart:{$records['feature']->id}")
-        ->and($feature->children[0]->label)->toBe('流程图');
-
-    Livewire::test(WorkbenchGraph::class)
-        ->call('selectNode', "flowchart:{$records['feature']->id}")
-        ->assertSeeHtml('data-flowchart')
-        ->assertSeeHtmlInOrder(['data-flowchart', 'data-pseudocode', 'app/Http/TraceController.php::store']);
-});
-
-test('the feature shows a grey "无流程图" leaf when it has no flowchart [T119]', function () {
-    $records = workbenchContext();
-
-    $feature = collect(Livewire::test(WorkbenchGraph::class)->instance()->tree[0]->children[0]->children)
-        ->keyBy('label')['功能']->children[0];
-
-    expect($feature->children[0]->key)->toBe("feature:{$records['feature']->id}#no-flowchart")
-        ->and($feature->children[0]->label)->toBe('无流程图')
-        ->and($feature->children[0]->isFolder)->toBeTrue();
 });
 
 test('a use case is green only when all its features and their data models are finished [T27]', function () {
@@ -352,28 +287,6 @@ test('作废 features are excluded from the total and never block green [T27]', 
 
     expect($traceGoal->tone)->toBe('success')
         ->and($traceGoal->badge)->toBe('功能 1/1 · 1 Model');
-});
-
-test('a feature with a stale flowchart is amber, and its flowchart leaf names how many nodes [T113]', function () {
-    $records = workbenchContext(); // Done feature, otherwise complete
-
-    Flowchart::factory()->create([
-        'feature_id' => $records['feature']->id,
-        'chart' => ['nodes' => [['id' => 'a', 'label' => 'A', 'shape' => 'start'], ['id' => 'b', 'label' => 'B', 'shape' => 'end']], 'edges' => [['from' => 'a', 'to' => 'b']]],
-        'stale_checked_at' => now(),
-        'stale_nodes' => ['a'],
-    ]);
-
-    $tree = Livewire::test(WorkbenchGraph::class)->instance()->tree;
-    $folders = collect($tree[0]->children[0]->children)->keyBy('label');
-    $feature = $folders['功能']->children[0];
-    $traceGoal = collect($tree[0]->children)->firstWhere('label', 'Trace goal');
-
-    expect($feature->tone)->toBe('warning')
-        ->and($feature->children[0]->key)->toBe("flowchart:{$records['feature']->id}")
-        ->and($feature->children[0]->label)->toBe('流程图 · 1 处过时')
-        ->and($traceGoal->tone)->toBe('warning')
-        ->and($traceGoal->badge)->toBe('功能 0/1 · 1 Model');
 });
 
 test('a group rolls up the progress of every use case inside it [T27]', function () {

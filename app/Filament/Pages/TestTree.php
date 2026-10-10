@@ -151,7 +151,7 @@ class TestTree extends Page
         return $this->selectedNumber === null ? null : Test::query()
             ->where('project_id', $this->project->id)
             ->where('number', $this->selectedNumber)
-            ->with('features.flowchart')
+            ->with('features')
             ->first();
     }
 

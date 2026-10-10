@@ -57,10 +57,6 @@
                     @else
                         <p class="whitespace-pre-wrap break-words text-sm leading-6 text-slate-700 dark:text-slate-300">{{ $body['text'] }}</p>
                     @endif
-
-                    @if ($presenter->flowchartMermaid($record) !== null)
-                        @include('filament.pages.partials.flowchart', ['flowchart' => $record->flowchart])
-                    @endif
                 </div>
             @else
                 <div class="px-5 py-16 text-center text-sm text-slate-500 dark:text-slate-400">从左侧选择一项。</div>

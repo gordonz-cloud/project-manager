@@ -2,8 +2,9 @@
 
 namespace Database\Factories;
 
-use App\Models\Feature;
+use App\Enums\RequirementKind;
 use App\Models\Flowchart;
+use App\Models\Requirement;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
 /**
@@ -19,7 +20,7 @@ class FlowchartFactory extends Factory
     public function definition(): array
     {
         return [
-            'feature_id' => Feature::factory(),
+            'requirement_id' => Requirement::factory()->state(['kind' => RequirementKind::Rule]),
             'chart' => [
                 'nodes' => [
                     ['id' => 'n1', 'label' => '开始', 'shape' => 'start'],
