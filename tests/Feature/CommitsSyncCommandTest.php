@@ -1,9 +1,8 @@
 <?php
 
-use App\Enums\FeatureStatus;
 use App\Models\Commit;
-use App\Models\Feature;
 use App\Models\Project;
+use App\Models\Requirement;
 use Symfony\Component\Process\Process;
 
 function makeCommitTestRepo(): string
@@ -21,15 +20,15 @@ function makeCommitTestRepo(): string
 
     file_put_contents($repo.'/f', 'one');
     $git(['add', 'f']);
-    $git(['commit', '-q', '-m', 'Fix login bug', '-m', 'Mentions Feature 12 in the subject-adjacent title']);
+    $git(['commit', '-q', '-m', 'Fix login bug', '-m', 'Works on R12 and R13']);
 
     file_put_contents($repo.'/f', 'two');
     $git(['add', 'f']);
-    $git(['commit', '-q', '-m', 'Second commit', '-m', 'Body references Feature 7 somewhere']);
+    $git(['commit', '-q', '-m', 'Second commit', '-m', 'Body references R7 somewhere, and Feature 12 the old way']);
 
     file_put_contents($repo.'/f', 'three');
     $git(['add', 'f']);
-    $git(['commit', '-q', '-m', 'Third commit, no feature reference']);
+    $git(['commit', '-q', '-m', 'Third commit, no rule reference']);
 
     file_put_contents($repo.'/f', 'four');
     $git(['add', 'f']);
@@ -38,12 +37,13 @@ function makeCommitTestRepo(): string
     return $repo;
 }
 
-test('syncs commits from git log, auto-assigns by feature reference, and stays idempotent [T21]', function () {
+test('syncs commits from git log, links each to every rule its message names, and stays idempotent [T21]', function () {
     $project = Project::factory()->create(['slug' => 'sg', 'repo_path' => makeCommitTestRepo()]);
 
-    $feature12 = Feature::factory()->create(['project_id' => $project->id, 'number' => 12, 'status' => FeatureStatus::Todo]);
-    $feature7 = Feature::factory()->create(['project_id' => $project->id, 'number' => 7, 'status' => FeatureStatus::Todo]);
-    Feature::factory()->create(['project_id' => $project->id, 'number' => 22, 'status' => FeatureStatus::Todo]);
+    $rule12 = Requirement::factory()->create(['project_id' => $project->id, 'number' => 12]);
+    $rule13 = Requirement::factory()->create(['project_id' => $project->id, 'number' => 13]);
+    $rule7 = Requirement::factory()->create(['project_id' => $project->id, 'number' => 7]);
+    Requirement::factory()->create(['project_id' => $project->id, 'number' => 22]);
 
     $this->artisan('commits:sync', ['project-slug' => 'sg'])
         ->expectsOutputToContain('新增 4、更新 0、自动挂上 2、未挂 2')
@@ -51,15 +51,13 @@ test('syncs commits from git log, auto-assigns by feature reference, and stays i
 
     expect(Commit::count())->toBe(4);
 
-    $bySubject = Commit::all()->keyBy('subject');
+    $rulesOf = fn (string $subject): array => Commit::where('subject', $subject)->sole()->requirements()->orderBy('number')->pluck('number')->all();
 
-    expect($bySubject->get('Fix login bug')->feature_id)->toBe($feature12->id)
-        ->and($bySubject->get('Second commit')->feature_id)->toBe($feature7->id)
-        ->and($bySubject->get('Third commit, no feature reference')->feature_id)->toBeNull()
-        // A bare "#N" is a PR/issue number on GitHub, not a feature
-        // reference — "Fix #22" / "Merge pull request #22" must not
-        // auto-assign to feature #22.
-        ->and($bySubject->get('Fix #22')->feature_id)->toBeNull();
+    expect($rulesOf('Fix login bug'))->toBe([12, 13])
+        ->and($rulesOf('Second commit'))->toBe([7])
+        ->and($rulesOf('Third commit, no rule reference'))->toBe([])
+        // A bare "#N" is a PR/issue number on GitHub, not a rule reference.
+        ->and($rulesOf('Fix #22'))->toBe([]);
 
     // Idempotent: re-running does not create duplicates, and since nothing
     // actually changed, nothing is written back either.
@@ -69,13 +67,13 @@ test('syncs commits from git log, auto-assigns by feature reference, and stays i
 
     expect(Commit::count())->toBe(4);
 
-    // A manual reassignment survives a re-sync.
-    $unassigned = $bySubject->get('Third commit, no feature reference');
-    $unassigned->update(['feature_id' => $feature7->id]);
+    // A manual relink survives a re-sync: the message's R7 is not added back.
+    Commit::where('subject', 'Second commit')->sole()->requirements()->sync([$rule12->id]);
 
     $this->artisan('commits:sync', ['project-slug' => 'sg'])->assertSuccessful();
 
-    expect($unassigned->fresh()->feature_id)->toBe($feature7->id);
+    expect($rulesOf('Second commit'))->toBe([12])
+        ->and($rule13->commits()->count())->toBe(1);
 });
 
 test('only writes rows whose fields actually changed [T21]', function () {

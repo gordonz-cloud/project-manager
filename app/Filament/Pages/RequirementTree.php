@@ -8,10 +8,8 @@ use App\Data\Requirements\RequirementProgress;
 use App\Data\Requirements\RequirementRollup;
 use App\Data\Requirements\RequirementTimeline;
 use App\Data\Requirements\RequirementTreeNode;
-use App\Enums\FeatureStatus;
 use App\Enums\NavigationGroup;
 use App\Enums\TestLastResult;
-use App\Models\Feature;
 use App\Models\Project;
 use App\Models\Requirement;
 use App\Models\RequirementDecisionDraft;
@@ -27,9 +25,7 @@ use Filament\Notifications\Notification;
 use Filament\Pages\Page;
 use Filament\Support\Icons\Heroicon;
 use Illuminate\Database\Eloquent\Collection as EloquentCollection;
-use Illuminate\Database\Eloquent\Relations\Relation;
 use Illuminate\Support\Collection;
-use Illuminate\Support\Facades\DB;
 use InvalidArgumentException;
 use Livewire\Attributes\Computed;
 use Livewire\Attributes\Url;
@@ -176,32 +172,20 @@ class RequirementTree extends Page
     }
 
     /**
-     * Gordon looked and it works: a 验证中 feature of the selected rule becomes 完成, noted in the history of every rule it serves.
+     * Gordon looked and it works: the selected 待验收 rule is accepted, noted in its history.
      */
-    public function acceptFeature(int $featureId): void
+    public function acceptRule(): void
     {
-        $feature = $this->selectedRequirement?->linkedFeatures->firstWhere('id', $featureId);
+        $requirement = $this->selectedRequirement;
 
-        if ($feature?->status !== FeatureStatus::InVerification) {
+        if ($requirement === null || $this->progressOf($requirement) !== RequirementProgress::AwaitingAcceptance) {
             return;
         }
 
-        DB::transaction(function () use ($feature): void {
-            $feature->update(['status' => FeatureStatus::Done]);
-
-            foreach ($feature->requirements as $requirement) {
-                $requirement->revisions()->create([
-                    'new_statement' => $requirement->title,
-                    'old_status' => $requirement->status->value,
-                    'new_status' => $requirement->status->value,
-                    'reason' => "功能 F{$feature->number}「{$feature->title}」验收通过：验证中 → 完成",
-                    'decided_by' => $this->user()->name,
-                ]);
-            }
-        });
+        $requirement->accept();
 
         unset($this->tree, $this->filteredTree, $this->nodesById, $this->total, $this->selectedRequirement, $this->recentChanges);
-        Notification::make()->title('验收通过，功能已改成完成')->success()->send();
+        Notification::make()->title('验收通过')->success()->send();
     }
 
     public function timelineOf(Requirement $requirement): RequirementTimeline
@@ -369,7 +353,7 @@ class RequirementTree extends Page
     }
 
     /**
-     * 做到哪了 in one line: "2 个功能 · 5 个测试全过", "1 个测试：1 失败", or 还没做.
+     * 做到哪了 in one line: "3 个 commit · 5 个测试全过", "1 个测试：1 失败", or 还没做.
      */
     public function builtSummary(Requirement $requirement): string
     {
@@ -379,7 +363,7 @@ class RequirementTree extends Page
             : '：'.$tests->countBy(fn (Test $test): string => $test->last_result->value)->map(fn (int $count, string $result): string => "{$count} {$result}")->implode('，');
 
         return implode(' · ', array_filter([
-            $requirement->linkedFeatures->isEmpty() ? null : "{$requirement->linkedFeatures->count()} 个功能",
+            $requirement->commits_count === 0 ? null : "{$requirement->commits_count} 个 commit",
             $tests->isEmpty() ? null : "{$tests->count()} 个测试{$results}",
         ])) ?: '还没做';
     }
@@ -404,13 +388,9 @@ class RequirementTree extends Page
         return $this->selectedNumber === null ? null : Requirement::query()
             ->where('project_id', $this->project->id)
             ->where('number', $this->selectedNumber)
-            ->with(['revisions', 'linkedFeatures' => fn (Relation $features) => $features->withCount('requirements'), 'flowchart', 'tests', 'supersedes', 'dependsOn', 'dependents'])
+            ->with(['revisions', 'flowchart', 'tests', 'supersedes', 'dependsOn', 'dependents'])
+            ->withCount('commits')
             ->first();
-    }
-
-    public function featureUrl(Feature $feature): string
-    {
-        return WorkbenchGraph::getUrl(['selectedKey' => "feature:{$feature->id}"]);
     }
 
     public function testUrl(Test $test): string

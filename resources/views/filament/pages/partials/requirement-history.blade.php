@@ -17,7 +17,6 @@
             <span class="text-slate-400">{{ $commit->committed_at->toDateString() }}</span>
             {{ substr($commit->hash, 0, 7) }}
             <span class="font-sans">{{ \Illuminate\Support\Str::limit($commit->subject, 80) }}</span>
-            @if ($commit->feature)<span class="font-sans text-slate-400" title="F{{ $commit->feature->number }}">· {{ $commit->feature->title }}</span>@endif
         </li>
     @endforeach
     @if ($revisions->isEmpty() && $commits->isEmpty())

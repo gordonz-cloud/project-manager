@@ -31,11 +31,6 @@ class RequirementForm
                     ->required(),
                 TextInput::make('version')
                     ->label('版本'),
-                Select::make('modules')
-                    ->label('模块')
-                    ->relationship(name: 'modules', titleAttribute: 'name')
-                    ->multiple()
-                    ->preload(),
                 Select::make('dependsOn')
                     ->label('依赖的需求')
                     ->relationship(

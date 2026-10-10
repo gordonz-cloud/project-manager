@@ -4,27 +4,25 @@ namespace App\Services\Commits;
 
 use App\Data\Commits\CommitSyncResult;
 use App\Models\Commit;
-use App\Models\Feature;
 use App\Models\Project;
+use App\Models\Requirement;
 use Illuminate\Support\Facades\DB;
 
 class SyncProjectCommits
 {
     public function __construct(
         private GitLogReader $gitLogReader,
-        private FeatureReferenceMatcher $featureReferenceMatcher,
+        private RequirementReferenceMatcher $requirementReferenceMatcher,
     ) {}
 
     public function handle(Project $project, ?string $since = null): CommitSyncResult
     {
-        $featuresByNumber = Feature::query()
-            ->where('project_id', $project->id)
-            ->get()
-            ->keyBy('number');
+        $ruleIdsByNumber = Requirement::withoutGlobalScopes()->where('project_id', $project->id)->pluck('id', 'number');
 
         $existingByHash = Commit::withoutGlobalScopes()
             ->where('project_id', $project->id)
-            ->get(['id', 'hash', 'subject', 'body', 'author', 'committed_at', 'feature_id'])
+            ->withExists('requirements')
+            ->get(['id', 'hash', 'subject', 'body', 'author', 'committed_at'])
             ->keyBy('hash');
 
         $created = 0;
@@ -34,19 +32,27 @@ class SyncProjectCommits
         $now = now();
         $toInsert = [];
         $toUpdate = [];
+        /** @var array<string, list<int>> $toLink hash => requirement ids, for commits not linked to any rule yet */
+        $toLink = [];
 
         foreach ($this->gitLogReader->read($project, $since) as $gitCommit) {
-            $feature = $this->featureReferenceMatcher->match(
-                $gitCommit->subject,
-                $gitCommit->body,
-                $featuresByNumber,
-            );
+            $ruleIds = array_values(array_filter(array_map(
+                fn (int $number): ?int => $ruleIdsByNumber[$number] ?? null,
+                $this->requirementReferenceMatcher->numbers($gitCommit->subject, $gitCommit->body),
+            )));
 
-            if ($feature === null) {
+            if ($ruleIds === []) {
                 $unassigned++;
             }
 
             $existing = $existingByHash->get($gitCommit->hash);
+
+            // Never touch an existing link (manual pick or earlier match); only link a commit that has none.
+            if ($ruleIds !== [] && ! $existing?->getAttribute('requirements_exists')) {
+                $toLink[$gitCommit->hash] = $ruleIds;
+                $autoAssigned++;
+            }
+
             // Match the string the Eloquent 'datetime' cast would produce,
             // so comparing against a value already round-tripped through
             // the DB is a plain string comparison, not a timezone puzzle.
@@ -54,11 +60,9 @@ class SyncProjectCommits
 
             if ($existing === null) {
                 $created++;
-                $autoAssigned += $feature !== null ? 1 : 0;
 
                 $toInsert[] = [
                     'project_id' => $project->id,
-                    'feature_id' => $feature?->id,
                     'hash' => $gitCommit->hash,
                     'subject' => $gitCommit->subject,
                     'body' => $gitCommit->body,
@@ -78,13 +82,6 @@ class SyncProjectCommits
                 'committed_at' => $committedAt,
             ];
 
-            // Never overwrite an existing feature_id (manual pick or earlier
-            // auto-match); only fill it in when it's still null.
-            if ($existing->feature_id === null && $feature !== null) {
-                $attrs['feature_id'] = $feature->id;
-                $autoAssigned++;
-            }
-
             $changed = array_filter($attrs, function ($value, $key) use ($existing) {
                 if ($key === 'committed_at') {
                     return $value !== $existing->committed_at->format('Y-m-d H:i:s');
@@ -100,13 +97,26 @@ class SyncProjectCommits
             }
         }
 
-        DB::transaction(function () use ($toInsert, $toUpdate) {
-            if ($toInsert !== []) {
-                Commit::withoutGlobalScopes()->insert($toInsert);
+        DB::transaction(function () use ($project, $toInsert, $toUpdate, $toLink) {
+            foreach (array_chunk($toInsert, 500) as $chunk) {
+                Commit::withoutGlobalScopes()->insert($chunk);
             }
 
             foreach ($toUpdate as $id => $attrs) {
                 Commit::withoutGlobalScopes()->whereKey($id)->update($attrs);
+            }
+
+            $idByHash = Commit::withoutGlobalScopes()->where('project_id', $project->id)->whereIn('hash', array_keys($toLink))->pluck('id', 'hash');
+            $links = [];
+
+            foreach ($toLink as $hash => $ruleIds) {
+                foreach ($ruleIds as $ruleId) {
+                    $links[] = ['commit_id' => $idByHash[$hash], 'requirement_id' => $ruleId];
+                }
+            }
+
+            foreach (array_chunk($links, 1000) as $chunk) {
+                DB::table('commit_requirement')->insertOrIgnore($chunk);
             }
         });
 

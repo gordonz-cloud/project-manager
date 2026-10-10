@@ -13,7 +13,7 @@ use LogicException;
  * Saves Test Matrix nodes from a JSON file. Omit "number" to create (the server assigns it; use "ref"/"parent_ref"
  * to link new nodes), give "number" to update an existing node:
  * {"project": "sg", "nodes": [{"number"?, "ref"?, "parent"?, "parent_ref"?, "module", "action", "expected", "priority", "platform",
- * "test_file", "test_name", "auto", "result", "notes", "features": [feature numbers]}]}.
+ * "test_file", "test_name", "auto", "result", "notes"}]}. Rules point at tests (requirements:save "tests"), not the other way round.
  */
 class SaveTestsCommand extends Command
 {
@@ -51,7 +51,7 @@ class SaveTestsCommand extends Command
             $this->line("{$label} → #{$number}");
         }
 
-        $this->info("Tests saved: {$result->created} created, {$result->updated} updated, {$result->nodesWithFeaturesSynced} feature lists synced");
+        $this->info("Tests saved: {$result->created} created, {$result->updated} updated");
 
         return self::SUCCESS;
     }

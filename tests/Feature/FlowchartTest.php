@@ -1,8 +1,7 @@
 <?php
 
-use App\Enums\FeatureStatus;
 use App\Enums\RequirementKind;
-use App\Models\Feature;
+use App\Models\Commit;
 use App\Models\Flowchart;
 use App\Models\Project;
 use App\Models\Requirement;
@@ -35,20 +34,22 @@ test('a valid chart saves under its rule\'s project [T14]', function () {
 });
 
 /**
- * Rule 1 of project "fc" (repo: the fixture), made to hold by one feature in $status, with a chart from $nodes and $edges.
+ * Rule 1 of project "fc" (repo: the fixture), worked on by a commit unless $planned, with a chart from $nodes and $edges.
  *
  * @param  list<array<string, string>>  $nodes
  * @param  list<array<string, string>>  $edges
- * @return array{Flowchart, Feature}
+ * @return array{Flowchart, Requirement}
  */
-function checkedRuleChart(FeatureStatus $status, array $nodes, array $edges): array
+function checkedRuleChart(array $nodes, array $edges, bool $planned = false): array
 {
     $project = Project::factory()->create(['slug' => 'fc', 'repo_path' => base_path('tests/Fixtures/repo')]);
     $rule = Requirement::factory()->create(['project_id' => $project->id, 'number' => 1, 'kind' => RequirementKind::Rule, 'title' => 'Orders keep a total']);
-    $feature = Feature::factory()->create(['project_id' => $project->id, 'status' => $status]);
-    $rule->linkedFeatures()->attach($feature);
 
-    return [Flowchart::factory()->create(['requirement_id' => $rule->id, 'chart' => ['nodes' => $nodes, 'edges' => $edges]]), $feature];
+    if (! $planned) {
+        $rule->commits()->attach(Commit::factory()->create(['project_id' => $project->id]));
+    }
+
+    return [Flowchart::factory()->create(['requirement_id' => $rule->id, 'chart' => ['nodes' => $nodes, 'edges' => $edges]]), $rule];
 }
 
 test('mermaid maps shapes, renumbers ids and escapes labels [T120]', function () {
@@ -228,7 +229,7 @@ test('flowcharts:save gives a rule its flowchart and refuses a non-rule [T180]',
 });
 
 test('flowcharts:check verifies files and functions in the repo [T16]', function (array $node, string $expected, bool $passes) {
-    checkedRuleChart(FeatureStatus::Done, [['id' => 'a', 'label' => 'A', 'shape' => 'start', ...$node], ['id' => 'z', 'label' => 'Z', 'shape' => 'end']], [['from' => 'a', 'to' => 'z']]);
+    checkedRuleChart([['id' => 'a', 'label' => 'A', 'shape' => 'start', ...$node], ['id' => 'z', 'label' => 'Z', 'shape' => 'end']], [['from' => 'a', 'to' => 'z']]);
 
     $result = $this->artisan('flowcharts:check', ['project-slug' => 'fc', '--requirement' => 1])->expectsOutputToContain($expected);
     $passes ? $result->assertSuccessful() : $result->assertFailed();
@@ -241,7 +242,7 @@ test('flowcharts:check verifies files and functions in the repo [T16]', function
 ]);
 
 test('flowcharts:check records which nodes are stale, empty when all are found [T109]', function () {
-    [$flowchart] = checkedRuleChart(FeatureStatus::Done, [
+    [$flowchart] = checkedRuleChart([
         ['id' => 'a', 'label' => 'A', 'shape' => 'start', 'file' => 'app/OrderController.php', 'function' => 'store'],
         ['id' => 'b', 'label' => 'B', 'shape' => 'step', 'file' => 'app/Gone.php', 'function' => 'store'],
         ['id' => 'z', 'label' => 'Z', 'shape' => 'end'],
@@ -262,11 +263,11 @@ test('flowcharts:check records which nodes are stale, empty when all are found [
     expect($flowchart->fresh()->stale_nodes)->toBe([]);
 });
 
-test('flowcharts:check skips a rule whose features are all still planned, checks it once one is done [T110]', function () {
-    [$flowchart, $feature] = checkedRuleChart(FeatureStatus::Todo, [
+test('flowcharts:check skips a rule no commit has worked on yet, checks it once one has [T110]', function () {
+    [$flowchart, $rule] = checkedRuleChart([
         ['id' => 'a', 'label' => 'A', 'shape' => 'start', 'file' => 'app/Gone.php', 'function' => 'store'],
         ['id' => 'z', 'label' => 'Z', 'shape' => 'end'],
-    ], [['from' => 'a', 'to' => 'z']]);
+    ], [['from' => 'a', 'to' => 'z']], planned: true);
 
     $this->artisan('flowcharts:check', ['project-slug' => 'fc'])
         ->expectsOutputToContain('规则 1 Orders keep a total：计划中，跳过')
@@ -274,7 +275,7 @@ test('flowcharts:check skips a rule whose features are all still planned, checks
 
     expect($flowchart->fresh()->stale_nodes)->toBe([]);
 
-    $feature->update(['status' => FeatureStatus::Done]);
+    $rule->commits()->attach(Commit::factory()->create(['project_id' => $rule->project_id]));
 
     $this->artisan('flowcharts:check', ['project-slug' => 'fc'])->assertFailed();
 

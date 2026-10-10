@@ -7,7 +7,6 @@ use App\Enums\TestAuto;
 use App\Enums\TestLastResult;
 use App\Enums\TestPriority;
 use App\Enums\TestStatus;
-use App\Models\Feature;
 use App\Models\Project;
 use App\Models\Test;
 use App\Support\NumberedTreePayload;
@@ -20,8 +19,8 @@ use InvalidArgumentException;
  * "number" updates that existing node. "ref"/"parent_ref" let new nodes in one payload point at each other.
  * Nodes left out of the payload stay as they are, so a run can send back only the results it changed.
  *
- * @phpstan-type RawNodeInput array{number?: int, ref?: string, parent_ref?: string, parent?: int|null, module?: string|null, action?: string, expected?: string|null, priority?: string|null, platform?: string|null, test_file?: string|null, test_name?: string|null, auto?: string|null, result?: string|null, notes?: string|null, features?: list<int>}
- * @phpstan-type TestNodeInput array{number: int, parent?: int|null, module?: string|null, action?: string, expected?: string|null, priority?: string|null, platform?: string|null, test_file?: string|null, test_name?: string|null, auto?: string|null, result?: string|null, notes?: string|null, features?: list<int>}
+ * @phpstan-type RawNodeInput array{number?: int, ref?: string, parent_ref?: string, parent?: int|null, module?: string|null, action?: string, expected?: string|null, priority?: string|null, platform?: string|null, test_file?: string|null, test_name?: string|null, auto?: string|null, result?: string|null, notes?: string|null}
+ * @phpstan-type TestNodeInput array{number: int, parent?: int|null, module?: string|null, action?: string, expected?: string|null, priority?: string|null, platform?: string|null, test_file?: string|null, test_name?: string|null, auto?: string|null, result?: string|null, notes?: string|null}
  */
 class TestTreeSaver
 {
@@ -36,14 +35,13 @@ class TestTreeSaver
             // Parallel saves to one project queue here, so two of them never hand out the same new number.
             Project::query()->whereKey($project->id)->lockForUpdate()->first();
             $existing = Test::withoutGlobalScopes()->where('project_id', $project->id)->get()->keyBy('number');
-            $featureIds = Feature::withoutGlobalScopes()->where('project_id', $project->id)->pluck('id', 'number');
             /** @var list<TestNodeInput> $nodes */
             [$nodes, $assigned] = NumberedTreePayload::numbered($rawNodes, array_values($existing->map(fn (Test $test): int => $test->number)->all()), 'test');
 
             $numberById = $existing->pluck('number', 'id');
             $storedParents = $existing->map(fn (Test $test): ?int => $numberById[$test->parent_id] ?? null)->all();
 
-            $this->assertValidTree($nodes, $storedParents, $featureIds->all());
+            $this->assertValidTree($nodes, $storedParents);
 
             $saved = [];
 
@@ -62,7 +60,6 @@ class TestTreeSaver
             }
 
             $numberToId = Test::withoutGlobalScopes()->where('project_id', $project->id)->pluck('id', 'number');
-            $featureSyncs = 0;
 
             foreach ($nodes as $node) {
                 $test = $saved[$node['number']];
@@ -70,14 +67,9 @@ class TestTreeSaver
                 if (isset($node['parent'])) {
                     $test->update(['parent_id' => $numberToId[$node['parent']]]);
                 }
-
-                if (array_key_exists('features', $node)) {
-                    $test->features()->sync(array_map(fn (int $number): int => $featureIds[$number], $node['features']));
-                    $featureSyncs++;
-                }
             }
 
-            return new TestTreeSaveResult($assigned, count($nodes) - count($assigned), $featureSyncs);
+            return new TestTreeSaveResult($assigned, count($nodes) - count($assigned));
         });
     }
 
@@ -96,11 +88,14 @@ class TestTreeSaver
                 && (! isset($node['ref']) || is_string($node['ref']))
                 && (! isset($node['parent_ref']) || (is_string($node['parent_ref']) && ! isset($node['parent'])))
                 && (! isset($node['parent']) || is_int($node['parent']))
-                && (! isset($node['features']) || (is_array($node['features']) && array_is_list($node['features']) && array_filter($node['features'], 'is_int') === $node['features']))
                 && array_filter($strings, fn (string $key): bool => isset($node[$key]) && ! is_string($node[$key])) === [];
 
             if (! $valid) {
-                throw new InvalidArgumentException("Node at index {$index}: number must be an integer, ref/parent_ref strings (parent_ref not with parent), parent an integer or null, features a list of integers, text fields strings.");
+                throw new InvalidArgumentException("Node at index {$index}: number must be an integer, ref/parent_ref strings (parent_ref not with parent), parent an integer or null, text fields strings.");
+            }
+
+            if (array_key_exists('features', $node)) {
+                throw new InvalidArgumentException("Node at index {$index}: features 已移除（功能这一层删了），测试挂规则用 requirements:save 的 tests。");
             }
 
             /** @var RawNodeInput $node */
@@ -135,9 +130,8 @@ class TestTreeSaver
     /**
      * @param  list<TestNodeInput>  $nodes
      * @param  array<int, int|null>  $storedParents  number => parent number
-     * @param  array<int, int>  $featureIds  number => id
      */
-    private function assertValidTree(array $nodes, array $storedParents, array $featureIds): void
+    private function assertValidTree(array $nodes, array $storedParents): void
     {
         $errors = [];
         $parents = $storedParents;
@@ -150,12 +144,6 @@ class TestTreeSaver
             }
 
             $errors = [...$errors, ...$this->enumErrors($number, $node)];
-
-            foreach ($node['features'] ?? [] as $featureNumber) {
-                if (! isset($featureIds[$featureNumber])) {
-                    $errors[] = "#{$number}: feature {$featureNumber} does not exist in this project.";
-                }
-            }
 
             $parents[$number] = array_key_exists('parent', $node) ? $node['parent'] : ($storedParents[$number] ?? null);
         }

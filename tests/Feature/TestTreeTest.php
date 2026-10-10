@@ -2,12 +2,14 @@
 
 use App\Data\Tests\TestNodeState;
 use App\Data\Tests\TestTreeNode;
+use App\Enums\RequirementKind;
+use App\Enums\RequirementStatus;
 use App\Enums\TestAuto;
 use App\Enums\TestLastResult;
 use App\Enums\TestPriority;
 use App\Filament\Pages\TestTree;
-use App\Models\Feature;
 use App\Models\Project;
+use App\Models\Requirement;
 use App\Models\Test;
 use App\Models\User;
 use App\Services\Tests\TestTreeService;
@@ -47,12 +49,11 @@ it('refuses a parent that would make a cycle or lives in another project [T18]',
     expect(fn () => $child->update(['parent_id' => $stranger->id]))->toThrow(LogicException::class, 'same project');
 });
 
-it('assigns numbers to new nodes, links them by parent_ref, updates by number, and syncs feature tags [T17]', function () {
+it('assigns numbers to new nodes, links them by parent_ref and updates by number [T17]', function () {
     $project = Project::factory()->create(['slug' => 'tt']);
-    $feature = Feature::factory()->create(['project_id' => $project->id, 'number' => 5]);
 
     saveTests(['project' => 'tt', 'nodes' => [
-        ['ref' => 'cart', 'action' => 'Open cart', 'expected' => 'Cart shows', 'priority' => 'P0', 'auto' => 'yes', 'result' => '通过', 'features' => [5]],
+        ['ref' => 'cart', 'action' => 'Open cart', 'expected' => 'Cart shows', 'priority' => 'P0', 'auto' => 'yes', 'result' => '通过'],
         ['parent_ref' => 'cart', 'action' => 'Pay', 'result' => '未跑'],
     ]])->expectsOutputToContain('cart → #1')->expectsOutputToContain('row 1 → #2')->expectsOutputToContain('2 created')->assertSuccessful();
 
@@ -61,14 +62,10 @@ it('assigns numbers to new nodes, links them by parent_ref, updates by number, a
     $root = Test::where('project_id', $project->id)->where('number', 1)->firstOrFail();
     $child = Test::where('project_id', $project->id)->where('number', 2)->firstOrFail();
 
-    expect($root->features->pluck('id')->all())->toBe([$feature->id])
-        ->and($root->priority)->toBe(TestPriority::P0)
+    expect($root->priority)->toBe(TestPriority::P0)
         ->and($child->last_result)->toBe(TestLastResult::Failed)
         ->and($child->title)->toBe('Pay')
         ->and($child->parent_id)->toBe($root->id);
-
-    saveTests(['project' => 'tt', 'nodes' => [['number' => 1, 'features' => []]]])->assertSuccessful();
-    expect($root->features()->count())->toBe(0);
 });
 
 it('never reuses a number across saves and prints the mapping as JSON [T17]', function () {
@@ -93,7 +90,7 @@ it('rejects a bad tree and writes nothing [T18]', function (array $nodes, string
     'unknown parent_ref' => [[['parent_ref' => 'x', 'action' => 'a']], 'parent_ref "x" matches no ref'],
     'missing parent' => [[['parent' => 9, 'action' => 'a']], 'parent #9 does not exist'],
     'cycle' => [[['ref' => 'a', 'parent_ref' => 'b', 'action' => 'a'], ['ref' => 'b', 'parent_ref' => 'a', 'action' => 'b']], 'loops'],
-    'unknown feature' => [[['action' => 'a', 'features' => [42]]], 'feature 42 does not exist'],
+    'features removed' => [[['action' => 'a', 'features' => [42]]], 'features 已移除'],
     'bad enum' => [[['action' => 'a', 'result' => 'PASS']], 'result "PASS"'],
 ]);
 
@@ -130,13 +127,14 @@ function testTreePage(): Project
     return $project;
 }
 
-it('renders the tree, filters to matches with their ancestor path, and lists uncovered features [T19]', function () {
+it('renders the tree, filters to matches with their ancestor path, and lists decided rules without tests [T19]', function () {
     $project = testTreePage();
-    $covered = Feature::factory()->create(['project_id' => $project->id, 'number' => 1, 'title' => 'Covered feature']);
-    Feature::factory()->create(['project_id' => $project->id, 'number' => 2, 'title' => 'Lonely feature']);
+    $covered = Requirement::factory()->create(['project_id' => $project->id, 'number' => 1, 'kind' => RequirementKind::Rule, 'status' => RequirementStatus::Decided, 'title' => 'Covered rule']);
+    Requirement::factory()->create(['project_id' => $project->id, 'number' => 2, 'kind' => RequirementKind::Rule, 'status' => RequirementStatus::Decided, 'title' => 'Lonely rule']);
+    Requirement::factory()->create(['project_id' => $project->id, 'number' => 3, 'kind' => RequirementKind::Rule, 'status' => RequirementStatus::Proposed, 'title' => 'Undecided rule']);
 
     $root = Test::factory()->create(['project_id' => $project->id, 'number' => 1, 'title' => 'Root step', 'last_result' => TestLastResult::Passed]);
-    $root->features()->attach($covered);
+    $root->requirements()->attach($covered);
     $middle = Test::factory()->create(['project_id' => $project->id, 'number' => 2, 'parent_id' => $root->id, 'title' => 'Middle step', 'last_result' => TestLastResult::Passed]);
     Test::factory()->create(['project_id' => $project->id, 'number' => 3, 'parent_id' => $middle->id, 'title' => 'Broken leaf', 'last_result' => TestLastResult::Failed]);
     Test::factory()->create(['project_id' => $project->id, 'number' => 4, 'parent_id' => $root->id, 'title' => 'Green sibling', 'last_result' => TestLastResult::Passed]);
@@ -145,7 +143,8 @@ it('renders the tree, filters to matches with their ancestor path, and lists unc
         ->assertOk()
         ->assertSee('未分类')
         ->assertDontSee('Root step')
-        ->assertSeeInOrder(['没有被任何测试覆盖的功能', 'Lonely feature'])
+        ->assertSeeInOrder(['没有测试的已定规则（1）', 'R2 Lonely rule'])
+        ->assertDontSee('Undecided rule')
         ->call('toggleArea', '未分类')
         ->assertSee('Root step')
         ->assertDontSee('Middle step')
@@ -153,7 +152,7 @@ it('renders the tree, filters to matches with their ancestor path, and lists unc
         ->assertSeeInOrder(['Root step', 'Middle step', 'Broken leaf'])
         ->assertDontSee('Green sibling')
         ->call('selectNode', 1)
-        ->assertSee('F1')
+        ->assertSee('R1 Covered rule')
         ->call('selectNode', 3)
         ->assertSeeInOrder(['Root step', 'Middle step', 'Broken leaf']);
 });

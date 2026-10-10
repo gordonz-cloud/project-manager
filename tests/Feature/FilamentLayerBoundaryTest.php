@@ -1,27 +1,13 @@
 <?php
 
-use App\Models\Module;
 use App\Models\Project;
 use App\Models\Requirement;
-use App\Services\Modules\ModuleDependencies;
 use App\Services\Requirements\RequirementDependencies;
 use App\Services\Requirements\RequirementVersionOptions;
 use Illuminate\Validation\ValidationException;
 
-test('module and requirement dependency validation preserve their form messages [T4] [T31]', function () {
+test('requirement dependency validation preserves its form message [T31]', function () {
     $project = Project::factory()->create();
-    $moduleA = Module::factory()->create(['project_id' => $project->id]);
-    $moduleB = Module::factory()->create(['project_id' => $project->id]);
-    $moduleC = Module::factory()->create(['project_id' => $project->id]);
-    $moduleA->dependsOn()->attach($moduleB);
-    $moduleB->dependsOn()->attach($moduleC);
-
-    expect(fn () => app(ModuleDependencies::class)->validate($moduleC, [$moduleA->id]))
-        ->toThrow(
-            ValidationException::class,
-            "{$moduleA->name} 已经（直接或间接）依赖 {$moduleC->name}，不能反过来",
-        );
-
     $requirementA = Requirement::factory()->create(['project_id' => $project->id]);
     $requirementB = Requirement::factory()->create(['project_id' => $project->id]);
     $requirementC = Requirement::factory()->create(['project_id' => $project->id]);

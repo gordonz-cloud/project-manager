@@ -44,11 +44,11 @@ class TestForm
                     ->label('最近结果')
                     ->options(TestLastResult::class)
                     ->required(),
-                Select::make('features')
-                    ->label('功能')
+                Select::make('requirements')
+                    ->label('规则')
                     ->multiple()
-                    ->relationship('features', 'title')
-                    ->preload(),
+                    ->relationship('requirements', 'title')
+                    ->searchable(),
             ]);
     }
 }

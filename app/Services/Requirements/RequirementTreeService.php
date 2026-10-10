@@ -29,7 +29,8 @@ class RequirementTreeService
     {
         $requirements = Requirement::withoutGlobalScopes()
             ->where('project_id', $project->id)
-            ->with(['linkedFeatures:id,status', 'tests:id,last_result', 'supersededBy:id,number,title,supersedes_id,decided_at'])
+            ->with(['tests:id,last_result,auto', 'supersededBy:id,number,title,supersedes_id,decided_at'])
+            ->withExists('commits')
             ->get();
         $dependencies = DB::table('requirement_dependencies')
             ->whereIn('requirement_id', Requirement::withoutGlobalScopes()->where('project_id', $project->id)->select('id'))
@@ -55,7 +56,7 @@ class RequirementTreeService
             ->where('project_id', $project->id)
             ->whereIn('status', [RequirementStatus::Proposed, RequirementStatus::Conflict])
             ->where(fn (Builder $query) => $query->whereNull('kind')->orWhere('kind', '!=', RequirementKind::Group))
-            ->with(['linkedFeatures', 'tests', 'supersedes.linkedFeatures', 'supersedes.tests'])
+            ->with(['commits', 'tests', 'supersedes.commits', 'supersedes.tests'])
             ->get()
             ->sortBy(fn (Requirement $requirement): array => [$requirement->status === RequirementStatus::Conflict ? 0 : 1, $treeOrder[$requirement->id] ?? PHP_INT_MAX])
             ->values();
@@ -92,9 +93,8 @@ class RequirementTreeService
 
         $commits = Commit::withoutGlobalScopes()
             ->where('commits.project_id', $project->id)
-            ->join('feature_requirement', 'feature_requirement.feature_id', '=', 'commits.feature_id')
-            ->select('commits.*', 'feature_requirement.requirement_id as requirement_id')
-            ->with('feature:id,number,title')
+            ->join('commit_requirement', 'commit_requirement.commit_id', '=', 'commits.id')
+            ->select('commits.*', 'commit_requirement.requirement_id as requirement_id')
             ->latest('committed_at')
             ->limit($limit)
             ->get()

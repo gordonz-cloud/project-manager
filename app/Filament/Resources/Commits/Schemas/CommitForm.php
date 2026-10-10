@@ -11,11 +11,11 @@ class CommitForm
     {
         return $schema
             ->components([
-                Select::make('feature_id')
-                    ->label('功能')
-                    ->relationship(name: 'feature', titleAttribute: 'title')
-                    ->searchable()
-                    ->preload(),
+                Select::make('requirements')
+                    ->label('规则')
+                    ->multiple()
+                    ->relationship(name: 'requirements', titleAttribute: 'title')
+                    ->searchable(),
             ]);
     }
 }

@@ -28,7 +28,7 @@ final readonly class RequirementTreeNode
      */
     public static function build(Requirement $requirement, array $children): self
     {
-        $own = DeliveryStatus::fromLinks($requirement->linkedFeatures, $requirement->tests);
+        $own = DeliveryStatus::of($requirement);
         $decidedChildren = array_filter($children, fn (self $child): bool => $child->requirement->status === RequirementStatus::Decided);
         $delivery = DeliveryStatus::combined(array_values(array_filter([$own, ...array_map(fn (self $child): DeliveryStatus => $child->delivery, $decidedChildren)])));
         $rollup = array_reduce($children, fn (RequirementRollup $sum, self $child): RequirementRollup => $sum->plus($child->rollup), RequirementRollup::of($requirement, $delivery, $children === []));

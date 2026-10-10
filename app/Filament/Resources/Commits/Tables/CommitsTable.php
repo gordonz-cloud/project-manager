@@ -2,8 +2,6 @@
 
 namespace App\Filament\Resources\Commits\Tables;
 
-use App\Filament\Resources\Features\FeatureResource;
-use App\Models\Commit;
 use Filament\Actions\EditAction;
 use Filament\Support\Enums\FontFamily;
 use Filament\Tables\Columns\TextColumn;
@@ -23,13 +21,11 @@ class CommitsTable
                     ->label('Hash')
                     ->formatStateUsing(fn (string $state): string => substr($state, 0, 8))
                     ->fontFamily(FontFamily::Mono),
-                TextColumn::make('feature.title')
-                    ->label('功能')
+                TextColumn::make('requirements.number')
+                    ->label('规则')
+                    ->formatStateUsing(fn (int $state): string => "R{$state}")
                     ->badge()
-                    ->color('gray')
-                    ->url(fn (Commit $record): ?string => $record->feature_id
-                        ? FeatureResource::getUrl('view', ['record' => $record->feature_id])
-                        : null),
+                    ->color('gray'),
                 TextColumn::make('subject')
                     ->label('Subject')
                     ->wrap()
@@ -43,12 +39,12 @@ class CommitsTable
             ])
             ->filters([
                 Filter::make('unassigned')
-                    ->label('未挂功能')
-                    ->query(fn (Builder $query): Builder => $query->whereNull('feature_id')),
+                    ->label('未挂规则')
+                    ->query(fn (Builder $query): Builder => $query->doesntHave('requirements')),
             ])
             ->recordActions([
                 EditAction::make()
-                    ->label('改挂功能')
+                    ->label('改挂规则')
                     ->slideOver(),
             ]);
     }

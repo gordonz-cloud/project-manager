@@ -42,11 +42,11 @@
                     <p class="px-2 py-6 text-center text-xs text-slate-400">{{ $this->isNarrowed() ? '没有匹配。' : '还没有测试。' }}</p>
                 @endforelse
 
-                <div class="mt-4 border-t border-slate-200 px-2 pt-3 dark:border-white/10" data-uncovered-features>
-                    <h3 class="text-xs font-medium text-slate-500 dark:text-slate-400">没有被任何测试覆盖的功能（{{ $this->uncoveredFeatures->count() }}）</h3>
+                <div class="mt-4 border-t border-slate-200 px-2 pt-3 dark:border-white/10" data-uncovered-rules>
+                    <h3 class="text-xs font-medium text-slate-500 dark:text-slate-400">没有测试的已定规则（{{ $this->uncoveredRules->count() }}）</h3>
                     <div class="mt-2 flex flex-wrap gap-1">
-                        @foreach ($this->uncoveredFeatures as $feature)
-                            <a href="{{ $this->featureUrl($feature) }}" class="rounded bg-slate-100 px-1.5 py-0.5 text-xs text-slate-600 hover:underline dark:bg-white/10 dark:text-slate-300" title="{{ $feature->title }}">F{{ $feature->number }} {{ \Illuminate\Support\Str::limit($feature->title, 24) }}</a>
+                        @foreach ($this->uncoveredRules as $rule)
+                            <a href="{{ $this->ruleUrl($rule) }}" class="rounded bg-slate-100 px-1.5 py-0.5 text-xs text-slate-600 hover:underline dark:bg-white/10 dark:text-slate-300" title="{{ $rule->title }}">R{{ $rule->number }} {{ \Illuminate\Support\Str::limit($rule->title, 24) }}</a>
                         @endforeach
                     </div>
                 </div>
@@ -77,16 +77,9 @@
                     @endif
                     <div><dt class="text-xs text-slate-500">代码标记</dt><dd class="font-mono text-xs" data-test-marker>[T{{ $test->number }}]</dd></div>
                 </dl>
-                @if ($test->features->isNotEmpty())
-                    <div class="mt-3 flex flex-wrap gap-1">
-                        @foreach ($test->features as $feature)
-                            <a href="{{ $this->featureUrl($feature) }}" class="rounded bg-slate-100 px-1.5 py-0.5 text-xs text-slate-600 hover:underline dark:bg-white/10 dark:text-slate-300" title="{{ $feature->title }}">F{{ $feature->number }}</a>
-                        @endforeach
-                    </div>
-                @endif
-                @foreach ($test->features as $feature)
-                    <div class="mt-5 border-t border-slate-200 pt-3 dark:border-white/10">
-                        <a href="{{ $this->featureUrl($feature) }}" class="text-sm font-medium text-slate-950 hover:underline dark:text-white">F{{ $feature->number }} {{ $feature->title }}</a>
+                @foreach ($test->requirements as $rule)
+                    <div class="mt-5 border-t border-slate-200 pt-3 dark:border-white/10" data-test-rule>
+                        <a href="{{ $this->ruleUrl($rule) }}" class="text-sm font-medium text-slate-950 hover:underline dark:text-white">R{{ $rule->number }} {{ $rule->title }}</a>
                     </div>
                 @endforeach
             @else

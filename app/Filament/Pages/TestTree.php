@@ -10,8 +10,8 @@ use App\Enums\NavigationGroup;
 use App\Enums\TestAuto;
 use App\Enums\TestLastResult;
 use App\Enums\TestPriority;
-use App\Models\Feature;
 use App\Models\Project;
+use App\Models\Requirement;
 use App\Models\Test;
 use App\Services\Tests\TestTreeService;
 use BackedEnum;
@@ -151,7 +151,7 @@ class TestTree extends Page
         return $this->selectedNumber === null ? null : Test::query()
             ->where('project_id', $this->project->id)
             ->where('number', $this->selectedNumber)
-            ->with('features')
+            ->with('requirements:id,number,title')
             ->first();
     }
 
@@ -183,12 +183,12 @@ class TestTree extends Page
     }
 
     /**
-     * @return Collection<int, Feature>
+     * @return Collection<int, Requirement>
      */
     #[Computed]
-    public function uncoveredFeatures(): Collection
+    public function uncoveredRules(): Collection
     {
-        return $this->testTreeService()->uncoveredFeatures($this->project);
+        return $this->testTreeService()->uncoveredRules($this->project);
     }
 
     public function isNarrowed(): bool
@@ -196,9 +196,9 @@ class TestTree extends Page
         return trim($this->search) !== '' || isset(self::FILTERS[$this->filter]);
     }
 
-    public function featureUrl(Feature $feature): string
+    public function ruleUrl(Requirement $requirement): string
     {
-        return WorkbenchGraph::getUrl(['selectedKey' => "feature:{$feature->id}"]);
+        return RequirementTree::getUrl(['selectedNumber' => $requirement->number]);
     }
 
     private function matchesFilter(TestTreeNode $node): bool

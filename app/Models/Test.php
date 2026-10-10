@@ -83,11 +83,13 @@ class Test extends Model
     }
 
     /**
-     * @return BelongsToMany<Feature, $this>
+     * Rules this test node verifies.
+     *
+     * @return BelongsToMany<Requirement, $this>
      */
-    public function features(): BelongsToMany
+    public function requirements(): BelongsToMany
     {
-        return $this->belongsToMany(Feature::class);
+        return $this->belongsToMany(Requirement::class);
     }
 
     /**

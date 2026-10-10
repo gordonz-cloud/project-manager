@@ -4,9 +4,11 @@ namespace App\Services\Tests;
 
 use App\Data\Tests\TestArea;
 use App\Data\Tests\TestTreeNode;
+use App\Enums\RequirementKind;
+use App\Enums\RequirementStatus;
 use App\Enums\TestLastResult;
-use App\Models\Feature;
 use App\Models\Project;
+use App\Models\Requirement;
 use App\Models\Test;
 use Illuminate\Database\Eloquent\Collection;
 
@@ -40,14 +42,16 @@ class TestTreeService
     }
 
     /**
-     * Features no test node is tagged with.
+     * Decided rules no test node verifies.
      *
-     * @return Collection<int, Feature>
+     * @return Collection<int, Requirement>
      */
-    public function uncoveredFeatures(Project $project): Collection
+    public function uncoveredRules(Project $project): Collection
     {
-        return Feature::withoutGlobalScopes()
+        return Requirement::withoutGlobalScopes()
             ->where('project_id', $project->id)
+            ->where('kind', RequirementKind::Rule)
+            ->where('status', RequirementStatus::Decided)
             ->whereDoesntHave('tests')
             ->orderBy('number')
             ->get(['id', 'number', 'title']);

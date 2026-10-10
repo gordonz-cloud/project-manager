@@ -7,7 +7,6 @@ use App\Data\Requirements\RequirementTimeline;
 use App\Data\Requirements\RequirementTreeSaveResult;
 use App\Enums\RequirementKind;
 use App\Enums\RequirementStatus;
-use App\Models\Feature;
 use App\Models\Project;
 use App\Models\Requirement;
 use App\Models\Test;
@@ -21,7 +20,7 @@ use InvalidArgumentException;
  * levels must nest (目标 → 子目标 → 分组 → 规则), dependencies (prerequisites) must not loop, a proposal that supersedes a 已定 rule is a 冲突, changing a 已定 rule
  * needs a reason, and deciding a 冲突 voids the rule it replaces. Revisions are written by Requirement itself.
  *
- * @phpstan-type NodeInput array{number: int, parent?: int|null, supersedes?: int|null, kind?: string, title?: string, rationale?: string|null, source?: string|null, status?: string, decided_by?: string|null, decided_at?: string|null, reason?: string|null, features?: list<int>, tests?: list<int>, depends_on?: list<int>, depends_on_refs?: list<string>, position?: int|null, decision?: array<string, mixed>|null, timeline?: list<array<string, mixed>>|null}
+ * @phpstan-type NodeInput array{number: int, parent?: int|null, supersedes?: int|null, kind?: string, title?: string, rationale?: string|null, source?: string|null, status?: string, decided_by?: string|null, decided_at?: string|null, reason?: string|null, needs_review?: bool, tests?: list<int>, depends_on?: list<int>, depends_on_refs?: list<string>, position?: int|null, decision?: array<string, mixed>|null, timeline?: list<array<string, mixed>>|null}
  * @phpstan-type NodeState array{kind: RequirementKind|null, status: RequirementStatus|null, parent: int|null, supersedes: int|null}
  */
 class RequirementTreeSaver
@@ -42,7 +41,6 @@ class RequirementTreeSaver
             // Parallel saves to one project queue here, so two of them never hand out the same new number.
             Project::query()->whereKey($project->id)->lockForUpdate()->first();
             $existing = Requirement::withoutGlobalScopes()->where('project_id', $project->id)->get()->keyBy('number');
-            $featureIds = Feature::withoutGlobalScopes()->where('project_id', $project->id)->pluck('id', 'number')->all();
             $testIds = Test::withoutGlobalScopes()->where('project_id', $project->id)->pluck('id', 'number')->all();
 
             /** @var list<NodeInput> $nodes */
@@ -50,7 +48,7 @@ class RequirementTreeSaver
             $nodes = $this->withDependencyRefsResolved($rawNodes, $nodes);
             $nodes = array_map(fn (array $node): array => $this->withConflictMarked($this->withGroupDecided($node, $existing->get($node['number'])), $existing->get($node['number'])), $nodes);
 
-            $this->assertValid($nodes, $existing->all(), $featureIds, $testIds, $this->storedDependencies($project));
+            $this->assertValid($nodes, $existing->all(), $testIds, $this->storedDependencies($project));
 
             $saved = [];
 
@@ -79,10 +77,6 @@ class RequirementTreeSaver
                         'parent_id' => isset($node['parent']) ? $idByNumber[$node['parent']] : $requirement->parent_id,
                         'supersedes_id' => array_key_exists('supersedes', $node) ? ($node['supersedes'] === null ? null : $idByNumber[$node['supersedes']]) : $requirement->supersedes_id,
                     ]);
-                }
-
-                if (array_key_exists('features', $node)) {
-                    $requirement->linkedFeatures()->sync(array_map(fn (int $number): int => $featureIds[$number], $node['features']));
                 }
 
                 if (array_key_exists('tests', $node)) {
@@ -250,7 +244,7 @@ class RequirementTreeSaver
                 && (! isset($node['parent_ref']) || (is_string($node['parent_ref']) && ! isset($node['parent'])))
                 && (! isset($node['parent']) || is_int($node['parent']))
                 && (! isset($node['supersedes']) || is_int($node['supersedes']))
-                && $this->isNumberList($node['features'] ?? [])
+                && (! isset($node['needs_review']) || is_bool($node['needs_review']))
                 && $this->isNumberList($node['tests'] ?? [])
                 && $this->isNumberList($node['depends_on'] ?? [])
                 && is_array($node['depends_on_refs'] ?? []) && array_is_list($node['depends_on_refs'] ?? []) && array_filter($node['depends_on_refs'] ?? [], 'is_string') === ($node['depends_on_refs'] ?? [])
@@ -260,7 +254,11 @@ class RequirementTreeSaver
                 && array_filter(self::TEXT_FIELDS, fn (string $key): bool => isset($node[$key]) && ! is_string($node[$key])) === [];
 
             if (! $valid) {
-                throw new InvalidArgumentException("Node at index {$index}: number/parent/supersedes/position must be integers, decision an object, timeline a list, ref/parent_ref strings (parent_ref not with parent), features/tests/depends_on lists of integers, depends_on_refs a list of strings, text fields strings.");
+                throw new InvalidArgumentException("Node at index {$index}: number/parent/supersedes/position must be integers, decision an object, timeline a list, ref/parent_ref strings (parent_ref not with parent), needs_review a boolean, tests/depends_on lists of integers, depends_on_refs a list of strings, text fields strings.");
+            }
+
+            if (array_key_exists('features', $node)) {
+                throw new InvalidArgumentException("Node at index {$index}: features 已移除（功能这一层删了），commit 写 R<规则号> 自动挂到规则，测试用 tests。");
             }
 
             if (array_key_exists('decider', $node)) {
@@ -287,7 +285,7 @@ class RequirementTreeSaver
     {
         $columns = [];
 
-        foreach (['kind', 'title', 'rationale', 'source', 'status', 'decided_by', 'decided_at', 'position', 'decision', 'timeline'] as $key) {
+        foreach (['kind', 'title', 'rationale', 'source', 'status', 'decided_by', 'decided_at', 'position', 'decision', 'timeline', 'needs_review'] as $key) {
             if (array_key_exists($key, $node)) {
                 $columns[$key] = $node[$key] === '' ? null : $node[$key];
             }
@@ -299,11 +297,10 @@ class RequirementTreeSaver
     /**
      * @param  list<NodeInput>  $nodes
      * @param  array<int, Requirement>  $existing  number => stored node
-     * @param  array<int, int>  $featureIds  number => id
      * @param  array<int, int>  $testIds  number => id
      * @param  array<int, list<int>>  $dependencies  number => numbers it depends on, as stored
      */
-    private function assertValid(array $nodes, array $existing, array $featureIds, array $testIds, array $dependencies): void
+    private function assertValid(array $nodes, array $existing, array $testIds, array $dependencies): void
     {
         $errors = [];
         $numberById = collect($existing)->mapWithKeys(fn (Requirement $requirement): array => [$requirement->id => (int) $requirement->number])->all();
@@ -317,7 +314,7 @@ class RequirementTreeSaver
         foreach ($nodes as $node) {
             $number = $node['number'];
             $stored = $existing[$number] ?? null;
-            $errors = [...$errors, ...$this->fieldErrors($number, $node, $stored, $featureIds, $testIds)];
+            $errors = [...$errors, ...$this->fieldErrors($number, $node, $stored, $testIds)];
 
             $states[$number] = [
                 'kind' => array_key_exists('kind', $node) ? RequirementKind::tryFrom($node['kind']) : $stored?->kind,
@@ -351,11 +348,10 @@ class RequirementTreeSaver
 
     /**
      * @param  NodeInput  $node
-     * @param  array<int, int>  $featureIds
      * @param  array<int, int>  $testIds
      * @return list<string>
      */
-    private function fieldErrors(int $number, array $node, ?Requirement $stored, array $featureIds, array $testIds): array
+    private function fieldErrors(int $number, array $node, ?Requirement $stored, array $testIds): array
     {
         $errors = [];
 
@@ -381,12 +377,6 @@ class RequirementTreeSaver
 
         if (isset($node['decision'])) {
             $errors = [...$errors, ...array_map(fn (string $error): string => "#{$number}: {$error}", RequirementDecision::errors($node['decision']))];
-        }
-
-        foreach ($node['features'] ?? [] as $featureNumber) {
-            if (! isset($featureIds[$featureNumber])) {
-                $errors[] = "#{$number}: feature {$featureNumber} does not exist in this project.";
-            }
         }
 
         foreach ($node['tests'] ?? [] as $testNumber) {

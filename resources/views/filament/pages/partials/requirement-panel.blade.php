@@ -87,17 +87,9 @@
             @php($isAccepting = $this->progressOf($requirement) === \App\Data\Requirements\RequirementProgress::AwaitingAcceptance)
             <details data-panel-progress @if ($isAccepting) open @endif>
                 <summary class="cursor-pointer text-xs text-slate-500">做到哪了：{{ $this->builtSummary($requirement) }}</summary>
-                <ul class="mt-1 space-y-0.5">
-                    @foreach ($requirement->linkedFeatures as $feature)
-                        <li class="flex flex-wrap items-center gap-x-2" wire:key="feature-{{ $feature->id }}">
-                            <a href="{{ $this->featureUrl($feature) }}" class="hover:underline" title="F{{ $feature->number }}">{{ $feature->title }} · {{ $feature->status->value }}</a>
-                            @if ($isAccepting && $feature->status === \App\Enums\FeatureStatus::InVerification)
-                                <button type="button" wire:click="acceptFeature({{ $feature->id }})" class="rounded border border-violet-300 px-2 py-0.5 text-xs text-violet-700 hover:bg-violet-50 dark:border-violet-500/40 dark:text-violet-300 dark:hover:bg-violet-500/10" data-accept-feature="{{ $feature->number }}">验收通过</button>
-                                @if ($feature->requirements_count > 1)<span class="text-xs text-slate-500">这个功能还挂在另外 {{ $feature->requirements_count - 1 }} 条规则上</span>@endif
-                            @endif
-                        </li>
-                    @endforeach
-                </ul>
+                @if ($isAccepting)
+                    <button type="button" wire:click="acceptRule" class="mt-1 rounded border border-violet-300 px-2 py-0.5 text-xs text-violet-700 hover:bg-violet-50 dark:border-violet-500/40 dark:text-violet-300 dark:hover:bg-violet-500/10" data-accept-rule>验收通过</button>
+                @endif
                 @if ($requirement->tests->isNotEmpty())
                     <div class="mt-1 flex flex-wrap gap-1">
                         @foreach ($requirement->tests as $test)

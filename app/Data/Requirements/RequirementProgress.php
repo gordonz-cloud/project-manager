@@ -25,7 +25,7 @@ enum RequirementProgress: string
             $status === RequirementStatus::Void => self::Dropped,
             $status === RequirementStatus::Later => self::Later,
             $delivery === DeliveryStatus::AwaitingAcceptance => self::AwaitingAcceptance,
-            $delivery === DeliveryStatus::Built, $delivery === DeliveryStatus::Verified => self::Done,
+            $delivery === DeliveryStatus::Verified => self::Done,
             default => self::Todo,
         };
     }

@@ -7,13 +7,12 @@ use Database\Factories\CommitFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Support\Carbon;
 
 /**
  * @property int $id
  * @property int $project_id
- * @property int|null $feature_id
  * @property string $hash
  * @property string $subject
  * @property string|null $body
@@ -22,7 +21,7 @@ use Illuminate\Support\Carbon;
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at
  */
-#[Fillable(['hash', 'subject', 'body', 'author', 'committed_at', 'feature_id'])]
+#[Fillable(['hash', 'subject', 'body', 'author', 'committed_at'])]
 class Commit extends Model
 {
     /** @use HasFactory<CommitFactory> */
@@ -36,19 +35,12 @@ class Commit extends Model
     }
 
     /**
-     * @return BelongsTo<Feature, $this>
+     * Rules this commit works on, from the R<number>s in its message.
+     *
+     * @return BelongsToMany<Requirement, $this>
      */
-    public function feature(): BelongsTo
+    public function requirements(): BelongsToMany
     {
-        return $this->belongsTo(Feature::class);
-    }
-
-    public function unassignFeature(): bool
-    {
-        if ($this->feature_id === null) {
-            return false;
-        }
-
-        return $this->forceFill(['feature_id' => null])->save();
+        return $this->belongsToMany(Requirement::class);
     }
 }

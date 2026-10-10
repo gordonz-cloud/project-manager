@@ -11,13 +11,9 @@ use RuntimeException;
 /**
  * Syncs a project's `commits` from its local repo's `git log`
  * (`Project.repo_path`), upserting by (project_id, hash). A commit whose
- * subject or body names a feature number ("Feature 12", "功能 12") gets
- * auto-assigned to it, unless the commit already carries a feature_id —
- * from an earlier auto-match or a manual pick — which is never overwritten.
- *
- * A bare "#N" is deliberately not matched: on a GitHub-hosted repo it is a
- * PR or issue number ("Merge pull request #20"), not a feature reference,
- * and matching it mis-assigns commits to unrelated features.
+ * message names rules ("R123", several allowed: "R123 R124") is linked to
+ * every one of them, unless it is already linked to some rule — from an
+ * earlier match or a manual pick — which is never overwritten.
  */
 class CommitsSyncCommand extends Command
 {

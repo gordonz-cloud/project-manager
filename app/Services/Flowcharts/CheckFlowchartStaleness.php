@@ -3,8 +3,6 @@
 namespace App\Services\Flowcharts;
 
 use App\Data\Flowcharts\FlowchartStaleCheck;
-use App\Enums\FeatureStatus;
-use App\Models\Feature;
 use App\Models\Flowchart;
 use App\Models\Project;
 use Illuminate\Support\Carbon;
@@ -30,7 +28,7 @@ class CheckFlowchartStaleness
         return Flowchart::withoutGlobalScopes()
             ->where('project_id', $project->id)
             ->when($requirementNumber, fn ($query, int $number) => $query->whereHas('requirement', fn ($q) => $q->where('number', $number)))
-            ->with('requirement.linkedFeatures')
+            ->with(['requirement' => fn ($query) => $query->withExists('commits')])
             ->get()
             ->map(fn (Flowchart $flowchart): FlowchartStaleCheck => $this->checkFlowchart($flowchart, $repoPath));
     }
@@ -38,13 +36,11 @@ class CheckFlowchartStaleness
     /**
      * A planned flowchart describes code that doesn't exist yet, so its nodes' missing
      * files/functions are expected, not drift — skip the check. A rule's chart is planned
-     * until one of its features is under way.
+     * until a commit works on it.
      */
     public function isPlanned(Flowchart $flowchart): bool
     {
-        $notStarted = [FeatureStatus::Todo, FeatureStatus::Uncertain, FeatureStatus::Void];
-
-        return $flowchart->requirement->linkedFeatures->every(fn (Feature $feature): bool => in_array($feature->status, $notStarted, true));
+        return ! $flowchart->requirement->getAttribute('commits_exists');
     }
 
     private function checkFlowchart(Flowchart $flowchart, string $repoPath): FlowchartStaleCheck

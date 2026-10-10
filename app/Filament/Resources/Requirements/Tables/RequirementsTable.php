@@ -3,7 +3,6 @@
 namespace App\Filament\Resources\Requirements\Tables;
 
 use App\Enums\RequirementStatus;
-use App\Filament\Tables\ModuleGroup;
 use App\Models\Project;
 use App\Models\Requirement;
 use App\Services\Requirements\RequirementVersionOptions;
@@ -75,18 +74,9 @@ class RequirementsTable
                     ->badge()
                     ->color('gray')
                     ->listWithLineBreaks(),
-                TextColumn::make('modules.name')
-                    ->label('模块')
-                    ->badge()
-                    ->color('gray')
-                    ->listWithLineBreaks(),
-                TextColumn::make('features_count')
-                    ->label('功能')
-                    ->counts('features')
-                    ->formatStateUsing(fn (int $state): string => "{$state} 个")
-                    ->tooltip(fn (Requirement $record): ?string => $record->features->isEmpty()
-                        ? null
-                        : $record->features->pluck('title')->implode("\n"))
+                TextColumn::make('commits_count')
+                    ->label('Commit')
+                    ->counts('commits')
                     ->sortable(),
                 TextColumn::make('created_at')
                     ->dateTime()
@@ -97,12 +87,8 @@ class RequirementsTable
                     ->sortable()
                     ->toggleable(isToggledHiddenByDefault: true),
             ])
-            ->modifyQueryUsing(fn (Builder $query): Builder => $query->with(['modules', 'dependsOn', 'features']))
+            ->modifyQueryUsing(fn (Builder $query): Builder => $query->with('dependsOn'))
             ->defaultSort('buildOrder')
-            ->defaultGroup('module')
-            ->groups([
-                ModuleGroup::make(),
-            ])
             ->filters([
                 SelectFilter::make('status')
                     ->label('状态')

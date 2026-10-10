@@ -1,7 +1,6 @@
 <?php
 
 use App\Filament\Resources\Requirements\Pages\EditRequirement;
-use App\Models\Module;
 use App\Models\Project;
 use App\Models\Requirement;
 use App\Models\User;
@@ -21,43 +20,14 @@ test('a requirement cannot depend on something that already depends on it, trans
     expect(Requirement::wouldCycle($a->id, $c->id))->toBeFalse();
 });
 
-test('build order puts a requirement after the ones it depends on, even across module order [T32]', function () {
+test('build order puts a requirement after the ones it depends on, then lower id first [T32]', function () {
     $project = Project::factory()->create();
-    $orders = Module::factory()->create(['project_id' => $project->id, 'name' => '订单']);
-    $panel = Module::factory()->create(['project_id' => $project->id, 'name' => '经营面板']);
-    $panel->dependsOn()->attach($orders);
-
-    $overview = Requirement::factory()->create(['project_id' => $project->id]);
-    $overview->modules()->attach($panel);
     $desk = Requirement::factory()->create(['project_id' => $project->id]);
-    $desk->modules()->attach($panel);
-    $ordersPull = Requirement::factory()->create(['project_id' => $project->id]);
-    $ordersPull->modules()->attach($orders);
-
+    $overview = Requirement::factory()->create(['project_id' => $project->id]);
+    $loose = Requirement::factory()->create(['project_id' => $project->id]);
     $desk->dependsOn()->attach($overview);
-    // The orders requirement's module is built earlier, but it depends on the
-    // panel's overview, so it must still sort after it.
-    $ordersPull->dependsOn()->attach($overview);
 
-    $order = Requirement::inBuildOrder($project)->pluck('id')->values()->all();
-
-    expect(array_search($overview->id, $order))->toBeLessThan(array_search($desk->id, $order));
-    expect(array_search($overview->id, $order))->toBeLessThan(array_search($ordersPull->id, $order));
-});
-
-test('without requirement dependencies the build order still follows module order then id [T32]', function () {
-    $project = Project::factory()->create();
-    $orders = Module::factory()->create(['project_id' => $project->id, 'name' => '订单']);
-    $panel = Module::factory()->create(['project_id' => $project->id, 'name' => '经营面板']);
-    $panel->dependsOn()->attach($orders);
-
-    $panelRequirement = Requirement::factory()->create(['project_id' => $project->id]);
-    $panelRequirement->modules()->attach($panel);
-    $ordersRequirement = Requirement::factory()->create(['project_id' => $project->id]);
-    $ordersRequirement->modules()->attach($orders);
-
-    expect(Requirement::inBuildOrder($project)->pluck('id')->all())
-        ->toBe([$ordersRequirement->id, $panelRequirement->id]);
+    expect(Requirement::inBuildOrder($project)->pluck('id')->all())->toBe([$overview->id, $desk->id, $loose->id]);
 });
 
 test('the dependency select on a requirement\'s form excludes itself and other projects [T97]', function () {

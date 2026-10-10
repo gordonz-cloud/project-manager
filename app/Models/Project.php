@@ -34,22 +34,6 @@ class Project extends Model
     }
 
     /**
-     * @return HasMany<Module, $this>
-     */
-    public function modules(): HasMany
-    {
-        return $this->hasMany(Module::class);
-    }
-
-    /**
-     * @return HasMany<ModuleSpec, $this>
-     */
-    public function moduleSpecs(): HasMany
-    {
-        return $this->hasMany(ModuleSpec::class);
-    }
-
-    /**
      * @return HasMany<Requirement, $this>
      */
     public function requirements(): HasMany

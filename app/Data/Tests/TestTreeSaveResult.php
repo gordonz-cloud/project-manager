@@ -12,7 +12,6 @@ final readonly class TestTreeSaveResult
     public function __construct(
         public array $assigned,
         public int $updated,
-        public int $nodesWithFeaturesSynced,
     ) {
         $this->created = count($assigned);
     }

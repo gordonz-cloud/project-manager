@@ -4,7 +4,6 @@ namespace App\Services\Requirements;
 
 use App\Data\Requirements\DecisionBatchResult;
 use App\Enums\RequirementStatus;
-use App\Models\Feature;
 use App\Models\Project;
 use App\Models\Requirement;
 use App\Models\RequirementDecisionDraft;
@@ -108,7 +107,7 @@ class RequirementDecisions
         return RequirementDecisionDraft::query()
             ->where('user_id', $user->id)
             ->whereIn('requirement_id', $requirements->pluck('id'))
-            ->with(['requirement.supersedes', 'requirement.linkedFeatures', 'requirement.tests'])
+            ->with(['requirement.supersedes', 'requirement.tests'])
             ->get();
     }
 
@@ -145,14 +144,13 @@ class RequirementDecisions
 
     /**
      * A newly decided rule is not built yet, whatever it was linked to while it was only a proposal (often the old
-     * behaviour's feature and tests): those links move into decision.impact as 受影响, so it starts as 待做.
+     * behaviour's tests): those links move into decision.impact as 受影响, so it starts as 待做.
      *
-     * @return array{decision: array<string, mixed>, features: list<int>, tests: list<int>}|array{}
+     * @return array{decision: array<string, mixed>, tests: list<int>}|array{}
      */
     private function startedFromScratch(Requirement $requirement): array
     {
         $affected = [
-            ...$requirement->linkedFeatures->map(fn (Feature $feature): string => "功能「{$feature->title}」（{$feature->status->value}）"),
             ...$requirement->tests->map(fn (Test $test): string => '测试「'.Str::limit($test->title, 30, '…')."」（{$test->last_result->value}）"),
         ];
 
@@ -163,6 +161,6 @@ class RequirementDecisions
         $decision = $requirement->decisionOrFallback()->toArray();
         $decision['impact'] = implode('；', array_filter([$decision['impact'] ?? null, '受影响（定下前挂着的）：'.implode('、', $affected)]));
 
-        return ['decision' => $decision, 'features' => [], 'tests' => []];
+        return ['decision' => $decision, 'tests' => []];
     }
 }

@@ -9,7 +9,7 @@ use Carbon\CarbonInterface;
 use Illuminate\Support\Collection;
 
 /**
- * Recent activity on one requirement: its revisions and its features' commits, each newest first.
+ * Recent activity on one requirement: its revisions and its commits, each newest first.
  */
 final readonly class RequirementChangeGroup
 {

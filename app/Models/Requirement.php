@@ -20,7 +20,6 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
-use LogicException;
 
 /**
  * One node of the requirement tree: a statement that should hold (title), why (rationale), where it came from (source)
@@ -43,10 +42,12 @@ use LogicException;
  * @property int|null $position
  * @property RequirementDecision|null $decision
  * @property list<array<string, mixed>>|null $timeline everything said about it over time (see RequirementTimeline)
+ * @property bool $needs_review once its tests pass, Gordon still has to look (UI, copy) before it counts as done
+ * @property Carbon|null $accepted_at when Gordon accepted it; an accepted rule is done unless a test fails, and a new statement or status needs accepting again
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at
  */
-#[Fillable(['number', 'parent_id', 'kind', 'title', 'rationale', 'source', 'decided_by', 'decided_at', 'supersedes_id', 'acceptance', 'status', 'version', 'position', 'decision', 'timeline'])]
+#[Fillable(['number', 'parent_id', 'kind', 'title', 'rationale', 'source', 'decided_by', 'decided_at', 'supersedes_id', 'acceptance', 'status', 'version', 'position', 'decision', 'timeline', 'needs_review', 'accepted_at'])]
 class Requirement extends Model
 {
     /** @use HasFactory<RequirementFactory> */
@@ -61,17 +62,16 @@ class Requirement extends Model
             $requirement->recordRevision(isNew: true);
         });
 
+        static::updating(function (self $requirement): void {
+            if ($requirement->isDirty(['title', 'status'])) {
+                $requirement->accepted_at = null;
+            }
+        });
+
         static::updated(function (self $requirement): void {
             if ($requirement->wasChanged(['title', 'status'])) {
                 $requirement->recordRevision(isNew: false);
             }
-        });
-
-        static::deleting(function (self $requirement): void {
-            if (WorkflowRun::withoutGlobalScopes()->where('requirement_id', $requirement->id)->exists()) {
-                throw new LogicException('A requirement with workflow history cannot be deleted.');
-            }
-
         });
     }
 
@@ -86,6 +86,8 @@ class Requirement extends Model
             'decided_at' => 'date',
             'decision' => RequirementDecision::class,
             'timeline' => 'array',
+            'needs_review' => 'boolean',
+            'accepted_at' => 'datetime',
         ];
     }
 
@@ -136,13 +138,13 @@ class Requirement extends Model
     }
 
     /**
-     * Features that make this statement hold (many-to-many; features.requirement_id is mirrored into it).
+     * Commits that work on this statement (their message names R<number>).
      *
-     * @return BelongsToMany<Feature, $this>
+     * @return BelongsToMany<Commit, $this>
      */
-    public function linkedFeatures(): BelongsToMany
+    public function commits(): BelongsToMany
     {
-        return $this->belongsToMany(Feature::class);
+        return $this->belongsToMany(Commit::class);
     }
 
     /**
@@ -211,18 +213,28 @@ class Requirement extends Model
     }
 
     /**
-     * Newest commits of the linked features.
+     * Newest commits on this statement.
      *
      * @return EloquentCollection<int, Commit>
      */
     public function recentCommits(int $limit = 10): EloquentCollection
     {
-        return Commit::withoutGlobalScopes()
-            ->whereIn('feature_id', $this->linkedFeatures()->select('features.id'))
-            ->with('feature:id,number,title')
-            ->latest('committed_at')
-            ->limit($limit)
-            ->get();
+        return $this->commits()->withoutGlobalScopes()->latest('committed_at')->limit($limit)->get();
+    }
+
+    /**
+     * Gordon looked and it works; noted in its history.
+     */
+    public function accept(): void
+    {
+        $this->forceFill(['accepted_at' => now()])->save();
+        $this->revisions()->create([
+            'new_statement' => $this->title,
+            'old_status' => $this->status->value,
+            'new_status' => $this->status->value,
+            'reason' => '验收通过',
+            'decided_by' => 'Gordon',
+        ]);
     }
 
     /**
@@ -259,37 +271,6 @@ class Requirement extends Model
         ]);
 
         $this->revisionReason = null;
-    }
-
-    /**
-     * @return BelongsToMany<Module, $this>
-     */
-    public function modules(): BelongsToMany
-    {
-        return $this->belongsToMany(Module::class);
-    }
-
-    /**
-     * @return HasMany<Feature, $this>
-     */
-    public function features(): HasMany
-    {
-        return $this->hasMany(Feature::class);
-    }
-
-    /**
-     * @return HasMany<UseCase, $this>
-     */
-    public function useCases(): HasMany
-    {
-        return $this->hasMany(UseCase::class);
-    }
-
-    public function hasWorkflowHistory(): bool
-    {
-        return WorkflowRun::withoutGlobalScopes()
-            ->where('requirement_id', $this->id)
-            ->exists();
     }
 
     /**
@@ -346,9 +327,7 @@ class Requirement extends Model
 
     /**
      * Build order (Kahn's algorithm): a requirement never precedes anything it
-     * depends on. Among the ready ones, the furthest-built module goes first
-     * (a requirement touching several modules sorts by whichever module is
-     * built last), then the lower id. This is the pickup order for /feature-run.
+     * depends on. Among the ready ones, the lower id goes first.
      *
      * @return Collection<int, Requirement>
      */
@@ -375,13 +354,8 @@ class Requirement extends Model
      */
     private static function computeBuildOrder(Project $project): Collection
     {
-        $position = array_flip(Module::inBuildOrder($project)->pluck('id')->all()); // module id => build position
-
-        $requirements = static::query()->where('project_id', $project->id)->with(['modules', 'dependsOn:id'])->get();
+        $requirements = static::query()->where('project_id', $project->id)->with('dependsOn:id')->get();
         $ids = $requirements->pluck('id')->flip();
-        $modulePosition = $requirements->mapWithKeys(fn (Requirement $requirement) => [
-            $requirement->id => $requirement->modules->max(fn (Module $m): int => $position[$m->id] ?? -1) ?? -1,
-        ])->all();
 
         /** @var array<int, int> $remaining number of un-placed dependencies per requirement id */
         $remaining = $requirements->mapWithKeys(fn (Requirement $requirement) => [
@@ -398,9 +372,9 @@ class Requirement extends Model
             }
         }
 
-        // Earliest module first, then lowest id: same tie-break as before, in O((n + e) log n).
+        // Lowest id first, in O((n + e) log n).
         $queue = new \SplPriorityQueue;
-        $enqueue = fn (int $id) => $queue->insert($id, [-$modulePosition[$id], -$id]);
+        $enqueue = fn (int $id) => $queue->insert($id, -$id);
         foreach ($remaining as $id => $count) {
             if ($count === 0) {
                 $enqueue($id);

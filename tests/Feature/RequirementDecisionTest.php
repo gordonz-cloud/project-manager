@@ -6,12 +6,11 @@ use App\Data\Requirements\RequirementProgress;
 use App\Data\Requirements\RequirementRollup;
 use App\Data\Requirements\RequirementTreeNode;
 use App\Data\Requirements\TimelineEntry;
-use App\Enums\FeatureStatus;
 use App\Enums\RequirementKind;
 use App\Enums\RequirementStatus;
 use App\Enums\TestLastResult;
 use App\Filament\Pages\RequirementTree;
-use App\Models\Feature;
+use App\Models\Commit;
 use App\Models\Project;
 use App\Models\Requirement;
 use App\Models\RequirementDecisionDraft;
@@ -104,12 +103,10 @@ it('stores a decision with the node and rejects one of the wrong shape [T58]', f
 
 it('shows one status per node and rolls them up as 待决策 / 待做 / 完成 [T59]', function () {
     [$project, , $goal] = decisionDesk();
-    $built = Feature::factory()->create(['project_id' => $project->id, 'status' => FeatureStatus::Done]);
-    $building = Feature::factory()->create(['project_id' => $project->id, 'status' => FeatureStatus::InDevelopment]);
     decisionRule($goal, 2, RequirementStatus::Proposed);
     decisionRule($goal, 3, RequirementStatus::Decided);
-    decisionRule($goal, 4, RequirementStatus::Decided)->linkedFeatures()->attach($building);
-    decisionRule($goal, 5, RequirementStatus::Decided)->linkedFeatures()->attach($built);
+    decisionRule($goal, 4, RequirementStatus::Decided)->commits()->attach(Commit::factory()->create(['project_id' => $project->id]));
+    decisionRule($goal, 5, RequirementStatus::Decided, ['accepted_at' => now()]);
     decisionRule($goal, 6, RequirementStatus::Void);
 
     $tree = app(RequirementTreeService::class)->tree($project);
@@ -212,8 +209,8 @@ it('lists decided rules not built yet in dependency order [T64]', function () {
     $later = decisionRule($goal, 2, RequirementStatus::Decided, ['title' => 'Charge the card']);
     $first = decisionRule($goal, 3, RequirementStatus::Decided, ['title' => 'Validate the card']);
     $later->dependsOn()->attach($first);
-    decisionRule($goal, 4, RequirementStatus::Decided, ['title' => 'Send receipt'])->linkedFeatures()->attach(Feature::factory()->create(['project_id' => $project->id, 'status' => FeatureStatus::InDevelopment]));
-    decisionRule($goal, 5, RequirementStatus::Decided, ['title' => 'Already shipped'])->linkedFeatures()->attach(Feature::factory()->create(['project_id' => $project->id, 'status' => FeatureStatus::Done]));
+    decisionRule($goal, 4, RequirementStatus::Decided, ['title' => 'Send receipt'])->commits()->attach(Commit::factory()->create(['project_id' => $project->id]));
+    decisionRule($goal, 5, RequirementStatus::Decided, ['title' => 'Already shipped', 'accepted_at' => now()]);
     decisionRule($goal, 6, RequirementStatus::Proposed, ['title' => 'Still a proposal']);
 
     Livewire::withQueryParams(['tab' => 'todo'])->test(RequirementTree::class)
@@ -225,7 +222,6 @@ it('lists decided rules not built yet in dependency order [T64]', function () {
 it('shows pending nodes in tree order and shows only what the decision needs, each piece once [T65]', function () {
     [$project, , $goal] = decisionDesk();
     $old = decisionRule($goal, 2, RequirementStatus::Decided, ['title' => 'Free shipping over 50', 'decided_by' => '老板', 'decided_at' => '2026-10-05', 'source' => '老板文档 docs/product/S7-cart/spec.md v0.9 §3.7（Haorui，2026-09-01）']);
-    $old->linkedFeatures()->attach(Feature::factory()->create(['project_id' => $project->id, 'number' => 9, 'title' => 'Shipping calculator']));
     decisionRule($goal, 3, RequirementStatus::Proposed, ['title' => 'Gift wrap for members', 'rationale' => 'see GiftWrapService::apply']);
     decisionRule($goal, 4, RequirementStatus::Conflict, ['supersedes_id' => $old->id, 'title' => 'Free shipping over 80', 'rationale' => 'margin', 'decision' => [
         ...shippingDecision(), 'difference' => 'Should orders between 50 and 80 pay shipping?', 'risk' => 'Fewer small orders than #2 promised',
@@ -299,7 +295,7 @@ it('never asks to decide a 分组: no card, no count, and its row sums up its ru
     $builtGroup = Requirement::factory()->create(['project_id' => $project->id, 'number' => 4, 'parent_id' => $sub->id, 'kind' => RequirementKind::Group, 'status' => RequirementStatus::Proposed, 'title' => 'Built group']);
     decisionRule($pendingGroup, 5, RequirementStatus::Proposed, ['title' => 'Rule for me']);
     decisionRule($pendingGroup, 6, RequirementStatus::Proposed, ['title' => 'Another rule']);
-    decisionRule($builtGroup, 7, RequirementStatus::Decided, ['title' => 'Done rule'])->linkedFeatures()->attach(Feature::factory()->create(['project_id' => $project->id, 'status' => FeatureStatus::Done]));
+    decisionRule($builtGroup, 7, RequirementStatus::Decided, ['title' => 'Done rule', 'accepted_at' => now()]);
 
     $tree = app(RequirementTreeService::class)->tree($project);
     $progress = collect(RequirementTreeNode::flattened($tree))->mapWithKeys(fn (RequirementTreeNode $node): array => [$node->requirement->number => $node->progress])->all();
@@ -469,7 +465,7 @@ it('sums a parent up from everything under it, open decisions included [T73]', f
 it('shows a sub-goal with a built rule and an open one as 待决策, not done [T73]', function () {
     [$project, , $goal] = decisionDesk();
     $sub = Requirement::factory()->create(['project_id' => $project->id, 'number' => 2, 'parent_id' => $goal->id, 'kind' => RequirementKind::SubGoal, 'status' => RequirementStatus::Decided, 'title' => 'Members only']);
-    decisionRule($sub, 3, RequirementStatus::Decided)->linkedFeatures()->attach(Feature::factory()->create(['project_id' => $project->id, 'status' => FeatureStatus::Done]));
+    decisionRule($sub, 3, RequirementStatus::Decided, ['accepted_at' => now()]);
     decisionRule($sub, 4, RequirementStatus::Proposed);
     decisionRule($sub, 5, RequirementStatus::Void);
     decisionRule($sub, 6, RequirementStatus::Decided, ['title' => 'Failing rule'])->tests()->attach(Test::factory()->create(['project_id' => $project->id, 'last_result' => TestLastResult::Failed]));
@@ -487,12 +483,11 @@ it('shows a sub-goal with a built rule and an open one as 待决策, not done [T
 it('starts a newly decided rule from 待做, signed by Gordon, and shows the old rule as superseded [T74]', function () {
     [$project, $user, $goal] = decisionDesk();
     $old = decisionRule($goal, 2, RequirementStatus::Decided, ['title' => 'Visitors see a price range']);
-    $oldFeature = Feature::factory()->create(['project_id' => $project->id, 'title' => 'Hide member prices', 'status' => FeatureStatus::Done]);
     $conflict = decisionRule($goal, 3, RequirementStatus::Conflict, ['supersedes_id' => $old->id, 'title' => 'Visitors see the market price', 'decision' => [
         ...shippingDecision(),
         'options' => [['key' => 'A', 'label' => '按新要求改', 'outcome' => 'accept', 'consequence' => 'Old rule voided']],
     ]]);
-    $conflict->linkedFeatures()->attach($oldFeature);
+    $conflict->forceFill(['accepted_at' => now()])->save();
     $conflict->tests()->attach(Test::factory()->create(['project_id' => $project->id, 'title' => 'Visitor sees no member price', 'last_result' => TestLastResult::Passed]));
     decisionRule($goal, 4, RequirementStatus::Void, ['title' => 'Dropped idea']);
     app(RequirementDecisions::class)->choose($conflict, $user, 'A');
@@ -505,9 +500,9 @@ it('starts a newly decided rule from 待做, signed by Gordon, and shows the old
 
     expect($decided->only(['status', 'decided_by', 'source']))->toBe(['status' => RequirementStatus::Decided, 'decided_by' => 'Gordon', 'source' => "spec v1；Gordon 拍板 {$today}：按新要求改"])
         ->and($decided->decided_at->toDateString())->toBe($today)
-        ->and($decided->linkedFeatures()->count())->toBe(0)
+        ->and($decided->accepted_at)->toBeNull()
         ->and($decided->tests()->count())->toBe(0)
-        ->and($decided->decision->impact)->toBe('Shipping calculator；受影响（定下前挂着的）：功能「Hide member prices」（完成）、测试「Visitor sees no member price」（通过）');
+        ->and($decided->decision->impact)->toBe('Shipping calculator；受影响（定下前挂着的）：测试「Visitor sees no member price」（通过）');
 
     $progress = collect(RequirementTreeNode::flattened(app(RequirementTreeService::class)->tree($project)))
         ->mapWithKeys(fn (RequirementTreeNode $node): array => [$node->requirement->number => $node->progress])->all();
@@ -615,7 +610,7 @@ it('words a rule decided in Gordon\'s own words as topic plus his words, unchang
 
 it('saves a rule as 以后做, shows it grey on the tree and keeps it out of the counts, 待决策 and 待做 [T165]', function () {
     [$project, , $goal] = decisionDesk();
-    decisionRule($goal, 2, RequirementStatus::Decided, ['title' => 'Built rule'])->linkedFeatures()->attach(Feature::factory()->create(['project_id' => $project->id, 'status' => FeatureStatus::Done]));
+    decisionRule($goal, 2, RequirementStatus::Decided, ['title' => 'Built rule', 'accepted_at' => now()]);
     decisionRule($goal, 3, RequirementStatus::Proposed, ['title' => 'Guild page later']);
 
     saveDecisionNodes([['number' => 3, 'status' => '以后做', 'reason' => '区分以后做和放弃']])->assertSuccessful()->run();

@@ -71,7 +71,7 @@ final readonly class RequirementRollup
             RequirementProgress::Pending->value => $this->pending(),
             RequirementProgress::Todo->value => $this->count(DeliveryStatus::NotBuilt) + $this->count(DeliveryStatus::InProgress) + $this->count(DeliveryStatus::Failed),
             RequirementProgress::AwaitingAcceptance->value => $this->count(DeliveryStatus::AwaitingAcceptance),
-            RequirementProgress::Done->value => $this->count(DeliveryStatus::Built) + $this->count(DeliveryStatus::Verified),
+            RequirementProgress::Done->value => $this->count(DeliveryStatus::Verified),
         ];
     }
 

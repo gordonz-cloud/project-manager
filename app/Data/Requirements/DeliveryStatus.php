@@ -2,14 +2,13 @@
 
 namespace App\Data\Requirements;
 
-use App\Enums\FeatureStatus;
+use App\Enums\TestAuto;
 use App\Enums\TestLastResult;
-use App\Models\Feature;
+use App\Models\Requirement;
 use App\Models\Test;
-use Illuminate\Support\Collection;
 
 /**
- * How far a requirement is delivered. Never stored: derived from its linked features and verifying tests,
+ * How far a requirement is delivered. Never stored: derived from its own tests, commits and acceptance,
  * and for a parent from its decided children.
  */
 enum DeliveryStatus: string
@@ -18,28 +17,26 @@ enum DeliveryStatus: string
     case NotBuilt = '未实现';
     case InProgress = '实现中';
     case AwaitingAcceptance = '待验收';
-    case Built = '已实现';
     case Verified = '已验证';
 
     /**
-     * What the node's own links say; null when nothing is linked.
-     *
-     * @param  Collection<int, Feature>  $features
-     * @param  Collection<int, Test>  $tests
+     * What the node's own links say; null when nothing is linked. A failing test always wins; an accepted node is done;
+     * once every automated test passes it is done, or 待验收 while Gordon still has to look (needs_review, or a manual
+     * test). Expects tests (with last_result, auto) loaded and commits_exists from withExists('commits').
      */
-    public static function fromLinks(Collection $features, Collection $tests): ?self
+    public static function of(Requirement $requirement): ?self
     {
-        $features = $features->reject(fn (Feature $feature): bool => $feature->status === FeatureStatus::Void);
-        $results = $tests->map(fn (Test $test): TestLastResult => $test->last_result);
+        $tests = $requirement->tests;
+        $automated = $tests->reject(fn (Test $test): bool => $test->auto === TestAuto::No);
+        $needsReview = $requirement->needs_review || $automated->count() < $tests->count();
+        $passed = fn (Test $test): bool => $test->last_result === TestLastResult::Passed;
 
         return match (true) {
-            $results->contains(TestLastResult::Failed) => self::Failed,
-            $features->contains(fn (Feature $feature): bool => $feature->status === FeatureStatus::InVerification)
-                && $features->every(fn (Feature $feature): bool => in_array($feature->status, [FeatureStatus::InVerification, FeatureStatus::Done], true)) => self::AwaitingAcceptance,
-            $results->isNotEmpty() && $results->every(fn (TestLastResult $result): bool => $result === TestLastResult::Passed) => self::Verified,
-            $features->isNotEmpty() && $features->every(fn (Feature $feature): bool => $feature->status === FeatureStatus::Done) => self::Built,
-            $features->contains(fn (Feature $feature): bool => in_array($feature->status, [FeatureStatus::InDevelopment, FeatureStatus::InVerification, FeatureStatus::Done], true)) => self::InProgress,
-            $features->isNotEmpty() || $tests->isNotEmpty() => self::NotBuilt,
+            $tests->contains(fn (Test $test): bool => $test->last_result === TestLastResult::Failed) => self::Failed,
+            $requirement->accepted_at !== null => self::Verified,
+            $tests->isNotEmpty() && $automated->every($passed) => $needsReview ? self::AwaitingAcceptance : self::Verified,
+            (bool) $requirement->getAttribute('commits_exists') || $tests->contains($passed) => self::InProgress,
+            $tests->isNotEmpty() => self::NotBuilt,
             default => null,
         };
     }
@@ -73,8 +70,7 @@ enum DeliveryStatus: string
             self::NotBuilt => 0,
             self::InProgress => 1,
             self::AwaitingAcceptance => 2,
-            self::Built => 3,
-            self::Verified => 4,
+            self::Verified => 3,
         };
     }
 }
