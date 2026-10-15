@@ -16,6 +16,7 @@ use App\Models\Test;
 use App\Models\User;
 use App\Services\Requirements\RequirementTreeService;
 use Filament\Facades\Filament;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Testing\PendingCommand;
 use Livewire\Livewire;
@@ -282,14 +283,142 @@ it('lists what waits on a decision with the rule it would replace and what it to
         ->assertDontSee('做到哪了');
 });
 
-it('groups recent revisions and commits by rule, newest first [T46]', function () {
+/**
+ * A goal › sub-goal › rule chain under the requirement tree page's project, created at the current (travelled) time.
+ *
+ * @return array{Requirement, Requirement, Requirement}
+ */
+function changeChain(Project $project, int $base, string $goal, string $rule): array
+{
+    $make = fn (int $number, ?Requirement $parent, RequirementKind $kind, string $title): Requirement => Requirement::factory()->create([
+        'project_id' => $project->id, 'number' => $number, 'parent_id' => $parent?->id, 'kind' => $kind, 'status' => RequirementStatus::Decided, 'title' => $title,
+    ]);
+    $root = $make($base, null, RequirementKind::Goal, $goal);
+    $sub = $make($base + 1, $root, RequirementKind::SubGoal, "{$goal} sub");
+
+    return [$root, $sub, $make($base + 2, $sub, RequirementKind::Rule, $rule)];
+}
+
+it('shows changes newest first by day, each with its time, kind, title, reason and path in the tree [T46]', function () {
     $project = requirementTreePage();
-    $quiet = Requirement::factory()->create(['project_id' => $project->id, 'title' => 'Quiet rule']);
-    $busy = Requirement::factory()->create(['project_id' => $project->id, 'title' => 'Busy rule']);
-    $busy->commits()->attach(Commit::factory()->create(['project_id' => $project->id, 'subject' => 'Ship the busy rule', 'committed_at' => now()->addDay()]));
+    $this->travelTo(Carbon::parse('2026-10-13 09:00'));
+    [, , $rule] = changeChain($project, 1, 'Guild goal', 'Members see tiers');
+    $legacy = Requirement::factory()->create(['project_id' => $project->id, 'number' => 9, 'kind' => RequirementKind::Rule, 'status' => RequirementStatus::Decided, 'title' => 'Legacy rule']);
+    $legacy->revisions()->delete();
+
+    $this->travelTo(Carbon::parse('2026-10-14 10:05'));
+    $rule->revisionReason = '老板改口';
+    $rule->update(['title' => 'Members see their tier']);
+
+    $this->travelTo(Carbon::parse('2026-10-15 11:30'));
+    $rule->revisionReason = '这期不做';
+    $rule->update(['status' => RequirementStatus::Later]);
+    $rule->accept();
+    $this->travelTo(Carbon::parse('2026-10-15 15:00'));
+
+    Livewire::withQueryParams(['tab' => 'changes', 'range' => '7d'])->test(RequirementTree::class)
+        ->assertSeeInOrder([
+            '今天', 'Guild goal › Guild goal sub', '11:30', '验收', 'Members see their tier', '待验收 → 完成', '验收通过',
+            '11:30', '状态', 'Members see their tier', '已定 → 以后做', '这期不做',
+            '昨天', '10:05', '改说法', 'Members see their tier', '原来：', 'Members see tiers', '老板改口',
+            '2026-10-13', '新', 'Legacy rule',
+        ]);
+
+    Livewire::withQueryParams(['tab' => 'changes', 'range' => 'today'])->test(RequirementTree::class)
+        ->assertSee('这期不做')
+        ->assertDontSee(['老板改口', 'Legacy rule']);
+
+    config(['app.display_timezone' => 'Asia/Shanghai']);
+    Livewire::withQueryParams(['tab' => 'changes', 'range' => '7d'])->test(RequirementTree::class)
+        ->assertSeeInOrder(['今天', '19:30', '验收', '昨天', '18:05', '改说法']);
+});
+
+it('maps only the branches that changed, darker the more they hold, and narrows the timeline to a picked branch [T184]', function () {
+    $project = requirementTreePage();
+    $this->travelTo(Carbon::parse('2026-10-15 09:00'));
+    [$busyGoal, , $busy] = changeChain($project, 1, 'Busy goal', 'Busy rule');
+    [$quietGoal] = changeChain($project, 10, 'Quiet goal', 'Quiet rule');
+    $this->travelTo(Carbon::parse('2026-10-10 09:00'));
+    changeChain($project, 20, 'Untouched goal', 'Old rule');
+    $this->travelTo(Carbon::parse('2026-10-15 10:00'));
+    $busy->revisionReason = 'again';
+    $busy->update(['title' => 'Busy rule, reworded']);
+    $busy->update(['status' => RequirementStatus::Later]);
+
+    $page = Livewire::withQueryParams(['tab' => 'changes', 'range' => 'today'])->test(RequirementTree::class)
+        ->assertSeeHtml('data-heat="5"')
+        ->assertSeeHtml('data-heat="3"')
+        ->assertDontSee('Untouched goal')
+        ->assertSeeHtml('data-change-timeline="8"')
+        ->assertSeeHtml('data-change-branch-select');
+
+    expect($page->instance()->heatClasses($busyGoal->id))->toContain('bg-orange-500')
+        ->and($page->instance()->heatClasses($quietGoal->id))->toContain('bg-orange-300');
+
+    $page->call('toggleBranch', $quietGoal->id)
+        ->assertSeeHtml('data-change-timeline="3"')
+        ->assertDontSee('Busy goal › Busy goal sub')
+        ->call('toggleBranch', $quietGoal->id)
+        ->assertSeeHtml('data-change-timeline="8"');
+});
+
+it('starts 上次看过以后 at this member\'s previous visit and remembers this one [T185]', function () {
+    $project = requirementTreePage();
+    $this->travelTo(Carbon::parse('2026-10-01 09:00'));
+    changeChain($project, 1, 'Ancient goal', 'Ancient rule');
+    $this->travelTo(Carbon::parse('2026-10-14 09:00'));
+    [, , $rule] = changeChain($project, 10, 'Recent goal', 'Recent rule');
+    $this->travelTo(Carbon::parse('2026-10-14 09:30'));
 
     Livewire::withQueryParams(['tab' => 'changes'])->test(RequirementTree::class)
-        ->assertSeeInOrder(['Busy rule', 'Ship the busy rule', 'Quiet rule', '新建 → ']);
+        ->assertSee('Recent rule')
+        ->assertDontSee('Ancient rule');
+
+    expect($project->changesSeenBy(auth()->user())?->toDateTimeString())->toBe('2026-10-14 09:30:00');
+
+    $this->travelTo(Carbon::parse('2026-10-14 12:00'));
+    $rule->revisionReason = 'after the visit';
+    $rule->update(['status' => RequirementStatus::Later]);
+
+    Livewire::test(RequirementTree::class)
+        ->call('setTab', 'changes')
+        ->assertSee(['after the visit', '1 条变化'])
+        ->call('setRange', '7d')
+        ->assertSee('4 条变化');
+});
+
+it('opens a timeline line in the detail panel and highlights it in the heat map [T186]', function () {
+    $project = requirementTreePage();
+    $this->travelTo(Carbon::parse('2026-10-15 09:00'));
+    changeChain($project, 1, 'Guild goal', 'Members see tiers');
+
+    $html = Livewire::withQueryParams(['tab' => 'changes', 'range' => 'today'])->test(RequirementTree::class)
+        ->call('selectNode', 3)
+        ->assertSet('selectedNumber', 3)
+        ->assertSeeInOrder(['data-panel-header', 'Members see tiers'], false)
+        ->html();
+
+    expect($html)->toMatch('/data-heat-node="3"\s+data-selected/');
+});
+
+it('reads the changes in a fixed number of queries however many there are [T187]', function () {
+    $project = requirementTreePage();
+    $this->travelTo(Carbon::parse('2026-10-15 09:00'));
+    $queriesFor = function () {
+        DB::flushQueryLog();
+        DB::enableQueryLog();
+        Livewire::withQueryParams(['tab' => 'changes', 'range' => 'today'])->test(RequirementTree::class);
+
+        return count(DB::getQueryLog());
+    };
+
+    changeChain($project, 1, 'Goal one', 'Rule one');
+    $few = $queriesFor();
+    foreach (range(1, 10) as $i) {
+        changeChain($project, 10 * $i + 10, "Goal {$i}", "Rule {$i}");
+    }
+
+    expect($queriesFor())->toBe($few);
 });
 
 it('shows a selected requirement with why, source, history, tests and commits [T47]', function () {

@@ -34,6 +34,21 @@ class Project extends Model
     }
 
     /**
+     * When $user last opened the requirement tree's 最近变化 here; null the first time.
+     */
+    public function changesSeenBy(User $user): ?Carbon
+    {
+        $seenAt = $this->users()->withPivot('changes_seen_at')->whereKey($user->id)->first()?->pivot?->getAttribute('changes_seen_at');
+
+        return $seenAt === null ? null : Carbon::parse($seenAt);
+    }
+
+    public function markChangesSeen(User $user): void
+    {
+        $this->users()->updateExistingPivot($user->id, ['changes_seen_at' => now()]);
+    }
+
+    /**
      * @return HasMany<Requirement, $this>
      */
     public function requirements(): HasMany

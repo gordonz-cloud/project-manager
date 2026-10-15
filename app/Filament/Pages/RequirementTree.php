@@ -3,7 +3,7 @@
 namespace App\Filament\Pages;
 
 use App\Data\Requirements\DecisionBatchResult;
-use App\Data\Requirements\RequirementChangeGroup;
+use App\Data\Requirements\RequirementChange;
 use App\Data\Requirements\RequirementProgress;
 use App\Data\Requirements\RequirementRollup;
 use App\Data\Requirements\RequirementTimeline;
@@ -20,11 +20,13 @@ use App\Services\Requirements\RequirementTimelines;
 use App\Services\Requirements\RequirementTreeService;
 use App\Support\RequirementMentions;
 use BackedEnum;
+use Carbon\CarbonInterface;
 use Filament\Facades\Filament;
 use Filament\Notifications\Notification;
 use Filament\Pages\Page;
 use Filament\Support\Icons\Heroicon;
 use Illuminate\Database\Eloquent\Collection as EloquentCollection;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 use InvalidArgumentException;
 use Livewire\Attributes\Computed;
@@ -41,11 +43,16 @@ use LogicException;
  * @property-read list<RequirementTreeNode> $filteredTree
  * @property-read EloquentCollection<int, RequirementDecisionDraft> $drafts
  * @property-read array<int, RequirementTreeNode> $nodesById
+ * @property-read list<RequirementChange> $allChanges
+ * @property-read array<int, int> $changeCounts
  */
 class RequirementTree extends Page
 {
     /** @var array<string, string> tab key => label */
     public const TABS = ['overview' => '全貌', 'pending' => '待决策', 'todo' => '待做', 'accepting' => '待验收', 'later' => '以后做', 'changes' => '最近变化'];
+
+    /** @var array<string, string> 最近变化 time range key => label */
+    public const CHANGE_RANGES = ['unseen' => '上次看过以后', 'today' => '今天', '3d' => '3 天', '7d' => '7 天'];
 
     /** @var array<string, RequirementProgress> tab key => the leaves it lists */
     public const LEAF_TABS = ['todo' => RequirementProgress::Todo, 'accepting' => RequirementProgress::AwaitingAcceptance, 'later' => RequirementProgress::Later];
@@ -71,6 +78,16 @@ class RequirementTree extends Page
 
     public bool $showUnfiled = false;
 
+    #[Url]
+    public string $range = 'unseen';
+
+    /** 最近变化 narrowed to this branch (requirement id); null shows every change */
+    #[Url]
+    public ?int $branch = null;
+
+    /** Where 上次看过以后 starts, fixed when the tab opens so it does not move while Gordon reads */
+    public ?string $unseenSince = null;
+
     private ?RequirementTreeService $requirementTreeService = null;
 
     private ?RequirementDecisions $requirementDecisions = null;
@@ -94,6 +111,10 @@ class RequirementTree extends Page
     public function mount(): void
     {
         $this->revealSelected();
+
+        if ($this->tab === 'changes') {
+            $this->openChanges();
+        }
     }
 
     /**
@@ -103,6 +124,10 @@ class RequirementTree extends Page
     {
         $this->tab = isset(self::TABS[$tab]) ? $tab : 'overview';
         $this->revealSelected();
+
+        if ($this->tab === 'changes') {
+            $this->openChanges();
+        }
         $this->dispatch('reveal-selected');
     }
 
@@ -184,7 +209,7 @@ class RequirementTree extends Page
 
         $requirement->accept();
 
-        unset($this->tree, $this->filteredTree, $this->nodesById, $this->total, $this->selectedRequirement, $this->recentChanges);
+        unset($this->tree, $this->filteredTree, $this->nodesById, $this->total, $this->selectedRequirement, $this->allChanges);
         Notification::make()->title('验收通过')->success()->send();
     }
 
@@ -374,12 +399,145 @@ class RequirementTree extends Page
     }
 
     /**
-     * @return list<RequirementChangeGroup>
+     * 上次看过以后 starts at the previous visit (a week back the first time); this visit is remembered for next time.
+     */
+    private function openChanges(): void
+    {
+        $this->unseenSince ??= ($this->project->changesSeenBy($this->user()) ?? now()->subWeek())->toIso8601String();
+        $this->project->markChangesSeen($this->user());
+    }
+
+    public function setRange(string $range): void
+    {
+        $this->range = isset(self::CHANGE_RANGES[$range]) ? $range : 'unseen';
+        $this->branch = null;
+        unset($this->allChanges, $this->changeCounts);
+    }
+
+    /**
+     * Narrows the timeline to one branch of the heat map; the same branch again shows everything.
+     */
+    public function toggleBranch(int $requirementId): void
+    {
+        $this->branch = $this->branch === $requirementId ? null : $requirementId;
+    }
+
+    public function changesFrom(): CarbonInterface
+    {
+        return match ($this->range) {
+            'today' => now(config('app.display_timezone'))->startOfDay(),
+            '3d' => now()->subDays(3),
+            '7d' => now()->subWeek(),
+            default => Carbon::parse($this->unseenSince ?? now()->subWeek()),
+        };
+    }
+
+    /**
+     * @return list<RequirementChange>
      */
     #[Computed]
-    public function recentChanges(): array
+    public function allChanges(): array
     {
-        return $this->requirementTreeService()->recentChanges($this->project);
+        return $this->requirementTreeService()->changesSince($this->project, $this->changesFrom());
+    }
+
+    /**
+     * The timeline: every change in range, or only those in the picked branch; newest first.
+     *
+     * @return list<RequirementChange>
+     */
+    public function changes(): array
+    {
+        return $this->branch === null
+            ? $this->allChanges
+            : array_values(array_filter($this->allChanges, fn (RequirementChange $change): bool => in_array($this->branch, $this->lineageOf($change->requirementId), true)));
+    }
+
+    /**
+     * How many changes each node's branch holds (itself and everything under it), keyed by requirement id.
+     *
+     * @return array<int, int>
+     */
+    #[Computed]
+    public function changeCounts(): array
+    {
+        $counts = [];
+
+        foreach ($this->allChanges as $change) {
+            foreach ($this->lineageOf($change->requirementId) as $id) {
+                $counts[$id] = ($counts[$id] ?? 0) + 1;
+            }
+        }
+
+        return $counts;
+    }
+
+    /**
+     * The heat map: only the branches something changed in, with their ancestors.
+     *
+     * @return list<RequirementTreeNode>
+     */
+    public function changeTree(): array
+    {
+        return RequirementTreeNode::keeping($this->tree, $this->changeCounts);
+    }
+
+    /**
+     * Darker the more of the range's changes sit under this node.
+     */
+    public function heatClasses(int $requirementId): string
+    {
+        $share = ($this->changeCounts[$requirementId] ?? 0) / max(1, max($this->changeCounts ?: [0]));
+
+        return match (true) {
+            $share > 0.66 => 'bg-orange-500 text-white',
+            $share > 0.33 => 'bg-orange-300 text-orange-950',
+            default => 'bg-orange-100 text-orange-800 dark:bg-orange-500/20 dark:text-orange-200',
+        };
+    }
+
+    /**
+     * 目标 › 子目标 › 分组 above a timeline line.
+     */
+    public function pathOf(int $requirementId): string
+    {
+        $ids = array_slice(array_reverse($this->lineageOf($requirementId)), 0, -1);
+
+        return implode(' › ', array_map(fn (int $id): string => $this->nodesById[$id]->requirement->title, $ids));
+    }
+
+    /**
+     * A change's time as Gordon reads it.
+     */
+    public function localTime(RequirementChange $change): CarbonInterface
+    {
+        return $change->at->copy()->setTimezone(config('app.display_timezone'));
+    }
+
+    public function depthOf(int $requirementId): int
+    {
+        return count($this->lineageOf($requirementId)) - 1;
+    }
+
+    public function requirementOf(RequirementChange $change): ?Requirement
+    {
+        return $this->nodesById[$change->requirementId]->requirement ?? null;
+    }
+
+    /**
+     * The node and its ancestors, nearest first.
+     *
+     * @return list<int>
+     */
+    private function lineageOf(int $requirementId): array
+    {
+        $ids = [];
+
+        for ($id = $requirementId; $id !== null && isset($this->nodesById[$id]); $id = $this->nodesById[$id]->requirement->parent_id) {
+            $ids[] = $id;
+        }
+
+        return $ids;
     }
 
     #[Computed]

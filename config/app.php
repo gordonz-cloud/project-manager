@@ -68,6 +68,11 @@ return [
     'timezone' => 'UTC',
 
     /*
+    | Where Gordon reads times: stored times stay UTC, pages that group by day (最近变化) show them here.
+    */
+    'display_timezone' => env('APP_DISPLAY_TIMEZONE', 'Asia/Shanghai'),
+
+    /*
     |--------------------------------------------------------------------------
     | Application Locale Configuration
     |--------------------------------------------------------------------------

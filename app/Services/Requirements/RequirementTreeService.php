@@ -2,15 +2,15 @@
 
 namespace App\Services\Requirements;
 
-use App\Data\Requirements\RequirementChangeGroup;
+use App\Data\Requirements\RequirementChange;
 use App\Data\Requirements\RequirementProgress;
 use App\Data\Requirements\RequirementTreeNode;
 use App\Enums\RequirementKind;
 use App\Enums\RequirementStatus;
-use App\Models\Commit;
 use App\Models\Project;
 use App\Models\Requirement;
 use App\Models\RequirementRevision;
+use Carbon\CarbonInterface;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Facades\DB;
@@ -78,39 +78,32 @@ class RequirementTreeService
     }
 
     /**
-     * Revisions and commits of the last $limit of each, grouped by requirement (at most 10 commits a group), most recently touched first.
+     * Everything that happened to this project's requirements since $from, newest first (later revision first within a
+     * second): one query for the revisions and
+     * one for requirements created without a 新 revision (older than revisions).
      *
-     * @return list<RequirementChangeGroup>
+     * @return list<RequirementChange>
      */
-    public function recentChanges(Project $project, int $limit = 200): array
+    public function changesSince(Project $project, CarbonInterface $from): array
     {
-        $revisions = RequirementRevision::query()
-            ->whereIn('requirement_id', Requirement::withoutGlobalScopes()->where('project_id', $project->id)->select('id'))
-            ->latest('id')
-            ->limit($limit)
+        $ids = Requirement::withoutGlobalScopes()->where('project_id', $project->id)->select('id');
+
+        $revised = RequirementRevision::query()
+            ->whereIn('requirement_id', $ids)
+            ->where('created_at', '>=', $from)
+            ->orderByDesc('id')
             ->get()
-            ->groupBy('requirement_id');
+            ->map(fn (RequirementRevision $revision): RequirementChange => RequirementChange::fromRevision($revision));
 
-        $commits = Commit::withoutGlobalScopes()
-            ->where('commits.project_id', $project->id)
-            ->join('commit_requirement', 'commit_requirement.commit_id', '=', 'commits.id')
-            ->select('commits.*', 'commit_requirement.requirement_id as requirement_id')
-            ->latest('committed_at')
-            ->limit($limit)
-            ->get()
-            ->groupBy('requirement_id');
+        $createdUnrecorded = Requirement::withoutGlobalScopes()
+            ->where('project_id', $project->id)
+            ->where('created_at', '>=', $from)
+            ->whereDoesntHave('revisions', fn (Builder $query) => $query->whereNull('old_status'))
+            ->get(['id', 'created_at'])
+            ->map(fn (Requirement $requirement): RequirementChange => RequirementChange::created($requirement->id, $requirement->created_at ?? $from));
 
-        $requirements = Requirement::withoutGlobalScopes()
-            ->whereKey($revisions->keys()->merge($commits->keys())->unique()->all())
-            ->get();
-
-        return array_values($requirements
-            ->map(fn (Requirement $requirement): RequirementChangeGroup => new RequirementChangeGroup(
-                $requirement,
-                $revisions->get($requirement->id, collect()),
-                $commits->get($requirement->id, collect())->take(10),
-            ))
-            ->sortByDesc(fn (RequirementChangeGroup $group): int => $group->latestAt()?->getTimestamp() ?? 0)
+        return array_values($revised->concat($createdUnrecorded)
+            ->sortByDesc(fn (RequirementChange $change): int => $change->at->getTimestamp())
             ->all());
     }
 

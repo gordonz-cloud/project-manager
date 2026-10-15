@@ -402,7 +402,7 @@ it('keeps the selected node in view on every tab, opening its ancestors in the t
 
     expect(Livewire::withQueryParams(['selectedNumber' => 4])->test(RequirementTree::class)->assertSeeInOrder(['Thresholds', 'Deep pending rule'])->html())->toMatch('/data-requirement-number="4"\s+data-selected/')
         ->and(Livewire::withQueryParams(['tab' => 'todo', 'selectedNumber' => 5])->test(RequirementTree::class)->html())->toMatch('/data-requirement-number="5"\s+data-selected/')
-        ->and(Livewire::withQueryParams(['tab' => 'changes', 'selectedNumber' => 5])->test(RequirementTree::class)->html())->toMatch('/data-selected\s+class="rounded-md border p-3 border-primary-500/');
+        ->and(Livewire::withQueryParams(['tab' => 'changes', 'selectedNumber' => 5])->test(RequirementTree::class)->html())->toMatch('/data-heat-node="5"\s+data-selected/');
 });
 
 it('shows 待决策, 待做 and 以后做 as the 全貌 tree cut down to their nodes and the ancestors above them, opened [T173]', function () {
