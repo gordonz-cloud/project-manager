@@ -6,7 +6,7 @@
         @include('filament.pages.partials.requirement-rollup', ['rollup' => $this->total])
     </div>
 
-    <div class="grid gap-4 xl:grid-cols-[minmax(0,11fr)_minmax(0,9fr)]">
+    <div class="grid gap-4 xl:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
         <aside class="rounded-lg border border-slate-200 bg-white dark:border-white/10 dark:bg-slate-950">
             <div class="flex flex-wrap items-center gap-2 border-b border-slate-200 p-3 dark:border-white/10">
                 @foreach (\App\Filament\Pages\RequirementTree::TABS as $key => $label)
@@ -66,7 +66,7 @@
                         @if ($this->allChanges === [])
                             <p class="px-2 py-6 text-center text-xs text-slate-400">这段时间没有变化。</p>
                         @else
-                            <div class="grid gap-3 lg:grid-cols-[minmax(0,2fr)_minmax(0,3fr)]">
+                            <div class="grid gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(0,2fr)]">
                                 <select wire:model.live="branch" class="block w-full rounded-md border-slate-300 text-sm lg:hidden dark:border-white/10 dark:bg-white/5" data-change-branch-select>
                                     <option value="">全部分支（{{ count($this->allChanges) }}）</option>
                                     @foreach (\App\Data\Requirements\RequirementTreeNode::flattened($this->changeTree()) as $node)
