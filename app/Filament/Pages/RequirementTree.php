@@ -41,6 +41,7 @@ use LogicException;
  * @property-read Requirement|null $selectedRequirement
  * @property-read Collection<int, Requirement> $awaitingDecision
  * @property-read list<RequirementTreeNode> $filteredTree
+ * @property-read list<int> $searchHits
  * @property-read EloquentCollection<int, RequirementDecisionDraft> $drafts
  * @property-read array<int, RequirementTreeNode> $nodesById
  * @property-read list<RequirementChange> $allChanges
@@ -72,6 +73,10 @@ class RequirementTree extends Page
 
     #[Url]
     public ?int $selectedNumber = null;
+
+    /** Matches node titles, or a number typed as `22` / `R22`; the tree is not filtered, hits are highlighted and jumped to */
+    #[Url]
+    public string $search = '';
 
     /** @var array<int, bool> keyed by requirement id; roots start open */
     public array $expanded = [];
@@ -129,6 +134,58 @@ class RequirementTree extends Page
             $this->openChanges();
         }
         $this->dispatch('reveal-selected');
+    }
+
+    public function updatedSearch(): void
+    {
+        if ($this->searchHits !== []) {
+            $this->selectNode($this->searchHits[0]);
+            $this->dispatch('reveal-selected');
+        }
+    }
+
+    /**
+     * Moves to the next (1) or previous (-1) hit after the selected node, wrapping around the ends.
+     */
+    public function jumpToHit(int $step): void
+    {
+        $hits = $this->searchHits;
+
+        if ($hits === []) {
+            return;
+        }
+
+        $position = array_search($this->selectedNumber, $hits, true);
+        $target = $position === false ? ($step > 0 ? 0 : count($hits) - 1) : ($position + $step + count($hits)) % count($hits);
+
+        $this->selectNode($hits[$target]);
+        $this->dispatch('reveal-selected');
+    }
+
+    /**
+     * Numbers of the nodes this tab shows whose title contains the search (or whose number was typed), in tree order.
+     *
+     * @return list<int>
+     */
+    #[Computed]
+    public function searchHits(): array
+    {
+        $term = trim($this->search);
+
+        if ($term === '' || $this->tab === 'changes') {
+            return [];
+        }
+
+        $shown = $this->tab === 'overview' ? [...$this->placedRoots(), ...$this->unfiledRoots()] : $this->filteredTree;
+        $typedNumber = preg_match('/^r?\s*(\d+)$/i', $term, $match) === 1 ? (int) $match[1] : null;
+
+        return array_values(array_map(
+            fn (RequirementTreeNode $node): int => (int) $node->requirement->number,
+            array_filter(
+                RequirementTreeNode::flattened($shown),
+                fn (RequirementTreeNode $node): bool => $node->requirement->number === $typedNumber || mb_stripos($node->requirement->title, $term) !== false,
+            ),
+        ));
     }
 
     public function choose(int $requirementId, string $choice, ?string $customText = null): void

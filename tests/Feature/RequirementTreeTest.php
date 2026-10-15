@@ -664,3 +664,68 @@ it('shows a selected rule\'s own flowchart and pseudocode in the panel [T182]', 
 
     expect($this->get(RequirementTree::getUrl(['selectedNumber' => 1]))->assertOk()->getContent())->toMatch('/<script[^>]+src="[^"]*mermaid[^"]*\\.js"/');
 });
+
+function searchableTree(): Project
+{
+    $project = requirementTreePage();
+    $make = fn (int $number, ?Requirement $parent, RequirementKind $kind, string $title, RequirementStatus $status = RequirementStatus::Decided): Requirement => Requirement::factory()->create(['project_id' => $project->id, 'number' => $number, 'parent_id' => $parent?->id, 'kind' => $kind, 'status' => $status, 'title' => $title]);
+    $goal = $make(1, null, RequirementKind::Goal, 'Guild goal');
+    $sub = $make(2, $goal, RequirementKind::SubGoal, 'Tier sub goal');
+    $make(3, $sub, RequirementKind::Rule, 'Tier rule A');
+    $make(4, $sub, RequirementKind::Rule, 'Tier rule B');
+    $make(22, $goal, RequirementKind::Rule, 'Cart rule');
+    $make(23, $goal, RequirementKind::Rule, 'Zebra later rule', RequirementStatus::Later);
+
+    return $project;
+}
+
+it('highlights title hits without filtering the tree, opens their ancestors and jumps to the first [T188]', function () {
+    searchableTree();
+
+    $html = Livewire::test(RequirementTree::class)
+        ->assertDontSee('Tier rule A')
+        ->set('search', 'TIER RULE')
+        ->assertSet('selectedNumber', 3)
+        ->assertSee('Tier rule A')
+        ->assertSee('Tier rule B')
+        ->assertSee('Cart rule')
+        ->assertSee('第 1 / 2 个')
+        ->html();
+
+    expect($html)->toMatch('/data-requirement-number="3"\s+data-selected\s+data-search-hit/')
+        ->and($html)->toMatch('/data-requirement-number="4"\s+data-search-hit/')
+        ->and($html)->not->toMatch('/data-requirement-number="22"\s+data-search-hit/');
+});
+
+it('moves to the next and previous hit and wraps around [T189]', function () {
+    searchableTree();
+
+    Livewire::test(RequirementTree::class)
+        ->set('search', 'rule')
+        ->assertSet('selectedNumber', 3)
+        ->call('jumpToHit', 1)->assertSet('selectedNumber', 4)
+        ->call('jumpToHit', 1)->assertSet('selectedNumber', 22)
+        ->call('jumpToHit', 1)->assertSet('selectedNumber', 23)
+        ->call('jumpToHit', 1)->assertSet('selectedNumber', 3)
+        ->call('jumpToHit', -1)->assertSet('selectedNumber', 23);
+});
+
+it('jumps to a number typed as R22 or 22 [T190]', function (string $typed) {
+    searchableTree();
+
+    Livewire::test(RequirementTree::class)->set('search', $typed)->assertSet('selectedNumber', 22)->assertSee('第 1 / 1 个');
+})->with(['R22', ' r 22 ', '22']);
+
+it('searches only what the tab shows: a hit on another tab gives 没有命中 and no jump [T191]', function () {
+    searchableTree();
+
+    Livewire::withQueryParams(['tab' => 'todo'])->test(RequirementTree::class)
+        ->set('search', 'zebra')
+        ->assertSet('selectedNumber', null)
+        ->assertSee('没有命中')
+        ->set('search', 'cart')
+        ->assertSet('selectedNumber', 22)
+        ->call('setTab', 'overview')
+        ->assertSet('search', 'cart')
+        ->assertSee('第 1 / 1 个');
+});

@@ -17,6 +17,19 @@
                 @endforeach
             </div>
 
+            @if ($this->tab !== 'changes')
+                @php($hits = $this->searchHits)
+                @php($hitPosition = array_search($this->selectedNumber, $hits, true))
+                <div class="flex items-center gap-2 border-b border-slate-200 p-2 dark:border-white/10" data-tree-search>
+                    <input type="search" wire:model.live.debounce.300ms="search" wire:keydown.enter="jumpToHit(1)" placeholder="搜标题，或输入 R22 / 22 找编号" class="min-w-0 flex-1 rounded-md border-slate-300 py-1 text-sm dark:border-white/10 dark:bg-white/5">
+                    @if (trim($search) !== '')
+                        <span class="shrink-0 text-xs tabular-nums text-slate-500" data-search-count>{{ $hits === [] ? '没有命中' : ($hitPosition === false ? '共 '.count($hits).' 个' : '第 '.($hitPosition + 1).' / '.count($hits).' 个') }}</span>
+                        <button type="button" wire:click="jumpToHit(-1)" @disabled($hits === []) class="rounded border border-slate-300 px-2 text-xs disabled:opacity-40 dark:border-white/10" aria-label="上一个">↑</button>
+                        <button type="button" wire:click="jumpToHit(1)" @disabled($hits === []) class="rounded border border-slate-300 px-2 text-xs disabled:opacity-40 dark:border-white/10" aria-label="下一个">↓</button>
+                    @endif
+                </div>
+            @endif
+
             <div class="max-h-[calc(100vh-14rem)] overflow-y-auto p-2"
                 x-data="{ reveal() { $nextTick(() => $el.querySelectorAll('[data-selected]').forEach((selected) => selected.scrollIntoView({ block: 'center' }))) } }"
                 x-init="reveal()" x-on:reveal-selected.window="reveal()">
