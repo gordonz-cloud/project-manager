@@ -9,12 +9,12 @@
 
 ## 环境坑
 - `--write` 的沙箱默认不让连网，连本地 docker Postgres 也不行，测试全跑不了。已在 `~/.codex/config.toml` 加 `[sandbox_workspace_write] network_access = true`。
-- worktree 的 git 目录在主仓库 `.git` 里，沙箱默认不让写，codex 提交会失败（index.lock）。加了 `writable_roots` 也没用（codex 一律保护 .git）。所以 codex 不提交，由我在 worktree 里 commit。任务书里写「不要 commit，改完留在工作区」。
+- worktree 的 git 目录在主仓库 `.git` 里，沙箱默认不让写，codex 提交会失败（index.lock）。试过加 `writable_roots` 也没用（codex 一律保护 .git，已删掉这行）。所以 codex 不提交，由我在 worktree 里 commit。任务书里写「不要 commit，改完留在工作区」。
 - 根目录 AGENTS.md 被 gitignore，worktree 里本来没有；setup 脚本会拷进去。
 
 ## 任务书写法
 - 开头说清：在哪个分支、先读 AGENTS.md、目标、验收标准（能量的写数字）。
-- 写死规则：只跑改到的测试文件、不跑全量；pint、phpstan 0 错；commit 前缀带规则号，`git add` 只加自己的文件，不推送。
+- 写死规则：只跑改到的测试文件、不跑全量；pint、phpstan（按 phpstan.neon 范围）0 错；不 commit、不推送，改完留在工作区（我来提交）。
 - 要它最后交报告：改了什么、测试和变异验证结果。
 - PHPStan 只查 app/ 等，不查 tests/。不要写「对改动文件跑 phpstan」——它会对测试文件跑，再去改已有测试凑 0 错。写「`vendor/bin/phpstan analyse --memory-limit=2G`（按 phpstan.neon 的范围）」。
 - 写明「已有测试一行不动，diff 里只能有新增的 it()」。它顺手重构的倾向很强。
