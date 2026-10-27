@@ -135,3 +135,20 @@ test('syncs commits that only live on a remote-tracking branch [T21]', function 
 
     expect(Commit::where('project_id', $project->id)->pluck('subject'))->toContain('Pushed elsewhere');
 });
+
+it('fails without writing commits when the repo path is not a git repository [T146]', function () {
+    $directory = sys_get_temp_dir().'/pm-not-git-'.bin2hex(random_bytes(8));
+    mkdir($directory);
+    Project::factory()->create(['slug' => 'not-git', 'repo_path' => $directory]);
+
+    try {
+        $this->artisan('commits:sync', ['project-slug' => 'not-git'])
+            ->expectsOutputToContain('git log failed:')
+            ->assertFailed();
+
+        expect(Commit::count())->toBe(0);
+        $this->assertDatabaseCount('commit_requirement', 0);
+    } finally {
+        rmdir($directory);
+    }
+});

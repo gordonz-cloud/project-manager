@@ -20,6 +20,7 @@ use App\Services\Requirements\RequirementDecisions;
 use App\Services\Requirements\RequirementTimelines;
 use App\Services\Requirements\RequirementTreeService;
 use Filament\Facades\Filament;
+use Filament\Notifications\Notification;
 use Illuminate\Testing\PendingCommand;
 use Livewire\Livewire;
 
@@ -674,4 +675,109 @@ it('always offers 保持现在 and 以后做, once, and applies them as 作废 a
         ->and($kept->revisions()->first()->reason)->toBe('保持现在：不改，照现在的做')
         ->and($later->fresh()->status)->toBe(RequirementStatus::Later)
         ->and($later->revisions()->first()->reason)->toBe('以后做：这期不做，将来再看');
+});
+
+it('rejects the whole timeline batch if one entry is malformed and saves a valid batch [T153]', function () {
+    [$project] = decisionDesk();
+    $timeline = [['date' => '2026-10-06', 'who' => '老板拍板', 'said' => 'Show the market price', 'current' => true]];
+    $nodes = [
+        ['parent' => 1, 'kind' => '规则', 'title' => 'First timeline', 'timeline' => $timeline],
+        ['parent' => 1, 'kind' => '规则', 'title' => 'Second timeline', 'timeline' => [['who' => '老板拍板', 'said' => 'Missing date']]],
+    ];
+    $before = Requirement::sole()->getRawOriginal();
+    $revisions = Requirement::sole()->revisions()->count();
+
+    saveDecisionNodes($nodes)->expectsOutputToContain('date is required')->assertFailed()->run();
+
+    expect(Requirement::sole()->getRawOriginal())->toBe($before);
+    $this->assertDatabaseCount('requirement_revisions', $revisions);
+
+    $nodes[1]['timeline'] = $timeline;
+    saveDecisionNodes($nodes)->assertSuccessful()->run();
+
+    expect(Requirement::where('project_id', $project->id)->where('number', '>', 1)->orderBy('number')->pluck('timeline')->all())
+        ->toEqual([$timeline, $timeline]);
+});
+
+it('restores the saved draft and its highlighted option when the decision page is reopened [T156]', function () {
+    [, $user, $goal] = decisionDesk();
+    $rule = decisionRule($goal, 2, RequirementStatus::Proposed, ['decision' => shippingDecision()]);
+
+    Livewire::withQueryParams(['tab' => 'pending', 'selectedNumber' => 2])->test(RequirementTree::class)
+        ->call('choose', $rule->id, 'A');
+
+    Livewire::withQueryParams(['tab' => 'pending', 'selectedNumber' => 2])->test(RequirementTree::class)
+        ->assertSeeHtml('data-drafted="yes"')
+        ->assertSeeHtmlInOrder(['data-picked', 'Raise to 80', 'Keep 50'])
+        ->assertSee('已选 1 / 1');
+
+    expect(RequirementDecisionDraft::sole()->only(['requirement_id', 'user_id', 'choice']))
+        ->toBe(['requirement_id' => $rule->id, 'user_id' => $user->id, 'choice' => 'A']);
+});
+
+it('replaces a picked option with a custom wording draft [T157]', function () {
+    [, $user, $goal] = decisionDesk();
+    $rule = decisionRule($goal, 2, RequirementStatus::Proposed, ['decision' => shippingDecision()]);
+
+    Livewire::withQueryParams(['tab' => 'pending', 'selectedNumber' => 2])->test(RequirementTree::class)
+        ->call('choose', $rule->id, 'A')
+        ->call('writeCustom', $rule->id, '  Free shipping over 70  ')
+        ->assertSee('Free shipping over 70');
+
+    expect(RequirementDecisionDraft::sole()->only(['requirement_id', 'user_id', 'choice', 'custom_text']))->toBe([
+        'requirement_id' => $rule->id, 'user_id' => $user->id, 'choice' => 'custom', 'custom_text' => 'Free shipping over 70',
+    ]);
+    expect($rule->fresh()->status)->toBe(RequirementStatus::Proposed);
+});
+
+it('shows an error and creates no draft for an unknown decision option [T158]', function () {
+    [, , $goal] = decisionDesk();
+    $rule = decisionRule($goal, 2, RequirementStatus::Proposed, ['decision' => shippingDecision()]);
+
+    Livewire::withQueryParams(['tab' => 'pending'])->test(RequirementTree::class)
+        ->call('choose', $rule->id, 'missing')
+        ->assertNotified('#2 没有选项 missing。');
+
+    expect(RequirementDecisionDraft::count())->toBe(0)
+        ->and($rule->fresh()->status)->toBe(RequirementStatus::Proposed);
+});
+
+it('rejects the entire batch when a draft option was removed from its decision card [T159]', function () {
+    [, $user, $goal] = decisionDesk();
+    $valid = decisionRule($goal, 2, RequirementStatus::Proposed);
+    $stale = decisionRule($goal, 3, RequirementStatus::Proposed, ['decision' => shippingDecision()]);
+    $page = Livewire::withQueryParams(['tab' => 'pending'])->test(RequirementTree::class)
+        ->call('choose', $valid->id, 'A')
+        ->call('choose', $stale->id, 'C');
+    $stale->update(['decision' => [...shippingDecision(), 'options' => array_slice(shippingDecision()['options'], 0, 2)]]);
+    $before = [$valid->refresh()->getRawOriginal(), $stale->refresh()->getRawOriginal()];
+    $revisionCount = $valid->revisions()->count() + $stale->revisions()->count() + $goal->revisions()->count();
+
+    $page->call('confirmAllDrafts')->assertNotified(
+        Notification::make()->title('没有确认，什么都没改')->body('#3 没有选项 C。')->danger(),
+    );
+
+    expect([$valid->fresh()->getRawOriginal(), $stale->fresh()->getRawOriginal()])->toBe($before)
+        ->and(RequirementDecisionDraft::where('user_id', $user->id)->orderBy('requirement_id')->get()->map->only(['requirement_id', 'choice'])->all())
+        ->toBe([
+            ['requirement_id' => $valid->id, 'choice' => 'A'],
+            ['requirement_id' => $stale->id, 'choice' => 'C'],
+        ]);
+    $this->assertDatabaseCount('requirement_revisions', $revisionCount);
+});
+
+it('deletes a cleared custom draft and shows the node as unpicked [T162]', function () {
+    [, , $goal] = decisionDesk();
+    $rule = decisionRule($goal, 2, RequirementStatus::Proposed);
+
+    Livewire::withQueryParams(['tab' => 'pending', 'selectedNumber' => 2])->test(RequirementTree::class)
+        ->call('writeCustom', $rule->id, 'Free shipping over 70')
+        ->assertSeeHtml('data-drafted="yes"')
+        ->call('writeCustom', $rule->id, '  ')
+        ->assertSeeHtml('data-drafted="no"')
+        ->assertDontSeeHtml('data-picked')
+        ->assertDontSee('Free shipping over 70')
+        ->assertSee('已选 0 / 1');
+
+    expect(RequirementDecisionDraft::count())->toBe(0);
 });

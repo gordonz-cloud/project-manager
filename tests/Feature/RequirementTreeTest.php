@@ -729,3 +729,55 @@ it('searches only what the tab shows: a hit on another tab gives 没有命中 an
         ->assertSet('search', 'cart')
         ->assertSee('第 1 / 1 个');
 });
+
+it('rejects an unknown project without writing requirements or revisions [T150]', function () {
+    $existing = Requirement::factory()->create();
+    $before = $existing->refresh()->getRawOriginal();
+    $revisionCount = $existing->revisions()->count();
+
+    saveRequirements(['project' => 'missing-project', 'nodes' => [['kind' => '目标', 'title' => 'Never saved']]])
+        ->expectsOutputToContain('existing slug')->assertFailed();
+
+    expect(Requirement::count())->toBe(1)
+        ->and($existing->fresh()->getRawOriginal())->toBe($before);
+    $this->assertDatabaseCount('requirement_revisions', $revisionCount);
+});
+
+it('saves a reasoned rewrite of a decided rule with the old and new wording in history [T151]', function () {
+    $project = Project::factory()->create(['slug' => 'rq']);
+    $goal = Requirement::factory()->create(['project_id' => $project->id, 'number' => 1, 'kind' => RequirementKind::Goal]);
+    $rule = Requirement::factory()->create(['project_id' => $project->id, 'number' => 2, 'parent_id' => $goal->id, 'kind' => RequirementKind::Rule, 'status' => RequirementStatus::Decided, 'title' => '运费满 50 包邮']);
+    $revisionCount = $rule->revisions()->count();
+
+    saveRequirements(['project' => 'rq', 'nodes' => [['number' => 2, 'title' => '运费满 80 包邮', 'reason' => '毛利不够']]])
+        ->assertSuccessful();
+
+    expect($rule->fresh()->title)->toBe('运费满 80 包邮')
+        ->and($rule->revisions()->count())->toBe($revisionCount + 1)
+        ->and($rule->revisions()->first()->only(['old_statement', 'new_statement', 'reason']))->toBe([
+            'old_statement' => '运费满 50 包邮', 'new_statement' => '运费满 80 包邮', 'reason' => '毛利不够',
+        ]);
+});
+
+it('voids the superseded rule and records both transitions when a conflict is decided [T152]', function () {
+    $project = Project::factory()->create(['slug' => 'rq']);
+    $goal = Requirement::factory()->create(['project_id' => $project->id, 'number' => 1, 'kind' => RequirementKind::Goal]);
+    $old = Requirement::factory()->create(['project_id' => $project->id, 'number' => 2, 'parent_id' => $goal->id, 'kind' => RequirementKind::Rule, 'status' => RequirementStatus::Decided]);
+    $conflict = Requirement::factory()->create(['project_id' => $project->id, 'number' => 3, 'parent_id' => $goal->id, 'kind' => RequirementKind::Rule, 'status' => RequirementStatus::Conflict, 'supersedes_id' => $old->id]);
+    $oldCount = $old->revisions()->count();
+    $conflictCount = $conflict->revisions()->count();
+
+    saveRequirements(['project' => 'rq', 'nodes' => [['number' => 3, 'status' => '已定', 'reason' => '采用新规则', 'source' => 'Gordon 拍板']]])
+        ->expectsOutputToContain('#2 → 作废')->assertSuccessful();
+
+    expect($old->fresh()->status)->toBe(RequirementStatus::Void)
+        ->and($conflict->fresh()->status)->toBe(RequirementStatus::Decided)
+        ->and($old->revisions()->count())->toBe($oldCount + 1)
+        ->and($conflict->revisions()->count())->toBe($conflictCount + 1)
+        ->and($old->revisions()->first()->only(['old_status', 'new_status', 'reason']))->toBe([
+            'old_status' => '已定', 'new_status' => '作废', 'reason' => '被 #3 取代（Gordon 拍板）：采用新规则',
+        ])
+        ->and($conflict->revisions()->first()->only(['old_status', 'new_status', 'reason']))->toBe([
+            'old_status' => '冲突', 'new_status' => '已定', 'reason' => '采用新规则',
+        ]);
+});

@@ -6,6 +6,8 @@ use App\Models\Flowchart;
 use App\Models\Project;
 use App\Models\Requirement;
 use App\Support\FlowchartMermaid;
+use Illuminate\Console\Scheduling\Event;
+use Illuminate\Console\Scheduling\Schedule;
 
 /**
  * @param  array<string, mixed>  $chart
@@ -280,4 +282,40 @@ test('flowcharts:check skips a rule no commit has worked on yet, checks it once 
     $this->artisan('flowcharts:check', ['project-slug' => 'fc'])->assertFailed();
 
     expect($flowchart->fresh()->stale_nodes)->toBe(['a']);
+});
+
+it('rejects checks for missing projects or repo paths without changing charts [T111]', function () {
+    $chart = Flowchart::factory()->create();
+    $chart->project->update(['repo_path' => null]);
+    $before = $chart->refresh()->getRawOriginal();
+
+    $this->artisan('flowcharts:check', ['project-slug' => 'missing-project'])
+        ->expectsOutputToContain('No project found')->assertFailed();
+    $this->artisan('flowcharts:check', ['project-slug' => $chart->project->slug])
+        ->expectsOutputToContain('has no repo_path set')->assertFailed();
+
+    expect(Flowchart::count())->toBe(1)
+        ->and($chart->fresh()->getRawOriginal())->toBe($before);
+});
+
+it('checks every project with a repo path in the daily scheduled callback and skips the rest [T112]', function () {
+    $projects = Project::factory()->count(2)->create(['repo_path' => base_path('tests/Fixtures/repo')]);
+    $skipped = Project::factory()->create(['repo_path' => null]);
+    $charts = $projects->map(fn (Project $project): Flowchart => Flowchart::factory()->create([
+        'requirement_id' => Requirement::factory()->create(['project_id' => $project->id, 'kind' => RequirementKind::Rule])->id,
+    ]));
+    $untouched = Flowchart::factory()->create([
+        'requirement_id' => Requirement::factory()->create(['project_id' => $skipped->id, 'kind' => RequirementKind::Rule])->id,
+    ]);
+    $before = $untouched->refresh()->getRawOriginal();
+    $event = collect(app(Schedule::class)->events())
+        ->sole(fn (Event $event): bool => $event->description === 'flowcharts:check-all');
+
+    expect($event->expression)->toBe('0 0 * * *');
+    $event->run(app());
+
+    foreach ($charts as $chart) {
+        expect($chart->fresh()->stale_checked_at)->not->toBeNull();
+    }
+    expect($untouched->fresh()->getRawOriginal())->toBe($before);
 });
