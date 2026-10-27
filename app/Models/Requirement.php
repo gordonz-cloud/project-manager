@@ -352,16 +352,26 @@ class Requirement extends Model
     #[Scope]
     protected function withDeliveryCounts(Builder $query): Builder
     {
-        $live = fn (Builder $tests): Builder => $tests->whereIn('tests.status', [TestStatus::Valid, TestStatus::ToWrite]);
-        $automated = fn (Builder $tests): Builder => $live($tests)->where(fn (Builder $q) => $q->whereNull('tests.auto')->orWhere('tests.auto', '!=', TestAuto::No));
+        $counts = Test::query()
+            ->join('requirement_test', 'tests.id', '=', 'requirement_test.test_id')
+            ->whereIn('tests.status', [TestStatus::Valid, TestStatus::ToWrite])
+            ->groupBy('requirement_test.requirement_id')
+            ->select('requirement_test.requirement_id')
+            ->selectRaw('count(*) as live_tests_count')
+            ->selectRaw('count(case when tests.last_result = ? then 1 end) as failed_tests_count', [TestLastResult::Failed->value])
+            ->selectRaw('count(case when tests.auto is null or tests.auto != ? then 1 end) as automated_tests_count', [TestAuto::No->value])
+            ->selectRaw('count(case when (tests.auto is null or tests.auto != ?) and tests.last_result = ? then 1 end) as passed_automated_tests_count', [TestAuto::No->value, TestLastResult::Passed->value])
+            ->selectRaw('count(case when tests.last_result = ? then 1 end) as passed_tests_count', [TestLastResult::Passed->value]);
 
-        return $query->withExists('commits')->withCount([
-            'tests as live_tests_count' => $live,
-            'tests as failed_tests_count' => fn (Builder $tests): Builder => $live($tests)->where('tests.last_result', TestLastResult::Failed),
-            'tests as automated_tests_count' => $automated,
-            'tests as passed_automated_tests_count' => fn (Builder $tests): Builder => $automated($tests)->where('tests.last_result', TestLastResult::Passed),
-            'tests as passed_tests_count' => fn (Builder $tests): Builder => $live($tests)->where('tests.last_result', TestLastResult::Passed),
-        ]);
+        return $query
+            ->select($query->getQuery()->columns ?? ['requirements.*'])
+            ->leftJoinSub($counts, 'delivery_counts', 'delivery_counts.requirement_id', '=', 'requirements.id')
+            ->selectRaw('coalesce(delivery_counts.live_tests_count, 0) as live_tests_count')
+            ->selectRaw('coalesce(delivery_counts.failed_tests_count, 0) as failed_tests_count')
+            ->selectRaw('coalesce(delivery_counts.automated_tests_count, 0) as automated_tests_count')
+            ->selectRaw('coalesce(delivery_counts.passed_automated_tests_count, 0) as passed_automated_tests_count')
+            ->selectRaw('coalesce(delivery_counts.passed_tests_count, 0) as passed_tests_count')
+            ->withExists('commits');
     }
 
     /**
