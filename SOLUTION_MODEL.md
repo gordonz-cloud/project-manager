@@ -36,7 +36,6 @@ Module 只保留一份当前 ModuleSpec，用文本章节保存本模块自己�
 - `rules` / `invariants`：无论走哪条路径都必须成立的事实。
 - 决策章节：还有哪些问题没定，为什么这样定，影响哪些用例和功能。
 - 入口（`request_replies`）：一次 request→response。同一目标的不同走法写进 Use Case Spec 的 `## 异常与补偿`，由测试盖住（没有 scenarios 表）。
-- 流程图（`flowcharts`，功能 1:1）：这个功能的代码怎么流动——`chart` JSON（节点带 `file`/`function`，边 `next`/`failure`）+ `pseudocode` 编号伪代码。功能（Feature）是工作项，通过 `feature_request_reply` 记它改了哪些入口。
 
 这里最重要的是决策章节。AI 每发现一个新问题，不能直接开始修，而要先分类：
 
@@ -45,7 +44,6 @@ Module 只保留一份当前 ModuleSpec，用文本章节保存本模块自己�
 需要业务拍板 → decision
 缺少行为 → Use Case Spec 的异常与补偿 + 测试
 会破坏业务事实 → invariant
-只是实现拆分 → 流程图节点
 ```
 
 分类完成后，沿边标记哪些用例、测试、代码和数据流受影响。这就是你前面说的“回边”，而且回边有原因、有范围、可恢复。
@@ -103,10 +101,6 @@ project-manager 现在保存的是业务事实和最终证据，适合接在这�
 
 ## 表关系设计
 
-### 第一原则：计划和运行分开
-
-流程图（`flowcharts`）是计划，描述代码要怎么走。运行状态放在 `workflow_runs` 和 `run_events` 中；计划可以改，历史运行不能因此被改写。
-
 ### 领域层
 
 `module_specs` 写模块自己的已确认事实，`use_case_specs` 写跨模块流程。
@@ -130,12 +124,9 @@ project-manager 现在保存的是业务事实和最终证据，适合接在这�
 规则和决策都是 Spec 的文本章节，不再独立建模；改变决策时直接保留清晰的历史文字，
 必要时在章节里写明 superseded/stale。
 
-### 功能与流程图
+### 功能与入口
 
-- `features 1 ── 1 flowcharts`：`chart` JSON `{"nodes":[{id,label,shape,file?,function?}],"edges":[{from,to,label?,kind?}]}`，保存时 Model 校验节点 id 唯一、边两端存在、shape/kind 合法；`pseudocode` 是编号伪代码，失败分支缩进并以「若 条件：」开头。
 - `features * ── * request_replies`，通过 `feature_request_reply`
-
-调用树（`implementation_nodes` + 边）已迁成每个功能一张流程图并删表；共享入口的节点复制给每个挂它的功能。
 
 ### 测试与提交证据
 
@@ -165,30 +156,6 @@ payload
 created_at
 ```
 
-### 完整关系图
-
-```mermaid
-erDiagram
-    PROJECT ||--o{ REQUIREMENT : contains
-    MODULE ||--|| MODULE_SPEC : declares
-    MODULE }o--o{ USE_CASE : module_use_cases
-    USE_CASE_GROUP ||--o{ USE_CASE : groups
-    USE_CASE ||--|| USE_CASE_SPEC : describes
-    MODULE ||--o{ FEATURE : owns
-    USE_CASE ||--o{ WORKFLOW_RUN : executed_as
-
-    USE_CASE ||--o{ FEATURE : delivers
-
-    FEATURE ||--|| FLOWCHART : flowchart
-    USE_CASE ||--o{ REQUEST_REPLY : entries
-    FEATURE }o--o{ REQUEST_REPLY : feature_request_reply
-
-    FEATURE }o--o{ TEST : feature_test
-    FEATURE ||--o{ COMMIT : commits
-
-    WORKFLOW_RUN ||--o{ RUN_EVENT : records
-```
-
 ### 不能破坏的系统不变量
 
 - 一个项目下的所有关联对象必须属于同一个项目。
@@ -203,9 +170,8 @@ erDiagram
 
 1. `use_cases`、`use_case_specs`
 2. 决策与业务规则写回 ModuleSpec / UseCaseSpec
-3. 功能的 `flowcharts`
-4. `workflow_runs`
-5. `run_events`
-6. 最后回填 `tests`、`commits` 的证据关系
+3. `workflow_runs`
+4. `run_events`
+5. 最后回填 `tests`、`commits` 的证据关系
 
 这样每一层都能单独使用。前面三层即使没有运行时，也能阻止 AI 从一句粗需求直接跳到代码。

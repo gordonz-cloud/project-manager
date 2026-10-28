@@ -106,13 +106,6 @@
         </section>
     @endif
 
-    @if ($requirement->flowchart !== null)
-        <section class="mt-4" data-rule-flowchart>
-            <h3 class="text-xs font-medium text-slate-500">流程图</h3>
-            @include('filament.pages.partials.flowchart', ['flowchart' => $requirement->flowchart])
-        </section>
-    @endif
-
     <div class="mt-4 space-y-2">
         @unless ($timeline->isEmpty())
             <details data-timeline>
