@@ -96,6 +96,36 @@ it('resets the stale result of an unclaimed node on a full run, only in that pro
         ->and($otherProject->fresh()->last_result)->toBe(TestLastResult::Passed);
 });
 
+it('fails a strict full run when a live node lost the test that proved it [T193]', function () {
+    $project = Project::factory()->create(['slug' => 'tt']);
+    Test::factory()->create(['project_id' => $project->id, 'number' => 1, 'last_result' => TestLastResult::Passed]);
+    Test::factory()->create(['project_id' => $project->id, 'number' => 2, 'title' => 'Lost its tag', 'last_result' => TestLastResult::Passed]);
+    Test::factory()->create(['project_id' => $project->id, 'number' => 3, 'title' => 'Retired page', 'last_result' => TestLastResult::Passed, 'status' => TestStatus::Stale]);
+
+    importJunit('tt', [passingCase('a [T1]')], ['--full' => true, '--strict' => true])
+        ->expectsOutputToContain('丢了认领')
+        ->expectsOutputToContain('T2 Lost its tag')
+        ->doesntExpectOutputToContain('T3 Retired page')
+        ->assertFailed();
+});
+
+it('keeps a lost claim a warning without --strict [T193]', function () {
+    $project = Project::factory()->create(['slug' => 'tt']);
+    Test::factory()->create(['project_id' => $project->id, 'number' => 2, 'title' => 'Lost its tag', 'last_result' => TestLastResult::Passed]);
+
+    importJunit('tt', [passingCase('unrelated')], ['--full' => true])
+        ->expectsOutputToContain('T2 Lost its tag')
+        ->assertSuccessful();
+});
+
+it('fails a strict full run when a test claims a number the tree does not have [T194]', function () {
+    $project = Project::factory()->create(['slug' => 'tt']);
+    Test::factory()->create(['project_id' => $project->id, 'number' => 1, 'last_result' => TestLastResult::NotRun]);
+
+    importJunit('tt', [passingCase('a [T1]'), passingCase('b [T404]')], ['--full' => true, '--strict' => true])
+        ->assertFailed();
+});
+
 it('reports unknown claimed numbers, unclaimed testcases, and auto nodes missing a test [T130]', function () {
     $project = Project::factory()->create(['slug' => 'tt']);
     Test::factory()->create(['project_id' => $project->id, 'number' => 1, 'title' => 'Covered', 'auto' => TestAuto::Yes]);

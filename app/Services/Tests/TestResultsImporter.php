@@ -42,9 +42,13 @@ class TestResultsImporter
         ));
 
         $missingTests = $this->missingTests($tree, array_keys($claims));
-        $reset = $fullRun ? $this->resetUnclaimed($tree, array_keys($claims)) : 0;
+        $stale = $fullRun ? $this->resetUnclaimed($tree, array_keys($claims)) : new Collection;
+        $lostClaims = array_values($stale
+            ->reject(fn (Test $test): bool => in_array($test->status, [TestStatus::Stale, TestStatus::Disabled], true))
+            ->map(fn (Test $test): string => "T{$test->number} {$test->title}")
+            ->all());
 
-        return new TestResultsImportResult($passed, $failed, $skipped, $unknownNumbers, $unclaimedTestcases, $missingTests, $reset);
+        return new TestResultsImportResult($passed, $failed, $skipped, $unknownNumbers, $unclaimedTestcases, $missingTests, $stale->count(), $lostClaims);
     }
 
     /**
@@ -109,8 +113,9 @@ class TestResultsImporter
      *
      * @param  Collection<int, Test>  $tree  keyed by number
      * @param  list<int>  $claimedNumbers
+     * @return Collection<int, Test> the nodes whose result went back to "not run"
      */
-    private function resetUnclaimed(Collection $tree, array $claimedNumbers): int
+    private function resetUnclaimed(Collection $tree, array $claimedNumbers): Collection
     {
         $stale = $tree->reject(fn (Test $test): bool => $test->last_result === TestLastResult::NotRun || in_array($test->number, $claimedNumbers, true));
 
@@ -118,7 +123,7 @@ class TestResultsImporter
             Test::withoutGlobalScopes()->whereKey($stale->modelKeys())->update(['last_result' => TestLastResult::NotRun]);
         }
 
-        return $stale->count();
+        return $stale;
     }
 
     /**
