@@ -5,7 +5,7 @@ namespace App\Support;
 use InvalidArgumentException;
 
 /**
- * The shared part of the tree save commands (tests:save, requirements:save): new nodes come without "number" and get
+ * The numbering and parent validation for requirements:save: new nodes come without "number" and get
  * the next free one, "ref"/"parent_ref" let new nodes in one payload point at each other, and parents must not loop.
  */
 final class NumberedTreePayload

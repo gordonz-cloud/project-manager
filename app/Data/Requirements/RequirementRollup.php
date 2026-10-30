@@ -69,15 +69,14 @@ final readonly class RequirementRollup
     {
         return [
             RequirementProgress::Pending->value => $this->pending(),
-            RequirementProgress::Todo->value => $this->count(DeliveryStatus::NotBuilt) + $this->count(DeliveryStatus::InProgress) + $this->count(DeliveryStatus::Failed),
+            RequirementProgress::Todo->value => $this->count(DeliveryStatus::NotBuilt),
             RequirementProgress::AwaitingAcceptance->value => $this->count(DeliveryStatus::AwaitingAcceptance),
             RequirementProgress::Done->value => $this->count(DeliveryStatus::Verified),
         ];
     }
 
     /**
-     * One status for a whole subtree: any open decision → 待决策; else anything not built (being built or failing
-     * included) → 待做; else anything waiting for Gordon to accept → 待验收; else 完成. Null when the subtree counts nothing.
+     * One status for a whole subtree: any open decision → 待决策; else anything not built → 待做; else anything waiting for Gordon to accept → 待验收; else 完成. Null when the subtree counts nothing.
      */
     public function progress(): ?RequirementProgress
     {

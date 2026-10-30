@@ -9,11 +9,9 @@ use App\Data\Requirements\RequirementRollup;
 use App\Data\Requirements\RequirementTimeline;
 use App\Data\Requirements\RequirementTreeNode;
 use App\Enums\NavigationGroup;
-use App\Enums\TestLastResult;
 use App\Models\Project;
 use App\Models\Requirement;
 use App\Models\RequirementDecisionDraft;
-use App\Models\Test;
 use App\Models\User;
 use App\Services\Requirements\RequirementDecisions;
 use App\Services\Requirements\RequirementTimelines;
@@ -50,13 +48,13 @@ use LogicException;
 class RequirementTree extends Page
 {
     /** @var array<string, string> tab key => label */
-    public const TABS = ['overview' => '全貌', 'pending' => '待决策', 'todo' => '待做', 'accepting' => '待验收', 'later' => '以后做', 'changes' => '最近变化'];
+    public const TABS = ['overview' => '全貌', 'pending' => '待决策', 'todo' => '待做', 'accepting' => '待验收', 'done' => '完成', 'later' => '以后做', 'changes' => '最近变化'];
 
     /** @var array<string, string> 最近变化 time range key => label */
     public const CHANGE_RANGES = ['unseen' => '上次看过以后', 'today' => '今天', '3d' => '3 天', '7d' => '7 天'];
 
     /** @var array<string, RequirementProgress> tab key => the leaves it lists */
-    public const LEAF_TABS = ['todo' => RequirementProgress::Todo, 'accepting' => RequirementProgress::AwaitingAcceptance, 'later' => RequirementProgress::Later];
+    public const LEAF_TABS = ['todo' => RequirementProgress::Todo, 'accepting' => RequirementProgress::AwaitingAcceptance, 'done' => RequirementProgress::Done, 'later' => RequirementProgress::Later];
 
     protected string $view = 'filament.pages.requirement-tree';
 
@@ -378,7 +376,7 @@ class RequirementTree extends Page
     }
 
     /**
-     * 待决策 / 待做 / 待验收 / 以后做: the 全貌 tree cut down to that tab's nodes and their ancestors.
+     * 待决策 / 待做 / 待验收 / 完成 / 以后做: the 全貌 tree cut down to that tab's nodes and their ancestors.
      *
      * @return list<RequirementTreeNode>
      */
@@ -434,20 +432,9 @@ class RequirementTree extends Page
         return collect(RequirementTreeNode::flattened($this->tree))->keyBy(fn (RequirementTreeNode $node): int => $node->requirement->id)->all();
     }
 
-    /**
-     * 做到哪了 in one line: "3 个 commit · 5 个测试全过", "1 个测试：1 失败", or 还没做.
-     */
     public function builtSummary(Requirement $requirement): string
     {
-        $tests = $requirement->tests;
-        $results = $tests->every(fn (Test $test): bool => $test->last_result === TestLastResult::Passed)
-            ? '全过'
-            : '：'.$tests->countBy(fn (Test $test): string => $test->last_result->value)->map(fn (int $count, string $result): string => "{$count} {$result}")->implode('，');
-
-        return implode(' · ', array_filter([
-            $requirement->commits_count === 0 ? null : "{$requirement->commits_count} 个 commit",
-            $tests->isEmpty() ? null : "{$tests->count()} 个测试{$results}",
-        ])) ?: '还没做';
+        return $requirement->commits_count > 0 ? "{$requirement->commits_count} 个 commit" : '还没做';
     }
 
     public function progressOf(Requirement $requirement): ?RequirementProgress
@@ -603,14 +590,9 @@ class RequirementTree extends Page
         return $this->selectedNumber === null ? null : Requirement::query()
             ->where('project_id', $this->project->id)
             ->where('number', $this->selectedNumber)
-            ->with(['revisions', 'tests', 'supersedes', 'dependsOn', 'dependents'])
+            ->with(['revisions', 'supersedes', 'dependsOn', 'dependents'])
             ->withCount('commits')
             ->first();
-    }
-
-    public function testUrl(Test $test): string
-    {
-        return TestTree::getUrl(['selectedNumber' => $test->number]);
     }
 
     private function requirementTreeService(): RequirementTreeService

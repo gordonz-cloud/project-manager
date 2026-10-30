@@ -5,9 +5,6 @@ namespace App\Models;
 use App\Data\Requirements\RequirementDecision;
 use App\Enums\RequirementKind;
 use App\Enums\RequirementStatus;
-use App\Enums\TestAuto;
-use App\Enums\TestLastResult;
-use App\Enums\TestStatus;
 use App\Models\Concerns\BelongsToProject;
 use App\Models\Concerns\HasProjectSequence;
 use Database\Factories\RequirementFactory;
@@ -45,8 +42,8 @@ use Illuminate\Support\Collection;
  * @property int|null $position
  * @property RequirementDecision|null $decision
  * @property list<array<string, mixed>>|null $timeline everything said about it over time (see RequirementTimeline)
- * @property bool $needs_review once its tests pass, Gordon still has to look (UI, copy) before it counts as done
- * @property Carbon|null $accepted_at when Gordon accepted it; an accepted rule is done unless a test fails, and a new statement or status needs accepting again
+ * @property bool $needs_review whether Gordon requested a review; does not determine delivery status
+ * @property Carbon|null $accepted_at when Gordon accepted it; a new statement or status needs accepting again
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at
  */
@@ -138,16 +135,6 @@ class Requirement extends Model
     public function commits(): BelongsToMany
     {
         return $this->belongsToMany(Commit::class);
-    }
-
-    /**
-     * Test-tree nodes that verify this statement directly.
-     *
-     * @return BelongsToMany<Test, $this>
-     */
-    public function tests(): BelongsToMany
-    {
-        return $this->belongsToMany(Test::class);
     }
 
     /**
@@ -333,8 +320,7 @@ class Requirement extends Model
     }
 
     /**
-     * What DeliveryStatus needs, counted in SQL instead of loading every linked test: its live tests (过时/停用 are no
-     * evidence), how many failed, how many are automated and how many of those passed, and whether a commit works on it.
+     * Whether a commit works on this requirement, for DeliveryStatus.
      *
      * @param  Builder<Requirement>  $query
      * @return Builder<Requirement>
@@ -342,26 +328,7 @@ class Requirement extends Model
     #[Scope]
     protected function withDeliveryCounts(Builder $query): Builder
     {
-        $counts = Test::query()
-            ->join('requirement_test', 'tests.id', '=', 'requirement_test.test_id')
-            ->whereIn('tests.status', [TestStatus::Valid, TestStatus::ToWrite])
-            ->groupBy('requirement_test.requirement_id')
-            ->select('requirement_test.requirement_id')
-            ->selectRaw('count(*) as live_tests_count')
-            ->selectRaw('count(case when tests.last_result = ? then 1 end) as failed_tests_count', [TestLastResult::Failed->value])
-            ->selectRaw('count(case when tests.auto is null or tests.auto != ? then 1 end) as automated_tests_count', [TestAuto::No->value])
-            ->selectRaw('count(case when (tests.auto is null or tests.auto != ?) and tests.last_result = ? then 1 end) as passed_automated_tests_count', [TestAuto::No->value, TestLastResult::Passed->value])
-            ->selectRaw('count(case when tests.last_result = ? then 1 end) as passed_tests_count', [TestLastResult::Passed->value]);
-
-        return $query
-            ->select($query->getQuery()->columns ?? ['requirements.*'])
-            ->leftJoinSub($counts, 'delivery_counts', 'delivery_counts.requirement_id', '=', 'requirements.id')
-            ->selectRaw('coalesce(delivery_counts.live_tests_count, 0) as live_tests_count')
-            ->selectRaw('coalesce(delivery_counts.failed_tests_count, 0) as failed_tests_count')
-            ->selectRaw('coalesce(delivery_counts.automated_tests_count, 0) as automated_tests_count')
-            ->selectRaw('coalesce(delivery_counts.passed_automated_tests_count, 0) as passed_automated_tests_count')
-            ->selectRaw('coalesce(delivery_counts.passed_tests_count, 0) as passed_tests_count')
-            ->withExists('commits');
+        return $query->withExists('commits');
     }
 
     /**

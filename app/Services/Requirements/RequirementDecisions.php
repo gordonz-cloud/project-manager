@@ -7,11 +7,9 @@ use App\Enums\RequirementStatus;
 use App\Models\Project;
 use App\Models\Requirement;
 use App\Models\RequirementDecisionDraft;
-use App\Models\Test;
 use App\Models\User;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Str;
 use InvalidArgumentException;
 
 /**
@@ -107,7 +105,7 @@ class RequirementDecisions
         return RequirementDecisionDraft::query()
             ->where('user_id', $user->id)
             ->whereIn('requirement_id', $requirements->pluck('id'))
-            ->with(['requirement.supersedes', 'requirement.tests'])
+            ->with(['requirement.supersedes'])
             ->get();
     }
 
@@ -138,29 +136,6 @@ class RequirementDecisions
             'decided_by' => 'Gordon',
             'decided_at' => $today,
             'reason' => $reason,
-            ...($status === RequirementStatus::Decided ? $this->startedFromScratch($requirement) : []),
         ], fn (mixed $value): bool => $value !== null);
-    }
-
-    /**
-     * A newly decided rule is not built yet, whatever it was linked to while it was only a proposal (often the old
-     * behaviour's tests): those links move into decision.impact as 受影响, so it starts as 待做.
-     *
-     * @return array{decision: array<string, mixed>, tests: list<int>}|array{}
-     */
-    private function startedFromScratch(Requirement $requirement): array
-    {
-        $affected = [
-            ...$requirement->tests->map(fn (Test $test): string => '测试「'.Str::limit($test->title, 30, '…')."」（{$test->last_result->value}）"),
-        ];
-
-        if ($affected === []) {
-            return [];
-        }
-
-        $decision = $requirement->decisionOrFallback()->toArray();
-        $decision['impact'] = implode('；', array_filter([$decision['impact'] ?? null, '受影响（定下前挂着的）：'.implode('、', $affected)]));
-
-        return ['decision' => $decision, 'tests' => []];
     }
 }

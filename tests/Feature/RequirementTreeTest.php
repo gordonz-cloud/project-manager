@@ -4,14 +4,10 @@ use App\Data\Requirements\DeliveryStatus;
 use App\Data\Requirements\RequirementTreeNode;
 use App\Enums\RequirementKind;
 use App\Enums\RequirementStatus;
-use App\Enums\TestAuto;
-use App\Enums\TestLastResult;
-use App\Enums\TestStatus;
 use App\Filament\Pages\RequirementTree;
 use App\Models\Commit;
 use App\Models\Project;
 use App\Models\Requirement;
-use App\Models\Test;
 use App\Models\User;
 use App\Services\Requirements\RequirementTreeService;
 use Filament\Facades\Filament;
@@ -47,16 +43,15 @@ function flatRequirementTree(array $nodes): array
     return $flat;
 }
 
-it('creates goals, sub-goals and rules with server numbers, links tests, and records a revision each [T40]', function () {
+it('creates goals, sub-goals and rules with server numbers and records a revision each [T40]', function () {
     $project = Project::factory()->create(['slug' => 'rq']);
-    $test = Test::factory()->create(['project_id' => $project->id, 'number' => 3]);
     Requirement::factory()->create(['project_id' => $project->id, 'number' => 7]);
 
     saveRequirements(['project' => 'rq', 'nodes' => [
         ['ref' => 'goal', 'kind' => '目标', 'title' => '公会成员按等级拿货', 'status' => '已定'],
         ['ref' => 'sub', 'parent_ref' => 'goal', 'kind' => '子目标', 'title' => 'Direct 商品分级可见', 'status' => '已定'],
         ['parent_ref' => 'sub', 'kind' => '规则', 'title' => '没到 Direct 等级能看不能加购', 'rationale' => '保护渠道价', 'source' => 'spec.md v1.0',
-            'status' => '已定', 'decided_by' => 'Gordon', 'decided_at' => '2026-10-02', 'needs_review' => true, 'tests' => [3]],
+            'status' => '已定', 'decided_by' => 'Gordon', 'decided_at' => '2026-10-02', 'needs_review' => true],
     ]])->expectsOutputToContain('goal → #8')->expectsOutputToContain('row 2 → #10')->expectsOutputToContain('3 created')->assertSuccessful();
 
     $rule = requirementNumbered($project, 10);
@@ -66,16 +61,14 @@ it('creates goals, sub-goals and rules with server numbers, links tests, and rec
         ->and($rule->kind)->toBe(RequirementKind::Rule)
         ->and($rule->decided_at->toDateString())->toBe('2026-10-02')
         ->and($rule->needs_review)->toBeTrue()
-        ->and($rule->tests->pluck('id')->all())->toBe([$test->id])
         ->and($rule->revisions)->toHaveCount(1)
         ->and($rule->revisions->first()->only(['old_status', 'new_status', 'new_statement', 'source']))
         ->toBe(['old_status' => null, 'new_status' => '已定', 'new_statement' => '没到 Direct 等级能看不能加购', 'source' => 'spec.md v1.0']);
 
-    saveRequirements(['project' => 'rq', 'nodes' => [['number' => 10, 'rationale' => '保护渠道价和 Direct 会员权益', 'tests' => []]]], ['--json' => true])
+    saveRequirements(['project' => 'rq', 'nodes' => [['number' => 10, 'rationale' => '保护渠道价和 Direct 会员权益']]], ['--json' => true])
         ->expectsOutput('{"created":0,"updated":1,"assigned":[],"voided":[],"warnings":[]}')->assertSuccessful();
 
     expect($rule->fresh()->rationale)->toBe('保护渠道价和 Direct 会员权益')
-        ->and($rule->tests()->count())->toBe(0)
         ->and($rule->revisions()->count())->toBe(1);
 });
 
@@ -95,7 +88,10 @@ it('rejects a bad payload and writes nothing [T41]', function (array $nodes, str
     'rule under a rule' => [[['parent' => 2, 'kind' => '规则', 'title' => 'x']], 'must sit under'],
     'cycle' => [[['ref' => 'a', 'parent_ref' => 'b', 'kind' => '子目标', 'title' => 'a'], ['ref' => 'b', 'parent_ref' => 'a', 'kind' => '子目标', 'title' => 'b']], 'loops'],
     'features removed' => [[['parent' => 1, 'kind' => '规则', 'title' => 'x', 'features' => [42]]], 'features 已移除'],
-    'unknown test' => [[['parent' => 1, 'kind' => '规则', 'title' => 'x', 'tests' => [42]]], 'test 42 does not exist'],
+    'tests removed' => [[['parent' => 1, 'kind' => '规则', 'title' => 'x', 'tests' => [42]]], 'tests 已移除'],
+    'empty tests removed' => [[['number' => 2, 'tests' => []]], 'tests 已移除'],
+    'null tests removed' => [[['number' => 2, 'tests' => null]], 'tests 已移除'],
+    'invalid tests removed' => [[['number' => 2, 'tests' => 'manual']], 'tests 已移除'],
     'bad status' => [[['parent' => 1, 'kind' => '规则', 'title' => 'x', 'status' => '完成']], 'status "完成"'],
     'supersede a proposal' => [[['parent' => 1, 'kind' => '规则', 'title' => 'x', 'supersedes' => 2]], 'can only supersede a 已定 rule'],
     'decided node supersedes' => [[['parent' => 1, 'kind' => '规则', 'title' => 'x', 'status' => '已定', 'supersedes' => 1, 'reason' => 'r']], 'only a 提议 can supersede'],
@@ -167,37 +163,33 @@ it('refuses the removed 老板 keys and stores where 现在 comes from [T49]', f
     'recorded as the boss' => ['record_as', 'decision.options[0].record_as 已移除'],
 ]);
 
-it('derives delivery from the rule\'s own tests, commits and acceptance and rolls it up through decided children [T44]', function () {
+it('derives delivery from commits and acceptance and rolls it up through decided children [T44]', function () {
     $project = Project::factory()->create();
     $goal = Requirement::factory()->create(['project_id' => $project->id, 'number' => 1, 'kind' => RequirementKind::Goal, 'status' => RequirementStatus::Decided]);
     $rule = fn (int $number, array $attributes = [], RequirementStatus $status = RequirementStatus::Decided): Requirement => Requirement::factory()->create([
         'project_id' => $project->id, 'number' => $number, 'parent_id' => $goal->id, 'kind' => RequirementKind::Rule, 'status' => $status, ...$attributes,
     ]);
-    $test = fn (TestLastResult $result, TestAuto $auto = TestAuto::Yes, TestStatus $status = TestStatus::Valid): int => Test::factory()->create(['project_id' => $project->id, 'last_result' => $result, 'auto' => $auto, 'status' => $status])->id;
-    $commit = fn (): int => Commit::factory()->create(['project_id' => $project->id])->id;
-
-    $rule(2)->tests()->attach([$test(TestLastResult::Passed), $test(TestLastResult::Passed)]);
-    $rule(3, ['needs_review' => true])->tests()->attach($test(TestLastResult::Passed));
-    $rule(4)->commits()->attach($commit());
-    $rule(5);
-    $rule(6, ['accepted_at' => now()])->tests()->attach($test(TestLastResult::Failed));
-    $rule(9, ['accepted_at' => now()])->tests()->attach($test(TestLastResult::NotRun));
-    $rule(10)->tests()->attach([$test(TestLastResult::Passed), $test(TestLastResult::NotRun, TestAuto::No)]);
-    $rule(11)->tests()->attach([$test(TestLastResult::Passed), $test(TestLastResult::Failed, status: TestStatus::Stale), $test(TestLastResult::NotRun, status: TestStatus::Disabled)]);
-    $rule(7, [], RequirementStatus::Proposed)->commits()->attach($commit());
+    $commit = Commit::factory()->create(['project_id' => $project->id]);
+    $rule(2, ['accepted_at' => now()]);
+    $rule(3, ['needs_review' => true])->commits()->attach($commit);
+    $rule(4)->commits()->attach($commit);
+    $unbuilt = $rule(5, ['needs_review' => true]);
+    $rule(6, ['accepted_at' => now(), 'needs_review' => true])->commits()->attach($commit);
+    $rule(7, [], RequirementStatus::Proposed)->commits()->attach($commit);
     $rule(8, [], RequirementStatus::Conflict);
 
     $nodes = flatRequirementTree(app(RequirementTreeService::class)->tree($project));
-
-    expect(array_map(fn (RequirementTreeNode $node): string => $node->delivery->value, array_intersect_key($nodes, array_flip([2, 3, 4, 5, 6, 9, 10, 11]))))
-        ->toBe([2 => '已验证', 3 => '待验收', 4 => '实现中', 5 => '未实现', 6 => '验证失败', 9 => '已验证', 10 => '待验收', 11 => '已验证'])
-        ->and($nodes[1]->delivery)->toBe(DeliveryStatus::Failed)
-        ->and($nodes[1]->rollup->delivered)->toEqualCanonicalizing(['已验证' => 3, '待验收' => 2, '实现中' => 1, '未实现' => 1, '验证失败' => 1])
-        ->and($nodes[1]->rollup->verifiedPercent())->toBe(38)
+    expect(DeliveryStatus::of($unbuilt->fresh()->loadExists('commits')))->toBeNull()
+        ->and(array_map(fn (RequirementTreeNode $node): string => $node->delivery->value, array_intersect_key($nodes, array_flip([2, 3, 4, 5, 6]))))
+        ->toBe([2 => '已验证', 3 => '待验收', 4 => '待验收', 5 => '未实现', 6 => '已验证'])
+        ->and($nodes[1]->delivery)->toBe(DeliveryStatus::NotBuilt)
+        ->and($nodes[1]->rollup->delivered)->toEqualCanonicalizing(['已验证' => 2, '待验收' => 2, '未实现' => 1])
+        ->and($nodes[1]->rollup->verifiedPercent())->toBe(40)
         ->and([$nodes[1]->rollup->proposed, $nodes[1]->rollup->conflicts])->toBe([1, 1]);
 
     expect(DeliveryStatus::combined([DeliveryStatus::Verified, DeliveryStatus::AwaitingAcceptance]))->toBe(DeliveryStatus::AwaitingAcceptance)
-        ->and(DeliveryStatus::combined([DeliveryStatus::NotBuilt, DeliveryStatus::Verified]))->toBe(DeliveryStatus::InProgress)
+        ->and(DeliveryStatus::combined([DeliveryStatus::NotBuilt, DeliveryStatus::Verified]))->toBe(DeliveryStatus::NotBuilt)
+        ->and(DeliveryStatus::combined([DeliveryStatus::Verified, DeliveryStatus::Verified]))->toBe(DeliveryStatus::Verified)
         ->and(DeliveryStatus::combined([]))->toBe(DeliveryStatus::NotBuilt);
 });
 
@@ -420,25 +412,21 @@ it('reads the changes in a fixed number of queries however many there are [T187]
     expect($queriesFor())->toBe($few);
 });
 
-it('shows a selected requirement with why, source, history, tests and commits [T47]', function () {
+it('shows a selected requirement with why, source, history and commits [T47]', function () {
     $project = requirementTreePage();
     $requirement = Requirement::factory()->create(['project_id' => $project->id, 'number' => 1, 'kind' => RequirementKind::Goal, 'status' => RequirementStatus::Decided,
         'title' => 'Members buy by tier', 'rationale' => 'protect channel price', 'source' => 'S5 spec v1.0', 'decided_by' => 'Gordon', 'decided_at' => '2026-10-02']);
-    $requirement->tests()->attach(Test::factory()->create(['project_id' => $project->id, 'number' => 12, 'last_result' => TestLastResult::Passed]));
     $requirement->commits()->attach(Commit::factory()->create(['project_id' => $project->id, 'subject' => 'Add tier gate']));
 
-    $requirement->tests()->attach(Test::factory()->create(['project_id' => $project->id, 'number' => 13, 'title' => 'Tier gate fails', 'last_result' => TestLastResult::Failed]));
-
     Livewire::withQueryParams(['selectedNumber' => 1])->test(RequirementTree::class)
-        ->assertSeeInOrder(['Members buy by tier', '待做', 'protect channel price', '出处：S5 spec v1.0', '做到哪了：1 个 commit · 2 个测试：1 通过，1 失败', 'Tier gate fails · 失败', '更早的说法（1）', '2026-10-02', '你拍板', '现在生效', '历史', '新建 → 已定', 'Add tier gate'])
+        ->assertSeeInOrder(['Members buy by tier', '待验收', 'protect channel price', '出处：S5 spec v1.0', '做到哪了：1 个 commit', '更早的说法（1）', '2026-10-02', '你拍板', '现在生效', '历史', '新建 → 已定', 'Add tier gate'])
         ->assertDontSee('要定的事')
         ->assertDontSee('来源：');
 
-    $requirement->tests()->detach(Test::where('number', 13)->value('id'));
     $requirement->update(['source' => null]);
 
     Livewire::withQueryParams(['selectedNumber' => 1])->test(RequirementTree::class)
-        ->assertSeeInOrder(['出处：Gordon 拍板 2026-10-02', '做到哪了：1 个 commit · 1 个测试全过']);
+        ->assertSeeInOrder(['出处：Gordon 拍板 2026-10-02', '做到哪了：1 个 commit']);
 });
 
 it('puts groups under sub-goals and rules under groups [T52]', function (array $nodes, ?string $message) {
@@ -581,27 +569,27 @@ it('puts void nodes after the live ones of their level and leaves them out of th
     expect($numbers)->toBe([3, 4, 5, 1, 2]);
 });
 
-it('shows 待验收 once a rule that needs a look passes its tests, and rolls up 待决策 > 待做 > 待验收 > 完成 [T175][T176]', function () {
+it('shows 待验收 once a rule has commits, and rolls up 待决策 > 待做 > 待验收 > 完成 [T175][T176]', function () {
     $project = Project::factory()->create();
     $goal = Requirement::factory()->create(['project_id' => $project->id, 'number' => 1, 'kind' => RequirementKind::Goal, 'status' => RequirementStatus::Decided]);
     $group = fn (int $number): Requirement => Requirement::factory()->create(['project_id' => $project->id, 'number' => $number, 'parent_id' => $goal->id, 'kind' => RequirementKind::Group, 'status' => RequirementStatus::Decided]);
     $rule = fn (Requirement $parent, int $number, array $attributes = [], RequirementStatus $status = RequirementStatus::Decided): Requirement => Requirement::factory()->create(
         ['project_id' => $project->id, 'number' => $number, 'parent_id' => $parent->id, 'kind' => RequirementKind::Rule, 'status' => $status, ...$attributes],
     );
-    $passing = fn (Requirement $rule) => $rule->tests()->attach(Test::factory()->create(['project_id' => $project->id, 'last_result' => TestLastResult::Passed, 'auto' => TestAuto::Yes]));
+    $linked = fn (Requirement $rule) => $rule->commits()->attach(Commit::factory()->create(['project_id' => $project->id]));
 
     $accepting = $group(10);
-    $passing($rule($accepting, 11, ['needs_review' => true]));
+    $linked($rule($accepting, 11, ['needs_review' => true]));
     $rule($accepting, 12, ['accepted_at' => now()]);
     $todo = $group(20);
-    $rule($todo, 21)->commits()->attach(Commit::factory()->create(['project_id' => $project->id]));
-    $passing($rule($todo, 22, ['needs_review' => true]));
+    $rule($todo, 21);
+    $linked($rule($todo, 22, ['needs_review' => true]));
     $pending = $group(30);
     $rule($pending, 31);
-    $passing($rule($pending, 32, ['needs_review' => true]));
+    $linked($rule($pending, 32, ['needs_review' => true]));
     $rule($pending, 33, [], RequirementStatus::Proposed);
     $done = $group(40);
-    $passing($rule($done, 41));
+    $rule($done, 41, ['accepted_at' => now()]);
 
     $nodes = flatRequirementTree(app(RequirementTreeService::class)->tree($project));
     $progress = fn (array $numbers): array => array_map(fn (int $number): string => $nodes[$number]->progress->value, $numbers);
@@ -615,9 +603,9 @@ it('lists only 待验收 rules on the 待验收 tab, keeps them off 待做, and 
     $project = requirementTreePage();
     $goal = Requirement::factory()->create(['project_id' => $project->id, 'number' => 1, 'kind' => RequirementKind::Goal, 'status' => RequirementStatus::Decided, 'title' => 'Guild goal']);
     $rule = fn (int $number, string $title, array $attributes = []): Requirement => Requirement::factory()->create(['project_id' => $project->id, 'number' => $number, 'parent_id' => $goal->id, 'kind' => RequirementKind::Rule, 'status' => RequirementStatus::Decided, 'title' => $title, ...$attributes]);
-    $accepting = $rule(2, 'Accepting rule', ['needs_review' => true]);
-    $accepting->tests()->attach(Test::factory()->create(['project_id' => $project->id, 'last_result' => TestLastResult::Passed, 'auto' => TestAuto::Yes]));
-    $rule(3, 'Sharing rule')->commits()->attach(Commit::factory()->create(['project_id' => $project->id]));
+    $accepting = $rule(2, 'Accepting rule');
+    $accepting->commits()->attach(Commit::factory()->create(['project_id' => $project->id]));
+    $rule(3, 'Sharing rule');
     $rule(4, 'Todo rule');
 
     $tabKeys = array_keys(RequirementTree::TABS);
@@ -633,6 +621,7 @@ it('lists only 待验收 rules on the 待验收 tab, keeps them off 待做, and 
         ->assertSee(['Sharing rule', 'Todo rule'])
         ->assertDontSee('Accepting rule');
 
+    Livewire::withQueryParams(['tab' => 'done'])->test(RequirementTree::class)->assertSee('没有已完成的规则。');
     Livewire::withQueryParams(['selectedNumber' => 4])->test(RequirementTree::class)->assertDontSeeHtml('data-accept-rule');
 
     Livewire::withQueryParams(['tab' => 'accepting', 'selectedNumber' => 2])->test(RequirementTree::class)
@@ -644,7 +633,11 @@ it('lists only 待验收 rules on the 待验收 tab, keeps them off 待做, and 
         ->and($accepting->revisions()->first()->reason)->toBe('验收通过');
 
     Livewire::withQueryParams(['tab' => 'accepting'])->test(RequirementTree::class)->assertDontSee('Accepting rule')->assertSee('没有待验收的规则。');
-    Livewire::withQueryParams(['selectedNumber' => 2])->test(RequirementTree::class)->assertSeeHtml('data-progress="完成"');
+    Livewire::withQueryParams(['tab' => 'done', 'selectedNumber' => 2])->test(RequirementTree::class)
+        ->assertSee('完成（1）')
+        ->assertSee('Accepting rule')
+        ->assertDontSee(['Sharing rule', 'Todo rule'])
+        ->assertSeeHtml('data-progress="完成"');
 });
 
 function searchableTree(): Project

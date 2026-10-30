@@ -90,13 +90,6 @@
                 @if ($isAccepting)
                     <button type="button" wire:click="acceptRule" class="mt-1 rounded border border-violet-300 px-2 py-0.5 text-xs text-violet-700 hover:bg-violet-50 dark:border-violet-500/40 dark:text-violet-300 dark:hover:bg-violet-500/10" data-accept-rule>验收通过</button>
                 @endif
-                @if ($requirement->tests->isNotEmpty())
-                    <div class="mt-1 flex flex-wrap gap-1">
-                        @foreach ($requirement->tests as $test)
-                            <a href="{{ $this->testUrl($test) }}" class="rounded bg-slate-100 px-1.5 py-0.5 text-xs text-slate-600 hover:underline dark:bg-white/10 dark:text-slate-300" title="T{{ $test->number }}">{{ \Illuminate\Support\Str::limit($test->title, 30) }} · {{ $test->last_result->value }}</a>
-                        @endforeach
-                    </div>
-                @endif
             </details>
             @foreach (['依赖' => $requirement->dependsOn, '被依赖' => $requirement->dependents] as $label => $related)
                 @if ($related->isNotEmpty())

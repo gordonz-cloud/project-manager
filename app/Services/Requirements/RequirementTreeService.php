@@ -56,7 +56,7 @@ class RequirementTreeService
             ->where('project_id', $project->id)
             ->whereIn('status', [RequirementStatus::Proposed, RequirementStatus::Conflict])
             ->where(fn (Builder $query) => $query->whereNull('kind')->orWhere('kind', '!=', RequirementKind::Group))
-            ->with(['commits', 'tests', 'supersedes.commits', 'supersedes.tests'])
+            ->with(['commits', 'supersedes.commits'])
             ->get()
             ->sortBy(fn (Requirement $requirement): array => [$requirement->status === RequirementStatus::Conflict ? 0 : 1, $treeOrder[$requirement->id] ?? PHP_INT_MAX])
             ->values();

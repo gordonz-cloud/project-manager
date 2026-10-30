@@ -8,13 +8,11 @@ use App\Data\Requirements\RequirementTreeNode;
 use App\Data\Requirements\TimelineEntry;
 use App\Enums\RequirementKind;
 use App\Enums\RequirementStatus;
-use App\Enums\TestLastResult;
 use App\Filament\Pages\RequirementTree;
 use App\Models\Commit;
 use App\Models\Project;
 use App\Models\Requirement;
 use App\Models\RequirementDecisionDraft;
-use App\Models\Test;
 use App\Models\User;
 use App\Services\Requirements\RequirementDecisions;
 use App\Services\Requirements\RequirementTimelines;
@@ -102,7 +100,7 @@ it('stores a decision with the node and rejects one of the wrong shape [T58]', f
     'unknown key' => [[...shippingDecision(), 'colour' => 'red'], 'unknown key "colour"'],
 ]);
 
-it('shows one status per node and rolls them up as 待决策 / 待做 / 完成 [T59]', function () {
+it('shows one status per node and rolls them up as 待决策 / 待做 / 待验收 / 完成 [T59]', function () {
     [$project, , $goal] = decisionDesk();
     decisionRule($goal, 2, RequirementStatus::Proposed);
     decisionRule($goal, 3, RequirementStatus::Decided);
@@ -113,17 +111,15 @@ it('shows one status per node and rolls them up as 待决策 / 待做 / 完成 [
     $tree = app(RequirementTreeService::class)->tree($project);
     $progress = collect(RequirementTreeNode::flattened($tree))->mapWithKeys(fn (RequirementTreeNode $node): array => [$node->requirement->number => $node->progress])->all();
 
-    expect($progress)->toBe([1 => RequirementProgress::Pending, 2 => RequirementProgress::Pending, 3 => RequirementProgress::Todo, 4 => RequirementProgress::Todo, 5 => RequirementProgress::Done, 6 => RequirementProgress::Dropped])
-        ->and(RequirementProgress::of(RequirementStatus::Decided, DeliveryStatus::Failed))->toBe(RequirementProgress::Todo)
-        ->and(RequirementProgress::of(RequirementStatus::Decided, DeliveryStatus::InProgress))->toBe(RequirementProgress::Todo)
+    expect($progress)->toBe([1 => RequirementProgress::Pending, 2 => RequirementProgress::Pending, 3 => RequirementProgress::Todo, 4 => RequirementProgress::AwaitingAcceptance, 5 => RequirementProgress::Done, 6 => RequirementProgress::Dropped])
         ->and(RequirementProgress::of(RequirementStatus::Decided, DeliveryStatus::Verified))->toBe(RequirementProgress::Done)
-        ->and(RequirementTreeNode::total($tree)->progressCounts())->toBe(['待决策' => 1, '待做' => 2, '待验收' => 0, '完成' => 1]);
+        ->and(RequirementTreeNode::total($tree)->progressCounts())->toBe(['待决策' => 1, '待做' => 1, '待验收' => 1, '完成' => 1]);
 
     Livewire::test(RequirementTree::class)
-        ->assertSee('title="1 待决策 · 2 待做 · 1 完成"', false)
+        ->assertSee('title="1 待决策 · 1 待做 · 1 待验收 · 1 完成"', false)
         ->assertDontSee('进行中')
         ->assertSeeHtmlInOrder(['1<span class="hidden @xl:inline"> 待决策</span>', '1<span class="hidden @xl:inline"> 完成</span>'])
-        ->assertSeeInOrder(['Checkout', '待决策（1）', 'Rule 2', '待决策', 'Rule 3', '待做', 'Rule 4', '待做', 'Rule 5', '完成', 'Rule 6', '放弃']);
+        ->assertSeeInOrder(['Checkout', '待决策（1）', 'Rule 2', '待决策', 'Rule 3', '待做', 'Rule 4', '待验收', 'Rule 5', '完成', 'Rule 6', '放弃']);
 });
 
 it('keeps a pick as a draft that survives reopening the page and counts it [T60]', function () {
@@ -167,7 +163,7 @@ it('applies every kind of answer in one confirmed batch, with history, and clear
 
     Livewire::withQueryParams(['tab' => 'pending'])->test(RequirementTree::class)
         ->call('confirmAllDrafts')
-        ->assertNotified('定下 2 条 · 作废 2 条 · 定下的规则从待做开始（原来挂的功能和测试记为受影响）');
+        ->assertNotified('定下 2 条 · 作废 2 条 · 定下后按关联 commit 和验收记录计算交付状态');
 
     expect($conflict->fresh()->only(['status', 'title', 'source', 'decided_by']))->toBe(['status' => RequirementStatus::Decided, 'title' => 'Free shipping over 80 from November', 'source' => "spec v1；Gordon 拍板 {$today}：Raise to 80", 'decided_by' => 'Gordon'])
         ->and($conflict->fresh()->decided_at->toDateString())->toBe($today)
@@ -215,7 +211,8 @@ it('lists decided rules not built yet in dependency order [T64]', function () {
     decisionRule($goal, 6, RequirementStatus::Proposed, ['title' => 'Still a proposal']);
 
     Livewire::withQueryParams(['tab' => 'todo'])->test(RequirementTree::class)
-        ->assertSeeInOrder(['待做（3）', 'Validate the card', 'Charge the card', 'Send receipt'])
+        ->assertSeeInOrder(['待做（2）', 'Validate the card', 'Charge the card'])
+        ->assertDontSee('Send receipt')
         ->assertDontSee('Already shipped')
         ->assertDontSee('Still a proposal');
 });
@@ -349,7 +346,7 @@ it('decides a pending node right from the 全貌 detail and confirms every draft
         ->assertDontSee('要定的事')
         ->assertSee('已选 2 / 2')
         ->call('confirmAllDrafts')
-        ->assertNotified('定下 2 条 · 定下的规则从待做开始（原来挂的功能和测试记为受影响）');
+        ->assertNotified('定下 2 条 · 定下后按关联 commit 和验收记录计算交付状态');
 
     expect($rule->fresh()->only(['status', 'title']))->toBe(['status' => RequirementStatus::Decided, 'title' => 'Free shipping over 80 from November'])
         ->and($other->fresh()->decided_by)->toBe('Gordon')
@@ -452,14 +449,13 @@ it('marks each 待决策 node in the tree as picked or not, keeps 改规则, and
 it('sums a parent up from everything under it, open decisions included [T73]', function (array $delivered, int $pending, ?RequirementProgress $expected) {
     expect((new RequirementRollup($delivered, $pending))->progress())->toBe($expected);
 })->with([
-    'all built' => [['已验证' => 2, '已实现' => 1], 0, RequirementProgress::Done],
+    'all built' => [['已验证' => 3], 0, RequirementProgress::Done],
     'built and a decision still open' => [['已验证' => 3], 1, RequirementProgress::Pending],
     'built and not built' => [['已验证' => 1, '未实现' => 1], 0, RequirementProgress::Todo],
-    'built and being built' => [['已验证' => 1, '实现中' => 1], 0, RequirementProgress::Todo],
+    'built and awaiting acceptance' => [['已验证' => 1, '待验收' => 1], 0, RequirementProgress::AwaitingAcceptance],
     'nothing built, all ready' => [['未实现' => 2], 0, RequirementProgress::Todo],
     'all open decisions' => [[], 2, RequirementProgress::Pending],
     'ready and open, nothing built' => [['未实现' => 1], 1, RequirementProgress::Pending],
-    'failed' => [['验证失败' => 1, '已验证' => 1], 0, RequirementProgress::Todo],
     'nothing counted' => [[], 0, null],
 ]);
 
@@ -469,10 +465,10 @@ it('shows a sub-goal with a built rule and an open one as 待决策, not done [T
     decisionRule($sub, 3, RequirementStatus::Decided, ['accepted_at' => now()]);
     decisionRule($sub, 4, RequirementStatus::Proposed);
     decisionRule($sub, 5, RequirementStatus::Void);
-    decisionRule($sub, 6, RequirementStatus::Decided, ['title' => 'Failing rule'])->tests()->attach(Test::factory()->create(['project_id' => $project->id, 'last_result' => TestLastResult::Failed]));
+    decisionRule($sub, 6, RequirementStatus::Decided, ['title' => 'Todo rule']);
 
     Livewire::withQueryParams(['selectedNumber' => 6])->test(RequirementTree::class)
-        ->assertSeeInOrder(['Members only', '待决策（1）', '✗ 1', 'Failing rule', '待做', '✗ 验证失败']);
+        ->assertSeeInOrder(['Members only', '待决策（1）', 'Todo rule', '待做']);
 
     $progress = collect(RequirementTreeNode::flattened(app(RequirementTreeService::class)->tree($project)))
         ->mapWithKeys(fn (RequirementTreeNode $node): array => [$node->requirement->number => $node->progress])->all();
@@ -489,11 +485,10 @@ it('starts a newly decided rule from 待做, signed by Gordon, and shows the old
         'options' => [['key' => 'A', 'label' => '按新要求改', 'outcome' => 'accept', 'consequence' => 'Old rule voided']],
     ]]);
     $conflict->forceFill(['accepted_at' => now()])->save();
-    $conflict->tests()->attach(Test::factory()->create(['project_id' => $project->id, 'title' => 'Visitor sees no member price', 'last_result' => TestLastResult::Passed]));
     decisionRule($goal, 4, RequirementStatus::Void, ['title' => 'Dropped idea']);
     app(RequirementDecisions::class)->choose($conflict, $user, 'A');
 
-    expect(app(RequirementDecisions::class)->preview($user, collect([$conflict]))->summary())->toContain('定下的规则从待做开始');
+    expect(app(RequirementDecisions::class)->preview($user, collect([$conflict]))->summary())->toContain('定下后按关联 commit 和验收记录计算交付状态');
 
     app(RequirementDecisions::class)->confirm($project, $user, collect([$conflict]));
     $decided = $conflict->fresh();
@@ -502,8 +497,7 @@ it('starts a newly decided rule from 待做, signed by Gordon, and shows the old
     expect($decided->only(['status', 'decided_by', 'source']))->toBe(['status' => RequirementStatus::Decided, 'decided_by' => 'Gordon', 'source' => "spec v1；Gordon 拍板 {$today}：按新要求改"])
         ->and($decided->decided_at->toDateString())->toBe($today)
         ->and($decided->accepted_at)->toBeNull()
-        ->and($decided->tests()->count())->toBe(0)
-        ->and($decided->decision->impact)->toBe('Shipping calculator；受影响（定下前挂着的）：测试「Visitor sees no member price」（通过）');
+        ->and($decided->decision->impact)->toBe('Shipping calculator');
 
     $progress = collect(RequirementTreeNode::flattened(app(RequirementTreeService::class)->tree($project)))
         ->mapWithKeys(fn (RequirementTreeNode $node): array => [$node->requirement->number => $node->progress])->all();

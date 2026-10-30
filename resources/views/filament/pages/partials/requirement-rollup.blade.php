@@ -5,5 +5,4 @@
         @if (! $loop->first)<span>·</span>@endif
         <span>{{ $count }}<span class="hidden @xl:inline"> {{ $label }}</span></span>
     @endforeach
-    @if ($failed = $rollup->count(\App\Data\Requirements\DeliveryStatus::Failed))<span class="text-red-600 dark:text-red-400">✗ {{ $failed }}<span class="hidden @xl:inline"> 验证失败</span></span>@endif
 </span>

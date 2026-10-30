@@ -36,7 +36,7 @@ final readonly class DecisionBatchResult
 
         return implode(' · ', array_filter([
             ...array_map(fn (string $status, int $count): string => ($labels[$status] ?? $status)." {$count} 条", array_keys($this->byStatus), $this->byStatus),
-            isset($this->byStatus[RequirementStatus::Decided->value]) ? '定下的规则从待做开始（原来挂的功能和测试记为受影响）' : null,
+            isset($this->byStatus[RequirementStatus::Decided->value]) ? '定下后按关联 commit 和验收记录计算交付状态' : null,
         ]));
     }
 }
